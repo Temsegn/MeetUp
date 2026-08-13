@@ -55,6 +55,7 @@ export const MeetingPage: React.FC = () => {
   const {
     joined, participantId, joinMeeting, leaveMeeting, session,
     peers, remoteStreams, creatorId,
+    isRecording, startRecording, stopRecording,
   } = useMeeting(roomId, token ?? '', user?.name ?? 'Guest', user?.id, addToast);
 
   const {
@@ -100,7 +101,10 @@ export const MeetingPage: React.FC = () => {
   // ── Active speakers ───────────────────────────────────────────────────────
   const activeSpeakers = useActiveSpeakers([
     { id: participantId, stream: localStream },
-    ...peers.map(p => ({ id: p.id, stream: remoteStreams.get(p.id)?.camera || null })),
+    ...peers.map(p => ({
+      id: p.id,
+      stream: remoteStreams.get(p.id)?.audio || remoteStreams.get(p.id)?.camera || null,
+    })),
   ]);
 
   // Sort: host first, then active speakers, then the rest
@@ -301,9 +305,11 @@ export const MeetingPage: React.FC = () => {
                   <div key={p.id} className="flex-shrink-0 aspect-video h-full">
                     <ParticipantTile
                       stream={remoteStreams.get(p.id)?.camera || null}
+                      audioStream={remoteStreams.get(p.id)?.audio || null}
                       name={p.name}
                       isHandRaised={raisedHands.has(p.id)}
                       isMuted={p.isMuted}
+                      isCameraOff={p.isCameraOff}
                     />
                   </div>
                 ))}
@@ -327,9 +333,11 @@ export const MeetingPage: React.FC = () => {
                 <ParticipantTile
                   key={p.id}
                   stream={remoteStreams.get(p.id)?.camera || null}
+                  audioStream={remoteStreams.get(p.id)?.audio || null}
                   name={p.name}
                   isHandRaised={raisedHands.has(p.id)}
                   isMuted={p.isMuted}
+                  isCameraOff={p.isCameraOff}
                 />
               ))}
 
@@ -374,10 +382,12 @@ export const MeetingPage: React.FC = () => {
         isCameraOff={isCameraOff}
         isSharingScreen={!!screenStream}
         isSomeoneElseSharing={remoteScreenStreams.length > 0}
+        isRecording={isRecording}
         onToggleMute={handleToggleMute}
         onToggleCamera={handleToggleCamera}
         onShareScreen={handleShareScreen}
         onStopScreenShare={handleStopScreenShare}
+        onToggleRecording={isRecording ? stopRecording : startRecording}
         onSendReaction={sendReaction}
         isHandRaised={raisedHands.has(participantId)}
         onToggleRaiseHand={toggleRaiseHand}

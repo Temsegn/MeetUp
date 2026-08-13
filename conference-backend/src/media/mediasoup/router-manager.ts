@@ -3,6 +3,7 @@ import { workerManager } from './worker-manager';
 import { mediasoupConfig } from '../../config/mediasoup';
 import { logger } from '../../infrastructure/logging/logger';
 import { metrics } from '../../infrastructure/metrics/metrics.service';
+import { clearRoomChat } from '../../realtime/handlers/chat.handler';
 import type { RouterStats } from './media.types';
 
 interface RouterEntry {
@@ -45,6 +46,23 @@ export class RouterManager {
    * share one creation promise instead of creating two Routers.
    */
   private creationInFlight: Map<string, Promise<Router>> = new Map();
+
+  /** Optional hooks when a router is removed (recording, chat, etc.). */
+  private onRouterClosedCallbacks: Array<(roomId: string) => void> = [];
+
+  public onRouterClosed(cb: (roomId: string) => void): void {
+    this.onRouterClosedCallbacks.push(cb);
+  }
+
+  private _emitRouterClosed(roomId: string): void {
+    for (const cb of this.onRouterClosedCallbacks) {
+      try {
+        cb(roomId);
+      } catch (err) {
+        logger.error('onRouterClosed callback threw', { roomId, err });
+      }
+    }
+  }
 
   // ── Router lifecycle ───────────────────────────────────────────────────────
 
@@ -128,6 +146,14 @@ export class RouterManager {
     metrics.roomsClosed.inc();
     metrics.activeRooms.dec();
 
+    try {
+      clearRoomChat(roomId);
+    } catch (err) {
+      logger.warn('Failed to clear chat history on router close', { roomId, err });
+    }
+
+    this._emitRouterClosed(roomId);
+
     logger.info('Router entry removed', { roomId });
   }
 
@@ -190,6 +216,14 @@ export class RouterManager {
         metrics.activeRouters.dec();
         metrics.roomsClosed.inc();
         metrics.activeRooms.dec();
+
+        try {
+          clearRoomChat(roomId);
+        } catch (err) {
+          logger.warn('Failed to clear chat history on worker death', { roomId, err });
+        }
+
+        this._emitRouterClosed(roomId);
 
         logger.warn('Room router removed due to worker death', { roomId, workerPid });
       }

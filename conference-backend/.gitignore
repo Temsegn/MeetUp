@@ -12,6 +12,9 @@ dist/
 build/
 *.tsbuildinfo
 
+# Recordings
+recordings/
+
 # Logs
 logs/
 *.log

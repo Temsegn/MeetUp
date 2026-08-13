@@ -13,8 +13,8 @@ RUN npm run build
 FROM node:22-alpine AS production
 WORKDIR /app
 
-# mediasoup requires build tools for native addon
-RUN apk add --no-cache python3 make g++ linux-headers
+# mediasoup requires build tools for native addon; ffmpeg for server-side recording
+RUN apk add --no-cache python3 make g++ linux-headers ffmpeg
 
 # Copy only production deps and compiled output
 COPY --from=builder /app/node_modules ./node_modules

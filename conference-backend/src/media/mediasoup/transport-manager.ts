@@ -159,7 +159,7 @@ export class TransportManager {
             roomId,
             participantId,
           });
-          this.io?.to(participantId).emit('transport-failed', {
+          this._notifyPeer(roomId, participantId, 'transport-failed', {
             transportId: transport.id,
             reason: 'dtls-failed',
           });
@@ -236,7 +236,7 @@ export class TransportManager {
               roomId,
               participantId,
             });
-            this.io?.to(participantId).emit('transport-failed', {
+            this._notifyPeer(roomId, participantId, 'transport-failed', {
               transportId: transport.id,
               reason: 'ice-failed',
             });
@@ -286,8 +286,8 @@ export class TransportManager {
           participantId,
           attempt: state.iceRestartAttempts,
         });
-        // Notify client — client must call transport.restartIce({ iceParameters })
-        this.io?.to(participantId).emit('ice-restart', {
+        // Notify the peer's socket — client must call transport.restartIce({ iceParameters })
+        this._notifyPeer(roomId, participantId, 'ice-restart', {
           transportId: transport.id,
           iceParameters,
         });
@@ -298,6 +298,24 @@ export class TransportManager {
           err: err.message,
         });
       });
+  }
+
+  /**
+   * Emit to the peer's Socket.IO socketId (NOT participantId).
+   * Sockets join(roomId); the auto-room is socket.id — participantId is never a room.
+   */
+  private _notifyPeer(
+    roomId: string,
+    participantId: string,
+    event: string,
+    payload: object,
+  ): void {
+    const peer = participantManager.getPeer(roomId, participantId);
+    if (!peer?.socketId || !this.io) {
+      logger.warn('Cannot notify peer — missing socket', { roomId, participantId, event });
+      return;
+    }
+    this.io.to(peer.socketId).emit(event, payload);
   }
 
   private _clearIceDisconnectTimer(state: TransportState): void {
@@ -335,9 +353,10 @@ export class TransportManager {
       if (!state) return;  // already cleaned up via _closeTransportInternal
       this._clearIceDisconnectTimer(state);
       this.transportStates.delete(transport.id);
-      // Peer-map and metric cleanup are handled by whoever called transport.close()
-      // (ParticipantManager.removePeer already removes from peer.transports and
-      // the transport metric is handled there — but we own transportStates here)
+      // Peer-map cleanup is owned by ParticipantManager.removePeer.
+      // We still own the activeTransports gauge — decrement when close() came
+      // from outside TransportManager (e.g. peer disconnect).
+      metrics.activeTransports.dec();
     });
   }
 

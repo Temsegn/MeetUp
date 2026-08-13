@@ -31,8 +31,12 @@ import {
   SetConsumerPrioritySchema,
   GetPeerDiagnosticsSchema,
   ReplaceTrackSchema,
+  StartRecordingSchema,
+  StopRecordingSchema,
+  GetRecordingStatusSchema,
 } from '../../shared/validation/socket.schemas';
 import type { TransportDirection, ProducerAppData } from '../../media/mediasoup/media.types';
+import { participantManager } from '../../media/mediasoup/participant-manager';
 
 type Callback = (res: unknown) => void;
 
@@ -405,8 +409,14 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
         return callback && authzError(callback, 'Producer not owned by you');
       }
 
+      const meta = _producerMeta(roomId, participantId, producerId);
       mediaEngine.closeProducer(roomId, participantId, producerId);
-      socket.to(roomId).emit('producer-closed', { participantId, producerId });
+      socket.to(roomId).emit('producer-closed', {
+        participantId,
+        producerId,
+        source: meta?.source,
+        kind: meta?.kind,
+      });
       callback?.({ success: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -431,8 +441,14 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
         return callback && authzError(callback, 'Producer not owned by you');
       }
 
+      const meta = _producerMeta(roomId, participantId, producerId);
       await mediaEngine.pauseProducer(roomId, participantId, producerId);
-      socket.to(roomId).emit('producer-paused', { participantId, producerId });
+      socket.to(roomId).emit('producer-paused', {
+        participantId,
+        producerId,
+        source: meta?.source,
+        kind: meta?.kind,
+      });
       callback?.({ success: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -457,8 +473,14 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
         return callback && authzError(callback, 'Producer not owned by you');
       }
 
+      const meta = _producerMeta(roomId, participantId, producerId);
       await mediaEngine.resumeProducer(roomId, participantId, producerId);
-      socket.to(roomId).emit('producer-resumed', { participantId, producerId });
+      socket.to(roomId).emit('producer-resumed', {
+        participantId,
+        producerId,
+        source: meta?.source,
+        kind: meta?.kind,
+      });
       callback?.({ success: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -554,6 +576,62 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
   });
 
   // ────────────────────────────────────────────────────────────────────────────
+  // start-recording / stop-recording / get-recording-status
+  // ────────────────────────────────────────────────────────────────────────────
+  socket.on('start-recording', async (payload: unknown, callback: Callback) => {
+    const v = validatePayload(StartRecordingSchema, payload);
+    if (!v.success) return validationError(callback, v.error);
+    const { roomId } = v.data;
+
+    try {
+      const participantId = _assertInRoom(socket, roomId, callback);
+      if (!participantId) return;
+
+      const info = await mediaEngine.startRecording(roomId, participantId);
+      callback({ recording: true, info });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error('start-recording error', { err: msg });
+      callback({ error: msg });
+    }
+  });
+
+  socket.on('stop-recording', async (payload: unknown, callback: Callback) => {
+    const v = validatePayload(StopRecordingSchema, payload);
+    if (!v.success) return validationError(callback, v.error);
+    const { roomId } = v.data;
+
+    try {
+      const participantId = _assertInRoom(socket, roomId, callback);
+      if (!participantId) return;
+
+      const info = await mediaEngine.stopRecording(roomId);
+      callback({ recording: false, info });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error('stop-recording error', { err: msg });
+      callback({ error: msg });
+    }
+  });
+
+  socket.on('get-recording-status', (payload: unknown, callback: Callback) => {
+    const v = validatePayload(GetRecordingStatusSchema, payload);
+    if (!v.success) return validationError(callback, v.error);
+    const { roomId } = v.data;
+
+    try {
+      const participantId = _assertInRoom(socket, roomId, callback);
+      if (!participantId) return;
+
+      const info = mediaEngine.getRecordingInfo(roomId);
+      callback({ recording: mediaEngine.isRecording(roomId), info });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      callback({ error: msg });
+    }
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
   // get-peer-diagnostics  — internal debugging
   // ────────────────────────────────────────────────────────────────────────────
   socket.on('get-peer-diagnostics', async (payload: unknown, callback: Callback) => {
@@ -595,6 +673,19 @@ function _assertInRoom(
     return null;
   }
   return current.participantId;
+}
+
+function _producerMeta(
+  roomId: string,
+  participantId: string,
+  producerId: string,
+): { source: string; kind: MediaKind } | null {
+  const producer = participantManager.getPeer(roomId, participantId)?.producers.get(producerId);
+  if (!producer) return null;
+  return {
+    source: (producer.appData as ProducerAppData).source ?? 'camera',
+    kind: producer.kind,
+  };
 }
 
 /**

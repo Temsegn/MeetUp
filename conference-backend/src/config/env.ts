@@ -36,6 +36,10 @@ const envSchema = z.object({
   TURN_USERNAME: z.string().optional(),
   TURN_PASSWORD: z.string().optional(),
 
+  // Recording
+  RECORDINGS_DIR: z.string().optional(),
+  RECORDING_FFMPEG_PATH: z.string().optional(),
+
   // Logging
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
 });

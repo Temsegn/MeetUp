@@ -5,6 +5,8 @@ import { MicOff, Hand, Users } from 'lucide-react';
 
 interface ParticipantTileProps {
   stream: MediaStream | null;
+  /** Separate remote mic stream — kept mounted when camera is off */
+  audioStream?: MediaStream | null;
   name: string;
   isLocal?: boolean;
   isScreen?: boolean;
@@ -21,6 +23,7 @@ interface ParticipantTileProps {
 
 export const ParticipantTile: React.FC<ParticipantTileProps> = ({
   stream,
+  audioStream,
   name,
   isLocal = false,
   isHandRaised = false,
@@ -31,7 +34,8 @@ export const ParticipantTile: React.FC<ParticipantTileProps> = ({
   isCameraOff,
   isSpeakingOverride,
 }) => {
-  const isSpeakingRaw = useAudioLevel(stream);
+  const levelStream = audioStream || stream;
+  const isSpeakingRaw = useAudioLevel(levelStream);
   const isSpeaking = isSpeakingOverride ?? isSpeakingRaw;
 
   const hasVideo =
@@ -42,9 +46,8 @@ export const ParticipantTile: React.FC<ParticipantTileProps> = ({
 
   const hasAudio =
     !isMuted &&
-    stream &&
-    stream.getAudioTracks().length > 0 &&
-    stream.getAudioTracks()[0].enabled;
+    ((audioStream && audioStream.getAudioTracks().length > 0) ||
+      (stream && stream.getAudioTracks().length > 0));
 
   // Overflow "+N more" tile ──────────────────────────────────────────────────
   if (overflowCount) {
@@ -84,6 +87,17 @@ export const ParticipantTile: React.FC<ParticipantTileProps> = ({
         }
       `}
     >
+      {/* Remote audio must play even when video is replaced by avatar */}
+      {!isLocal && audioStream && audioStream.getAudioTracks().length > 0 && (
+        <audio
+          autoPlay
+          playsInline
+          ref={(el) => {
+            if (el && el.srcObject !== audioStream) el.srcObject = audioStream;
+          }}
+        />
+      )}
+
       {/* Video or avatar */}
       {hasVideo ? (
         <VideoPlayer

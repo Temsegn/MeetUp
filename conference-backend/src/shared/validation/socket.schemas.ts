@@ -104,6 +104,12 @@ export const SetConsumerPrioritySchema = z.object({
 
 export const GetPeerDiagnosticsSchema = z.object({ roomId });
 
+// ── Recording ────────────────────────────────────────────────────────────────
+
+export const StartRecordingSchema = z.object({ roomId });
+export const StopRecordingSchema = z.object({ roomId });
+export const GetRecordingStatusSchema = z.object({ roomId });
+
 // ── Chat / reactions ─────────────────────────────────────────────────────────
 
 export const SendMessageSchema = z.object({

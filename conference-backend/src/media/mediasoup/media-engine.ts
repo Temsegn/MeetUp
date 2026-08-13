@@ -13,6 +13,7 @@ import { producerManager } from './producer-manager';
 import { consumerManager } from './consumer-manager';
 import { participantManager } from './participant-manager';
 import { activeSpeakerManager } from './active-speaker-observer';
+import { recordingManager } from './recording-manager';
 import { logger } from '../../infrastructure/logging/logger';
 import { metrics } from '../../infrastructure/metrics/metrics.service';
 import { mediasoupConfig } from '../../config/mediasoup';
@@ -26,6 +27,7 @@ import type {
   RoomStats,
   WorkerStats,
 } from './media.types';
+import type { RecordingInfo } from './recording-manager';
 
 /**
  * MediaEngine — the single public API for the entire SFU media layer.
@@ -52,9 +54,14 @@ export class MediaEngine {
     producerManager.setIO(io);
     consumerManager.setIO(io);
     activeSpeakerManager.setIO(io);
+    recordingManager.setIO(io);
 
     // Initialize worker pool
     await workerManager.initialize();
+
+    routerManager.onRouterClosed((roomId) => {
+      void recordingManager.onRoomClosed(roomId);
+    });
 
     // Wire worker death → router cleanup → client notification
     workerManager.onWorkerDied((workerPid, _affectedRoomIds) => {
@@ -74,6 +81,8 @@ export class MediaEngine {
           metrics.activeParticipants.dec();
           metrics.participantsLeft.inc();
         }
+
+        void recordingManager.onRoomClosed(roomId);
 
         io.to(roomId).emit('worker-died', {
           message: 'Conference server error — please rejoin the meeting.',
@@ -122,6 +131,7 @@ export class MediaEngine {
 
   /** Force-close a room immediately. Normally handled by scheduleRoomCleanup. */
   public closeRoom(roomId: string): void {
+    void recordingManager.onRoomClosed(roomId);
     for (const peer of participantManager.getPeersInRoom(roomId)) {
       participantManager.removePeer(roomId, peer.id);
     }
@@ -218,6 +228,10 @@ export class MediaEngine {
     if (producer.kind === 'audio') {
       await activeSpeakerManager.addProducer(roomId, producer.id);
     }
+    const source = (producer.appData as ProducerAppData).source ?? 'camera';
+    void recordingManager.onProducerCreated(
+      roomId, producer.id, participantId, producer.kind, source,
+    );
     return producer.id;
   }
 
@@ -248,17 +262,34 @@ export class MediaEngine {
     if (producer?.kind === 'audio') {
       activeSpeakerManager.removeProducer(roomId, producerId).catch(() => {});
     }
+    void recordingManager.onProducerClosed(roomId, producerId);
     producerManager.closeProducer(roomId, participantId, producerId);
+  }
+
+  // ── Recording ──────────────────────────────────────────────────────────────
+
+  public async startRecording(
+    roomId: string,
+    startedByParticipantId: string,
+  ): Promise<RecordingInfo> {
+    return recordingManager.startRecording(roomId, startedByParticipantId);
+  }
+
+  public async stopRecording(roomId: string): Promise<RecordingInfo | null> {
+    return recordingManager.stopRecording(roomId);
+  }
+
+  public getRecordingInfo(roomId: string): RecordingInfo | null {
+    return recordingManager.getRecordingInfo(roomId);
+  }
+
+  public isRecording(roomId: string): boolean {
+    return recordingManager.isRecording(roomId);
   }
 
   /**
    * Replace the underlying media track of a running producer in-place.
    * All existing consumers continue without interruption.
-   *
-   * Use cases:
-   *  - Camera device switch (front/back, USB device A → B)
-   *  - New screen-share capture replacing the previous one
-   *  - Pass track=null to pause the producer at the RTP level
    */
   public async replaceTrack(
     roomId: string,
@@ -588,6 +619,7 @@ export class MediaEngine {
       this.statsTimer = undefined;
     }
 
+    await recordingManager.shutdown();
     await routerManager.shutdown();
     await workerManager.shutdown();
 

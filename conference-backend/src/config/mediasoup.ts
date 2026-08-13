@@ -86,7 +86,7 @@ const mediaCodecs: RouterOptions['mediaCodecs'] = [
     },
   },
 
-  // ── Video: VP8 ─────────────────────────────────────────────────────────────
+  // ── Video: VP8 + RTX ───────────────────────────────────────────────────────
   {
     kind:      'video',
     mimeType:  'video/VP8',
@@ -102,8 +102,14 @@ const mediaCodecs: RouterOptions['mediaCodecs'] = [
       { type: 'transport-cc' },
     ],
   },
+  {
+    kind:      'video',
+    mimeType:  'video/rtx',
+    clockRate: 90000,
+    parameters: {},
+  },
 
-  // ── Video: H264 Constrained Baseline 3.1 ───────────────────────────────────
+  // ── Video: H264 Constrained Baseline 3.1 + RTX ─────────────────────────────
   // profile-level-id 42e01f = Constrained Baseline Profile Level 3.1
   // Required for Safari WebRTC compatibility.
   {
@@ -124,10 +130,14 @@ const mediaCodecs: RouterOptions['mediaCodecs'] = [
       { type: 'transport-cc' },
     ],
   },
+  {
+    kind:      'video',
+    mimeType:  'video/rtx',
+    clockRate: 90000,
+    parameters: {},
+  },
 
-  // ── Video: VP9 Profile 0 ───────────────────────────────────────────────────
-  // Chrome and Firefox only. Safari does not support VP9 in WebRTC (≤ Safari 15).
-  // profile-id 0 = widest VP9 browser support
+  // ── Video: VP9 Profile 0 + RTX ─────────────────────────────────────────────
   {
     kind:      'video',
     mimeType:  'video/VP9',
@@ -143,6 +153,12 @@ const mediaCodecs: RouterOptions['mediaCodecs'] = [
       { type: 'goog-remb' },
       { type: 'transport-cc' },
     ],
+  },
+  {
+    kind:      'video',
+    mimeType:  'video/rtx',
+    clockRate: 90000,
+    parameters: {},
   },
 ];
 

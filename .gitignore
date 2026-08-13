@@ -11,3 +11,6 @@ Thumbs.db
 # Env (belt-and-suspenders)
 **/.env
 !**/.env.example
+
+# Recordings
+**/recordings/

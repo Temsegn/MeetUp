@@ -39,6 +39,12 @@ export interface ServerToClientEvents {
   'peer-raise-hand': (payload: PeerRaiseHandPayload) => void;
   /** Active speaker changed — dominant audio producer in the room */
   'active-speaker':  (payload: ActiveSpeakerPayload) => void;
+  /** Server-side recording started */
+  'recording-started': (payload: RecordingStartedPayload) => void;
+  /** Server-side recording stopped */
+  'recording-stopped': (payload: RecordingStoppedPayload) => void;
+  /** A new track was added to an active recording */
+  'recording-track-added': (payload: RecordingTrackAddedPayload) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -74,6 +80,9 @@ export interface ClientToServerEvents {
    * No server-side track object is involved — only the producerId is needed.
    */
   'replace-track':          (payload: ReplaceTrackPayload,          callback?: AckCallback<SuccessResponse>) => void;
+  'start-recording':        (payload: StartRecordingPayload,        callback: AckCallback<RecordingStatusResponse>) => void;
+  'stop-recording':         (payload: StopRecordingPayload,         callback: AckCallback<RecordingStatusResponse>) => void;
+  'get-recording-status':   (payload: GetRecordingStatusPayload,    callback: AckCallback<RecordingStatusResponse>) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +168,9 @@ export interface SendMessagePayload    { roomId: string; content: string; }
 export interface GetChatHistoryPayload { roomId: string; }
 export interface SendReactionPayload   { roomId: string; reaction: string; }
 export interface RaiseHandPayload      { roomId: string; isRaised: boolean; }
+export interface StartRecordingPayload { roomId: string; }
+export interface StopRecordingPayload  { roomId: string; }
+export interface GetRecordingStatusPayload { roomId: string; }
 
 // ---------------------------------------------------------------------------
 // Response / ack types
@@ -241,8 +253,18 @@ export interface NewProducerPayload {
   appData:       Record<string, unknown>;
 }
 
-export interface ProducerClosedPayload  { participantId: string; producerId: string; }
-export interface ProducerStatePayload   { participantId: string; producerId: string; }
+export interface ProducerClosedPayload  {
+  participantId: string;
+  producerId: string;
+  source?: 'camera' | 'microphone' | 'screen' | string;
+  kind?: MediaKind;
+}
+export interface ProducerStatePayload   {
+  participantId: string;
+  producerId: string;
+  source?: 'camera' | 'microphone' | 'screen' | string;
+  kind?: MediaKind;
+}
 
 export interface ConsumerClosedPayload {
   consumerId:    string;
@@ -275,3 +297,38 @@ export interface PeerReactionPayload   { participantId: string; reaction: string
 export interface PeerRaiseHandPayload  { participantId: string; isRaised: boolean; }
 export interface ActiveSpeakerPayload  { roomId: string; participantId: string; }
 export interface ReplaceTrackPayload   { roomId: string; producerId: string; }
+
+export interface RecordingStartedPayload {
+  roomId: string;
+  recordingId: string;
+  startedBy: string;
+  startedAt: string;
+}
+
+export interface RecordingStoppedPayload {
+  roomId: string;
+  recordingId: string;
+  outputDir: string;
+  files: string[];
+}
+
+export interface RecordingTrackAddedPayload {
+  roomId: string;
+  producerId: string;
+  participantId: string;
+  kind: MediaKind;
+  source: string;
+}
+
+export interface RecordingStatusResponse {
+  recording: boolean;
+  info?: {
+    roomId: string;
+    recordingId: string;
+    startedBy: string;
+    startedAt: string;
+    outputDir: string;
+    trackCount: number;
+    files: string[];
+  } | null;
+}
