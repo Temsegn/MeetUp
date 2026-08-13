@@ -86,7 +86,11 @@ const mediaCodecs: RouterOptions['mediaCodecs'] = [
     },
   },
 
-  // ── Video: VP8 + RTX ───────────────────────────────────────────────────────
+  // ── Video: VP8 ─────────────────────────────────────────────────────────────
+  // Note: do NOT add bare video/rtx entries here — mediasoup-client rejects
+  // router RTP caps with "media codec not supported [mimeType:video/rtx]".
+  // NACK still works; RTX retransmission can be added later with a verified
+  // mediasoup + mediasoup-client pairing.
   {
     kind:      'video',
     mimeType:  'video/VP8',
@@ -102,16 +106,8 @@ const mediaCodecs: RouterOptions['mediaCodecs'] = [
       { type: 'transport-cc' },
     ],
   },
-  {
-    kind:      'video',
-    mimeType:  'video/rtx',
-    clockRate: 90000,
-    parameters: {},
-  },
 
-  // ── Video: H264 Constrained Baseline 3.1 + RTX ─────────────────────────────
-  // profile-level-id 42e01f = Constrained Baseline Profile Level 3.1
-  // Required for Safari WebRTC compatibility.
+  // ── Video: H264 Constrained Baseline 3.1 ───────────────────────────────────
   {
     kind:      'video',
     mimeType:  'video/H264',
@@ -130,14 +126,8 @@ const mediaCodecs: RouterOptions['mediaCodecs'] = [
       { type: 'transport-cc' },
     ],
   },
-  {
-    kind:      'video',
-    mimeType:  'video/rtx',
-    clockRate: 90000,
-    parameters: {},
-  },
 
-  // ── Video: VP9 Profile 0 + RTX ─────────────────────────────────────────────
+  // ── Video: VP9 Profile 0 ───────────────────────────────────────────────────
   {
     kind:      'video',
     mimeType:  'video/VP9',
@@ -153,12 +143,6 @@ const mediaCodecs: RouterOptions['mediaCodecs'] = [
       { type: 'goog-remb' },
       { type: 'transport-cc' },
     ],
-  },
-  {
-    kind:      'video',
-    mimeType:  'video/rtx',
-    clockRate: 90000,
-    parameters: {},
   },
 ];
 

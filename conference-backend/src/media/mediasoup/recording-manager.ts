@@ -1,14 +1,13 @@
 import { spawn, ChildProcess, execFile } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { createServer } from 'net';
+import dgram from 'dgram';
 import { promisify } from 'util';
 import { Server as SocketIOServer } from 'socket.io';
 import {
   Consumer,
   PlainTransport,
   Producer,
-  RtpCodecCapability,
 } from 'mediasoup/types';
 import { routerManager } from './router-manager';
 import { producerManager } from './producer-manager';
@@ -29,6 +28,7 @@ interface RecordedProducer {
   ffmpeg?: ChildProcess;
   rtpPort: number;
   outputFile: string;
+  sdpPath: string;
 }
 
 interface RoomRecording {
@@ -53,13 +53,12 @@ export interface RecordingInfo {
 /**
  * Server-side mediasoup recording via PlainTransport → FFmpeg.
  *
- * Architecture:
- *  - One RoomRecording per actively recording room
- *  - Each mediasoup Producer is forked to a PlainTransport Consumer
- *  - FFmpeg receives RTP on localhost and writes per-track WebM files
- *  - Files land in RECORDINGS_DIR/{roomId}/{recordingId}/
- *
- * Requires `ffmpeg` on PATH (or RECORDING_FFMPEG_PATH).
+ * Order (critical):
+ *  1. Create PlainTransport
+ *  2. Create paused Consumer
+ *  3. Reserve UDP port + write SDP
+ *  4. Start FFmpeg (listens on that port)
+ *  5. transport.connect → consumer.resume → requestKeyFrame
  */
 export class RecordingManager {
   private io?: SocketIOServer;
@@ -119,6 +118,13 @@ export class RecordingManager {
     const router = routerManager.getRouter(roomId);
     if (!router) throw new Error(`No router for room ${roomId}`);
 
+    const producers = producerManager.getAllProducersInRoom(roomId);
+    if (producers.length === 0) {
+      throw new Error(
+        'No media to record. Join with camera/mic on, wait until you see yourself, then start recording.',
+      );
+    }
+
     const recordingId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const outputDir = path.join(this.recordingsRoot, roomId, recordingId);
     await fs.mkdir(outputDir, { recursive: true });
@@ -133,17 +139,26 @@ export class RecordingManager {
     };
     this.recordings.set(roomId, session);
 
-    const producers = producerManager.getAllProducersInRoom(roomId);
-    for (const p of producers) {
-      try {
-        await this._attachProducer(session, p.producerId, p.participantId, p.kind, p.source);
-      } catch (err) {
-        logger.error('Failed to attach producer to recording', {
-          roomId,
-          producerId: p.producerId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      }
+    // Attach all producers in parallel — sequential waits made Record feel very slow
+    await Promise.all(
+      producers.map(async (p) => {
+        try {
+          await this._attachProducer(session, p.producerId, p.participantId, p.kind, p.source);
+        } catch (err) {
+          logger.error('Failed to attach producer to recording', {
+            roomId,
+            producerId: p.producerId,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }),
+    );
+
+    if (session.tracks.size === 0) {
+      this.recordings.delete(roomId);
+      throw new Error(
+        'Could not attach any media tracks for recording. Check server logs for FFmpeg/RTP errors.',
+      );
     }
 
     const info = this.getRecordingInfo(roomId)!;
@@ -168,21 +183,36 @@ export class RecordingManager {
     const session = this.recordings.get(roomId);
     if (!session) return null;
 
+    const tracks = Array.from(session.tracks.values());
+    session.tracks.clear();
+    this.recordings.delete(roomId);
+
+    // Stop all tracks (close RTP + quit ffmpeg) in parallel
+    await Promise.all(tracks.map((t) => this._detachTrack(t)));
+
+    // Remux each file so browsers/players can open it (live WebM often lacks index)
+    const playable: string[] = [];
+    for (const track of tracks) {
+      try {
+        const finalized = await this._finalizeWebm(track.outputFile);
+        if (finalized) playable.push(finalized);
+      } catch (err) {
+        logger.warn('Failed to finalize recording file', {
+          file: track.outputFile,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     const info: RecordingInfo = {
       roomId: session.roomId,
       recordingId: session.recordingId,
       startedBy: session.startedBy,
       startedAt: session.startedAt.toISOString(),
       outputDir: session.outputDir,
-      trackCount: session.tracks.size,
-      files: Array.from(session.tracks.values()).map((t) => t.outputFile),
+      trackCount: tracks.length,
+      files: playable,
     };
-
-    for (const track of session.tracks.values()) {
-      await this._detachTrack(track);
-    }
-    session.tracks.clear();
-    this.recordings.delete(roomId);
 
     this.io?.to(roomId).emit('recording-stopped', {
       roomId,
@@ -195,12 +225,12 @@ export class RecordingManager {
       roomId,
       recordingId: info.recordingId,
       files: info.files.length,
+      paths: info.files,
     });
 
     return info;
   }
 
-  /** Attach a newly created producer if the room is recording. */
   public async onProducerCreated(
     roomId: string,
     producerId: string,
@@ -238,7 +268,6 @@ export class RecordingManager {
     session.tracks.delete(producerId);
   }
 
-  /** Stop recording when room/router is torn down. */
   public async onRoomClosed(roomId: string): Promise<void> {
     if (this.recordings.has(roomId)) {
       await this.stopRecording(roomId);
@@ -273,12 +302,13 @@ export class RecordingManager {
     const rtpPort = await this._getFreeUdpPort();
 
     const transport = await router.createPlainTransport({
-      listenIp: { ip: '127.0.0.1', announcedIp: undefined },
+      listenInfo: {
+        protocol: 'udp',
+        ip: '127.0.0.1',
+      },
       rtcpMux: true,
       comedia: false,
     });
-
-    await transport.connect({ ip: '127.0.0.1', port: rtpPort });
 
     const consumer = await transport.consume({
       producerId,
@@ -286,23 +316,51 @@ export class RecordingManager {
       paused: true,
     });
 
+    // Prefer highest simulcast layer for recording quality
+    if (consumer.type === 'simulcast' || consumer.type === 'svc') {
+      try {
+        await consumer.setPreferredLayers({ spatialLayer: 2, temporalLayer: 2 });
+      } catch { /* non-critical */ }
+    }
+
     const safeSource = String(source).replace(/[^a-z0-9_-]/gi, '');
-    const outputFile = path.join(
+    const outputFile = path.resolve(
       session.outputDir,
       `${participantId.slice(0, 8)}_${safeSource}_${kind}_${producerId.slice(0, 8)}.webm`,
     );
-
-    const sdp = this._createSdp(consumer, transport.tuple.localPort, rtpPort);
     const sdpPath = `${outputFile}.sdp`;
+
+    const codec = consumer.rtpParameters.codecs[0];
+    const sdp = this._createSdp({
+      kind: consumer.kind,
+      payloadType: codec.payloadType,
+      mimeType: codec.mimeType,
+      clockRate: codec.clockRate,
+      channels: codec.channels,
+      parameters: codec.parameters as Record<string, unknown> | undefined,
+      rtpPort,
+    });
     await fs.writeFile(sdpPath, sdp);
 
+    // Start FFmpeg and wait until it is actually listening for RTP.
     const ffmpeg = this._spawnFfmpeg(sdpPath, outputFile, kind);
+    await this._waitForFfmpegReady(ffmpeg, 3_000);
 
-    // Give FFmpeg a moment to open the UDP socket, then resume RTP.
-    await new Promise((r) => setTimeout(r, 400));
+    await transport.connect({ ip: '127.0.0.1', port: rtpPort });
+
     if (!consumer.closed) {
       await consumer.resume();
       if (kind === 'video') {
+        const keyframeInterval = setInterval(() => {
+          if (consumer.closed) {
+            clearInterval(keyframeInterval);
+            return;
+          }
+          consumer.requestKeyFrame().catch(() => {});
+        }, 2000);
+        // Clear when producer closes / detach closes consumer
+        consumer.on('transportclose', () => clearInterval(keyframeInterval));
+        consumer.on('producerclose', () => clearInterval(keyframeInterval));
         try {
           await consumer.requestKeyFrame();
         } catch { /* non-critical */ }
@@ -319,6 +377,7 @@ export class RecordingManager {
       ffmpeg,
       rtpPort,
       outputFile,
+      sdpPath,
     };
     session.tracks.set(producerId, track);
 
@@ -331,11 +390,14 @@ export class RecordingManager {
       producerId,
       kind,
       source,
+      codec: codec.mimeType,
+      rtpPort,
       outputFile,
     });
   }
 
   private async _detachTrack(track: RecordedProducer): Promise<void> {
+    // Stop RTP first so FFmpeg can finalize the container
     try {
       if (!track.consumer.closed) track.consumer.close();
     } catch { /* ignore */ }
@@ -343,82 +405,147 @@ export class RecordingManager {
       if (!track.transport.closed) track.transport.close();
     } catch { /* ignore */ }
 
-    if (track.ffmpeg && !track.ffmpeg.killed) {
+    if (track.ffmpeg && track.ffmpeg.exitCode === null && !track.ffmpeg.killed) {
       await new Promise<void>((resolve) => {
         const proc = track.ffmpeg!;
-        const done = () => resolve();
+        let settled = false;
+        const done = () => {
+          if (settled) return;
+          settled = true;
+          resolve();
+        };
         proc.once('exit', done);
-        proc.kill('SIGINT');
+
+        // Graceful quit via stdin (Windows-safe). Guard against closed stdin.
+        try {
+          if (proc.stdin && !proc.stdin.destroyed && proc.stdin.writable) {
+            proc.stdin.write('q');
+            proc.stdin.end();
+          } else {
+            proc.kill();
+          }
+        } catch {
+          try { proc.kill(); } catch { /* ignore */ }
+        }
+
         setTimeout(() => {
-          if (!proc.killed) proc.kill('SIGKILL');
+          if (proc.exitCode === null) {
+            try { proc.kill(); } catch { /* ignore */ }
+          }
           done();
-        }, 3000);
+        }, 4000);
       });
     }
 
-    // Clean SDP sidecar
     try {
-      await fs.unlink(`${track.outputFile}.sdp`);
+      await fs.unlink(track.sdpPath);
     } catch { /* ignore */ }
   }
 
-  private _spawnFfmpeg(sdpPath: string, outputFile: string, kind: 'audio' | 'video'): ChildProcess {
-    // Copy codecs when possible; fall back to libopus/libvpx if needed.
+  private _spawnFfmpeg(sdpPath: string, outputFile: string, _kind: 'audio' | 'video'): ChildProcess {
+    const absSdp = path.resolve(sdpPath);
+    const absOut = path.resolve(outputFile);
+
+    // Copy RTP codecs (Opus/VP8) into WebM — much faster than re-encode and opens more reliably after remux.
     const args = [
-      '-loglevel', 'warning',
+      '-hide_banner',
+      '-loglevel', 'info',
       '-protocol_whitelist', 'file,udp,rtp',
-      '-fflags', '+genpts',
-      '-i', sdpPath,
+      '-fflags', '+genpts+igndts',
+      '-f', 'sdp',
+      '-i', absSdp,
       '-map', '0:0',
-      ...(kind === 'audio'
-        ? ['-c:a', 'libopus', '-b:a', '128k']
-        : ['-c:v', 'libvpx', '-b:v', '1000k', '-deadline', 'realtime', '-cpu-used', '4']),
+      '-c', 'copy',
+      '-flush_packets', '1',
+      '-cluster_size_limit', '2M',
+      '-cluster_time_limit', '5000',
       '-f', 'webm',
       '-y',
-      outputFile,
+      absOut,
     ];
 
+    logger.info('Spawning ffmpeg for recording', { args: args.join(' '), outputFile: absOut });
+
     const proc = spawn(this.ffmpegPath, args, {
-      stdio: ['ignore', 'ignore', 'pipe'],
+      stdio: ['pipe', 'ignore', 'pipe'],
+      windowsHide: true,
     });
 
     proc.stderr?.on('data', (buf: Buffer) => {
       const line = buf.toString().trim();
-      if (line) logger.debug('ffmpeg', { line, outputFile });
+      if (line) {
+        logger.info('ffmpeg', { line, outputFile: absOut });
+      }
+    });
+
+    proc.on('error', (err) => {
+      logger.error('ffmpeg spawn error', { err: err.message, outputFile: absOut });
     });
 
     proc.on('exit', (code, signal) => {
-      logger.info('ffmpeg exited', { outputFile, code, signal });
+      logger.info('ffmpeg exited', { outputFile: absOut, code, signal });
     });
 
     return proc;
   }
 
   /**
-   * Minimal SDP that points FFmpeg at the mediasoup PlainTransport tuple
-   * and describes the consumer's negotiated codec.
+   * Wait until FFmpeg has parsed the SDP and is listening for RTP.
+   * Connecting/resuming before this causes all UDP packets to be lost.
    */
-  private _createSdp(
-    consumer: Consumer,
-    localPort: number,
-    remotePort: number,
-  ): string {
-    const codec = consumer.rtpParameters.codecs[0] as RtpCodecCapability & {
-      payloadType: number;
-      clockRate: number;
-      channels?: number;
-      mimeType: string;
-      parameters?: Record<string, unknown>;
-    };
-    const payloadType = codec.payloadType;
-    const mime = codec.mimeType.split('/')[1] || 'opus';
-    const isAudio = consumer.kind === 'audio';
-    const clockRate = codec.clockRate;
-    const channels = codec.channels ?? 2;
+  private _waitForFfmpegReady(proc: ChildProcess, ms: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (proc.exitCode !== null) {
+        reject(new Error(`FFmpeg exited immediately with code ${proc.exitCode}`));
+        return;
+      }
 
-    // mediasoup sends TO remotePort; FFmpeg listens on remotePort.
-    // c= line uses 127.0.0.1; mediasoup plain transport localPort is source.
-    void localPort;
+      let ready = false;
+      const onExit = (code: number | null) => {
+        clearTimeout(timer);
+        if (!ready) reject(new Error(`FFmpeg exited early with code ${code}`));
+      };
+      proc.once('exit', onExit);
+
+      const onData = (buf: Buffer) => {
+        const text = buf.toString();
+        if (
+          text.includes('Press [q]') ||
+          text.includes('Stream mapping') ||
+          text.includes('Output #0')
+        ) {
+          ready = true;
+          clearTimeout(timer);
+          proc.stderr?.off('data', onData);
+          proc.off('exit', onExit);
+          // Small delay so UDP bind is fully active
+          setTimeout(resolve, 100);
+        }
+      };
+      proc.stderr?.on('data', onData);
+
+      const timer = setTimeout(() => {
+        proc.stderr?.off('data', onData);
+        proc.off('exit', onExit);
+        // Proceed anyway — better than hanging forever
+        logger.warn('FFmpeg ready timeout — proceeding with connect/resume');
+        resolve();
+      }, ms);
+    });
+  }
+
+  private _createSdp(opts: {
+    kind: 'audio' | 'video';
+    payloadType: number;
+    mimeType: string;
+    clockRate: number;
+    channels?: number;
+    parameters?: Record<string, unknown>;
+    rtpPort: number;
+  }): string {
+    const mime = opts.mimeType.split('/')[1] || (opts.kind === 'audio' ? 'opus' : 'VP8');
+    const isAudio = opts.kind === 'audio';
+    const channels = opts.channels ?? 2;
 
     const lines = [
       'v=0',
@@ -426,37 +553,94 @@ export class RecordingManager {
       's=MeetUp Recording',
       'c=IN IP4 127.0.0.1',
       't=0 0',
-      `m=${isAudio ? 'audio' : 'video'} ${remotePort} RTP/AVP ${payloadType}`,
-      `a=rtpmap:${payloadType} ${mime}/${clockRate}${isAudio ? `/${channels}` : ''}`,
+      `m=${isAudio ? 'audio' : 'video'} ${opts.rtpPort} RTP/AVP ${opts.payloadType}`,
+      `a=rtpmap:${opts.payloadType} ${mime}/${opts.clockRate}${isAudio ? `/${channels}` : ''}`,
       'a=recvonly',
+      'a=rtcp-mux',
     ];
 
-    if (codec.parameters && Object.keys(codec.parameters).length > 0) {
-      const fmtp = Object.entries(codec.parameters)
+    if (opts.parameters && Object.keys(opts.parameters).length > 0) {
+      const fmtp = Object.entries(opts.parameters)
         .map(([k, v]) => `${k}=${v}`)
         .join(';');
-      lines.push(`a=fmtp:${payloadType} ${fmtp}`);
+      if (fmtp) lines.push(`a=fmtp:${opts.payloadType} ${fmtp}`);
     }
 
-    return lines.join('\n') + '\n';
+    return `${lines.join('\r\n')}\r\n`;
   }
 
+  /**
+   * Remux live WebM into a playable file with a proper index/cues.
+   * Live RTP→WebM often won't open in VLC/Chrome until remuxed.
+   */
+  private async _finalizeWebm(inputPath: string): Promise<string | null> {
+    try {
+      const st = await fs.stat(inputPath);
+      if (st.size < 100) return null;
+    } catch {
+      return null;
+    }
+
+    const tmpPath = `${inputPath}.tmp.webm`;
+
+    const remuxArgsSets: string[][] = [
+      // Fast remux with cues/index
+      ['-hide_banner', '-loglevel', 'error', '-y', '-i', inputPath, '-c', 'copy', '-f', 'webm', tmpPath],
+      // Re-encode fallback when live WebM is truncated / missing index
+      [
+        '-hide_banner', '-loglevel', 'error', '-y', '-err_detect', 'ignore_err',
+        '-i', inputPath,
+        '-c:v', 'libvpx', '-b:v', '1M',
+        '-c:a', 'libopus', '-b:a', '128k',
+        '-f', 'webm', tmpPath,
+      ],
+    ];
+
+    for (const args of remuxArgsSets) {
+      try {
+        await execFileAsync(this.ffmpegPath, args);
+        await fs.unlink(inputPath).catch(() => {});
+        await fs.rename(tmpPath, inputPath);
+        const finalStat = await fs.stat(inputPath);
+        if (finalStat.size < 100) continue;
+        logger.info('Recording file finalized', { file: inputPath, bytes: finalStat.size });
+        return inputPath;
+      } catch (err) {
+        try { await fs.unlink(tmpPath); } catch { /* ignore */ }
+        logger.warn('WebM finalize attempt failed', {
+          inputPath,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    try {
+      const st = await fs.stat(inputPath);
+      return st.size > 100 ? inputPath : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Bind a real UDP socket so the port is reserved for FFmpeg. */
   private _getFreeUdpPort(): Promise<number> {
     return new Promise((resolve, reject) => {
-      // TCP listen-and-close is a practical way to reserve an ephemeral port
-      // number that we then use for UDP RTP toward FFmpeg.
-      const server = createServer();
-      server.listen(0, '127.0.0.1', () => {
-        const addr = server.address();
-        if (!addr || typeof addr === 'string') {
-          server.close();
-          reject(new Error('Failed to allocate port'));
+      const socket = dgram.createSocket('udp4');
+      socket.once('error', (err) => {
+        try { socket.close(); } catch { /* ignore */ }
+        reject(err);
+      });
+      socket.bind(0, '127.0.0.1', () => {
+        const addr = socket.address();
+        if (typeof addr === 'string') {
+          socket.close();
+          reject(new Error('Failed to allocate UDP port'));
           return;
         }
         const { port } = addr;
-        server.close((err) => (err ? reject(err) : resolve(port)));
+        // Close so FFmpeg can bind the same port immediately after.
+        socket.close(() => resolve(port));
       });
-      server.on('error', reject);
     });
   }
 }

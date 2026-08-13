@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authService, authHeaders } from '../services/auth/auth.service';
-import { Video, Link2, LogOut, Copy, Check, Users, Clock, ExternalLink, RefreshCw, Calendar, X, Zap } from 'lucide-react';
+import { Video, Link2, LogOut, Copy, Check, Users, Clock, ExternalLink, RefreshCw, Calendar, X, Zap, Trash2 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4001';
 
@@ -34,17 +34,24 @@ export const HomePage: React.FC = () => {
   const [scheduleTime, setScheduleTime] = useState('');
   const [scheduleDuration, setScheduleDuration] = useState('30');
   const [isScheduling, setIsScheduling] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
 
   const fetchMeetings = useCallback(async () => {
     setMeetingsLoading(true);
+    setListError(null);
     try {
       const res = await fetch(`${API_URL}/meetings`, { headers: authHeaders() });
       if (res.ok) {
         const data = await res.json();
         setMeetings(Array.isArray(data) ? data : data.meetings || []);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setListError(data.error || 'Failed to load meetings. Try signing in again.');
       }
     } catch (e) {
       console.error('Failed to fetch meetings', e);
+      setListError('Failed to load meetings.');
     } finally {
       setMeetingsLoading(false);
     }
@@ -54,11 +61,15 @@ export const HomePage: React.FC = () => {
 
   const handleNewInstantMeeting = async () => {
     try {
-      await fetch(`${API_URL}/meetings`, {
+      const res = await fetch(`${API_URL}/meetings`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ roomId: newRoomId, type: 'instant', title: 'Instant Meeting' }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.error('Failed to save instant meeting', data);
+      }
     } catch (e) {
       console.error('Failed to save instant meeting', e);
     }
@@ -70,6 +81,7 @@ export const HomePage: React.FC = () => {
     if (!scheduleDate || !scheduleTime) return;
 
     setIsScheduling(true);
+    setScheduleError(null);
     const scheduledRoomId = authService.generateRoomId();
     const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
 
@@ -91,12 +103,37 @@ export const HomePage: React.FC = () => {
         setScheduleTitle('');
         setScheduleDate('');
         setScheduleTime('');
-        fetchMeetings();
+        await fetchMeetings();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setScheduleError(data.error || 'Failed to schedule meeting.');
       }
     } catch (e) {
       console.error('Failed to schedule meeting', e);
+      setScheduleError('Failed to schedule meeting.');
     } finally {
       setIsScheduling(false);
+    }
+  };
+
+  const handleDeleteMeeting = async (meeting: Meeting) => {
+    if (!window.confirm(`Delete "${meeting.title || meeting.roomId}"? This cannot be undone.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`${API_URL}/meetings/${meeting._id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (res.ok) {
+        setMeetings((prev) => prev.filter((m) => m._id !== meeting._id));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Failed to delete meeting.');
+      }
+    } catch (e) {
+      console.error('Failed to delete meeting', e);
+      alert('Failed to delete meeting.');
     }
   };
 
@@ -288,6 +325,10 @@ export const HomePage: React.FC = () => {
             </div>
           </div>
 
+          {listError && (
+            <p className="text-sm text-red-400 mb-3">{listError}</p>
+          )}
+
           {meetingsLoading ? (
             <div className="flex items-center justify-center py-12 text-slate-600 text-sm gap-2 bg-slate-900/50 rounded-2xl border border-slate-800">
               <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
@@ -300,6 +341,7 @@ export const HomePage: React.FC = () => {
             <div className="flex flex-col items-center justify-center py-12 text-slate-600 gap-2 bg-slate-900/50 rounded-2xl border border-slate-800">
               <Users size={32} className="text-slate-700" />
               <p className="text-sm">No {activeTab !== 'all' ? activeTab : ''} meetings found.</p>
+              <p className="text-xs text-slate-500">Start or schedule a meeting — it stays here until you delete it.</p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -327,7 +369,7 @@ export const HomePage: React.FC = () => {
                           <span>ID: {m.roomId}</span>
                           {isScheduled && m.scheduledAt && (
                             <span className="text-purple-300 font-sans">
-                              📅 {formatDate(m.scheduledAt)} ({m.duration || 30} mins)
+                              {formatDate(m.scheduledAt)} ({m.duration || 30} mins)
                             </span>
                           )}
                           {!isScheduled && (
@@ -345,6 +387,13 @@ export const HomePage: React.FC = () => {
                       >
                         {copied === m.roomId ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
                         <span className="hidden sm:inline">Copy link</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteMeeting(m)}
+                        className="text-slate-400 hover:text-red-400 transition p-2 rounded-lg hover:bg-slate-800"
+                        title="Delete meeting"
+                      >
+                        <Trash2 size={14} />
                       </button>
                       <button
                         onClick={() => navigate(`/room/${m.roomId}`)}
@@ -382,6 +431,11 @@ export const HomePage: React.FC = () => {
             </div>
 
             <form onSubmit={handleScheduleMeeting} className="flex flex-col gap-4">
+              {scheduleError && (
+                <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
+                  {scheduleError}
+                </p>
+              )}
               <div>
                 <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5">
                   Meeting Title

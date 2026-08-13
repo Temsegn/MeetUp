@@ -203,6 +203,7 @@ export const useMeeting = (
   const startRecording = useCallback(async () => {
     const sess = sessionRef.current;
     if (!sess) return;
+    addToast?.('Starting recording…');
     const res = await sess.startRecording();
     if (res.error) {
       addToast?.(res.error);
@@ -215,15 +216,15 @@ export const useMeeting = (
   const stopRecording = useCallback(async () => {
     const sess = sessionRef.current;
     if (!sess) return;
+    addToast?.('Stopping recording…');
     const res = await sess.stopRecording();
     if (res.error) {
       addToast?.(res.error);
       return;
     }
     setIsRecording(false);
-    addToast?.('Recording stopped');
+    addToast?.('Recording stopped — files saved on server');
   }, [addToast]);
-
   return {
     joined,
     participantId,

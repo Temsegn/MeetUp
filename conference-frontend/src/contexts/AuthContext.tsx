@@ -9,6 +9,7 @@ export interface User {
 }
 
 const TOKEN_KEY = 'conference_token';
+const LEGACY_TOKEN_KEY = 'meetspace_token';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001';
 
 interface AuthContextType {
@@ -21,6 +22,18 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+
+function readStoredToken(): string | null {
+  const current = localStorage.getItem(TOKEN_KEY);
+  if (current) return current;
+  const legacy = localStorage.getItem(LEGACY_TOKEN_KEY);
+  if (legacy) {
+    localStorage.setItem(TOKEN_KEY, legacy);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+    return legacy;
+  }
+  return null;
+}
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
@@ -37,14 +50,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem(TOKEN_KEY);
+    const stored = readStoredToken();
     if (!stored) { setLoading(false); return; }
 
     apiFetch<Omit<User, 'token'>>('/auth/me', {
       headers: { Authorization: `Bearer ${stored}`, 'Content-Type': 'application/json' },
     })
       .then(u => setUser({ ...u, token: stored }))
-      .catch(() => localStorage.removeItem(TOKEN_KEY))
+      .catch(() => {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(LEGACY_TOKEN_KEY);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -54,6 +70,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       { method: 'POST', body: JSON.stringify({ email, password }) },
     );
     localStorage.setItem(TOKEN_KEY, token);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
     setUser({ ...u, token });
   };
 
@@ -63,11 +80,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       { method: 'POST', body: JSON.stringify({ name, email, password }) },
     );
     localStorage.setItem(TOKEN_KEY, token);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
     setUser({ ...u, token });
   };
 
   const signOut = () => {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
     setUser(null);
   };
 

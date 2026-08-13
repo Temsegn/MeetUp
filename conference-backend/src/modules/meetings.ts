@@ -11,7 +11,7 @@ router.use(authenticate);
 router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const page  = Math.max(1, parseInt(String(req.query.page ?? '1'), 10));
-    const limit = Math.min(50, parseInt(String(req.query.limit ?? '20'), 10));
+    const limit = Math.min(50, parseInt(String(req.query.limit ?? '50'), 10));
     const skip  = (page - 1) * limit;
 
     const query: Record<string, any> = { createdBy: req.user!._id };
@@ -36,6 +36,7 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
 });
 
 // POST /meetings — create a new meeting (instant or scheduled)
+// Meetings persist in MongoDB until explicitly deleted — room close does NOT delete them.
 router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
   const { roomId, type = 'instant', title, scheduledAt, duration } = req.body;
   if (!roomId || typeof roomId !== 'string' || roomId.trim().length === 0) {
@@ -45,6 +46,13 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
 
   const sanitizedRoomId = roomId.trim().slice(0, 100);
   const meetingType = type === 'scheduled' ? 'scheduled' : 'instant';
+
+  if (meetingType === 'scheduled') {
+    if (!scheduledAt || Number.isNaN(Date.parse(String(scheduledAt)))) {
+      res.status(400).json({ error: 'scheduledAt must be a valid date for scheduled meetings.' });
+      return;
+    }
+  }
 
   try {
     const meeting = await Meeting.findOneAndUpdate(
@@ -67,6 +75,26 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
   } catch (err) {
     console.error('Create meeting error:', err);
     res.status(500).json({ error: 'Failed to create meeting.' });
+  }
+});
+
+// DELETE /meetings/:id — permanently remove a meeting the user owns
+router.delete('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const meeting = await Meeting.findOneAndDelete({
+      _id: req.params.id,
+      createdBy: req.user!._id,
+    });
+
+    if (!meeting) {
+      res.status(404).json({ error: 'Meeting not found or you do not own it.' });
+      return;
+    }
+
+    res.json({ success: true, roomId: meeting.roomId });
+  } catch (err) {
+    console.error('Delete meeting error:', err);
+    res.status(500).json({ error: 'Failed to delete meeting.' });
   }
 });
 

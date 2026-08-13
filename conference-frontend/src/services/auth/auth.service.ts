@@ -1,5 +1,7 @@
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4001';
-const TOKEN_KEY = 'meetspace_token';
+// Must match AuthContext TOKEN_KEY so meeting APIs receive the JWT
+const TOKEN_KEY = 'conference_token';
+const LEGACY_TOKEN_KEY = 'meetspace_token';
 
 export interface User {
   id: string;
@@ -13,9 +15,26 @@ interface AuthResponse {
   user: User;
 }
 
-const getToken = (): string | null => localStorage.getItem(TOKEN_KEY);
-const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
-const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+const getToken = (): string | null => {
+  const current = localStorage.getItem(TOKEN_KEY);
+  if (current) return current;
+  // Migrate older key so meetings list works after login from previous builds
+  const legacy = localStorage.getItem(LEGACY_TOKEN_KEY);
+  if (legacy) {
+    localStorage.setItem(TOKEN_KEY, legacy);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+    return legacy;
+  }
+  return null;
+};
+const setToken = (t: string) => {
+  localStorage.setItem(TOKEN_KEY, t);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
+};
+const clearToken = () => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
+};
 
 export const authHeaders = (): HeadersInit => ({
   'Content-Type': 'application/json',

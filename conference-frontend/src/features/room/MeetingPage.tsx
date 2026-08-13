@@ -149,15 +149,22 @@ export const MeetingPage: React.FC = () => {
     setJoinError(null);
     setIsJoining(true);
     try {
+      // Ensure we have a live MediaStream BEFORE joining/producing.
+      // Stale React state can be null even after getUserMedia succeeded.
+      const stream = localStream ?? await startLocalMedia();
+      if (!stream || stream.getTracks().length === 0) {
+        throw new Error('Could not access camera/microphone. Allow permissions and try again.');
+      }
+
       await joinMeeting();
       const sess = session.current;
-      if (sess && localStream) {
-        for (const track of localStream.getAudioTracks()) {
-          await sess.produce(track, 'microphone');
-        }
-        for (const track of localStream.getVideoTracks()) {
-          await sess.produce(track, 'camera', true);
-        }
+      if (!sess) throw new Error('Media session failed to initialize');
+
+      for (const track of stream.getAudioTracks()) {
+        await sess.produce(track, 'microphone');
+      }
+      for (const track of stream.getVideoTracks()) {
+        await sess.produce(track, 'camera', true);
       }
     } catch (err: any) {
       setJoinError(err?.message || 'Failed to join. Is the backend running?');
