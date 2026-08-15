@@ -6,8 +6,8 @@ import {
   RtpCapabilities,
   MediaKind,
 } from 'mediasoup/types';
-import { Meeting } from '../../models/Meeting.model';
-import { mediaEngine } from '../../media/mediasoup/media-engine';
+import { Meeting } from '../../database/models/Meeting.model';
+import { mediaEngine } from '../../media/media-engine';
 import { mediasoupConfig } from '../../config/mediasoup';
 import { logger } from '../../infrastructure/logging/logger';
 import { metrics } from '../../infrastructure/metrics/metrics.service';
@@ -35,8 +35,8 @@ import {
   StopRecordingSchema,
   GetRecordingStatusSchema,
 } from '../../shared/validation/socket.schemas';
-import type { TransportDirection, ProducerAppData } from '../../media/mediasoup/media.types';
-import { participantManager } from '../../media/mediasoup/participant-manager';
+import type { TransportDirection, ProducerAppData } from '../../media/media.types';
+import { participantManager } from '../../media/managers/participant-manager';
 
 type Callback = (res: unknown) => void;
 

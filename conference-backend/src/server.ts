@@ -3,9 +3,10 @@ import { Server as SocketIOServer } from 'socket.io';
 import { createApp } from './app';
 import { env, corsOrigins } from './config/env';
 import { connectDB, disconnectDB } from './database/db';
-import { mediaEngine } from './media/mediasoup/media-engine';
+import { mediaEngine } from './media/media-engine';
 import { setupSocketServer } from './realtime/socket.server';
 import { logger } from './infrastructure/logging/logger';
+import { storage } from './infrastructure/storage/local.storage';
 
 let isShuttingDown = false;
 
@@ -26,6 +27,9 @@ const startServer = async () => {
 
   // Connect to MongoDB
   await connectDB();
+
+  // Ensure storage/recordings, storage/photos, storage/files exist
+  await storage.ensureBuckets();
 
   // Initialize MediaEngine (workers, router/transport wiring, stats collection)
   await mediaEngine.initialize(io);

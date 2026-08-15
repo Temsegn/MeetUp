@@ -54,6 +54,8 @@ export const ParticipantTile: React.FC<ParticipantTileProps> = ({
     return (
       <button
         onClick={onOverflowClick}
+        data-meeting-tile
+        data-participant-name={`+${overflowCount} more`}
         className="
           relative w-full h-full rounded-2xl overflow-hidden
           bg-slate-800/90 border-2 border-slate-700
@@ -78,6 +80,10 @@ export const ParticipantTile: React.FC<ParticipantTileProps> = ({
   // Normal participant tile ──────────────────────────────────────────────────
   return (
     <div
+      data-meeting-tile
+      data-participant-name={name}
+      data-meeting-local={isLocal ? '1' : undefined}
+      data-meeting-screen={isScreen ? '1' : undefined}
       className={`
         relative w-full h-full rounded-2xl overflow-hidden bg-slate-800
         border-2 transition-all duration-300

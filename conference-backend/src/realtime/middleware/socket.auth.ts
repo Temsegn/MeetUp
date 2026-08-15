@@ -1,7 +1,7 @@
 import { Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/env';
-import { User } from '../../models/User.model';
+import { User } from '../../database/models/User.model';
 import { logger } from '../../infrastructure/logging/logger';
 import { metrics } from '../../infrastructure/metrics/metrics.service';
 

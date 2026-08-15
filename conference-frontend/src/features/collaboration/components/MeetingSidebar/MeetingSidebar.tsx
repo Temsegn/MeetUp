@@ -34,7 +34,7 @@ export const MeetingSidebar: React.FC<MeetingSidebarProps> = ({ roomId, peerId, 
   };
 
   return (
-    <div className="w-full h-full bg-slate-800 flex flex-col">
+    <div className="w-full h-full bg-slate-800 flex flex-col" data-meeting-chat>
       <div className="flex border-b border-slate-700">
         <button
           className={`flex-1 py-3 text-sm font-medium ${activeTab === 'chat' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-400'}`}
@@ -65,7 +65,14 @@ export const MeetingSidebar: React.FC<MeetingSidebarProps> = ({ roomId, peerId, 
               const isOwn = msg.senderId === userId;
               const senderLabel = isOwn ? 'You' : (msg.senderName || msg.senderId);
               return (
-                <div key={msg.id} className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+                <div
+                  key={msg.id}
+                  className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}
+                  data-meeting-chat-message
+                  data-sender={senderLabel}
+                  data-own={isOwn ? '1' : '0'}
+                  data-content={msg.content}
+                >
                   <span className="text-xs text-slate-400 mb-1">{senderLabel}</span>
                   <div className={`px-3 py-2 rounded-lg text-sm max-w-[85%] ${isOwn ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-200'}`}>
                     {msg.content}

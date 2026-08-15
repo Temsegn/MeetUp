@@ -12,5 +12,6 @@ Thumbs.db
 **/.env
 !**/.env.example
 
-# Recordings
-**/recordings/
+# Recorded files on disk (not source modules)
+/conference-backend/recordings/
+/conference-backend/storage/

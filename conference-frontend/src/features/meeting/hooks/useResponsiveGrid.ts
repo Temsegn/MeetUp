@@ -2,7 +2,6 @@ import { useMemo, useSyncExternalStore } from 'react';
 import type { CSSProperties } from 'react';
 
 // ── Viewport size subscription ──────────────────────────────────────────────
-// Uses useSyncExternalStore for tear-free reads — no stale dimensions.
 
 function subscribeToResize(cb: () => void): () => void {
   window.addEventListener('resize', cb);
@@ -22,96 +21,115 @@ function getViewportSnapshot(): { w: number; h: number } {
   return cachedSize;
 }
 
-// Sentinel for SSR (never hit in this SPA, but keeps TypeScript happy)
 const SSR_SIZE = { w: 1280, h: 720 };
 
 function useViewportSize() {
-  const size = useSyncExternalStore(subscribeToResize, getViewportSnapshot, () => SSR_SIZE);
-  return size;
+  return useSyncExternalStore(subscribeToResize, getViewportSnapshot, () => SSR_SIZE);
 }
 
 // ── Layout constants ────────────────────────────────────────────────────────
 
-/** Height consumed by the bottom control bar */
 const CONTROLS_HEIGHT = 72;
-/** Height of the top header bar */
 const HEADER_HEIGHT = 52;
-/** Gap between tiles (px) */
 const TILE_GAP = 6;
-/** Minimum tile width to keep things readable */
 const MIN_TILE_W = 120;
-/** Minimum tile height */
 const MIN_TILE_H = 90;
-/** Padding around the grid */
 const GRID_PADDING = 8;
 
 // ── Algorithm ───────────────────────────────────────────────────────────────
 
 interface GridResult {
   layout: 'gallery' | 'presentation';
+  /** Outer flex column container */
   gridStyle: CSSProperties;
+  /** Participants per row, top → bottom. Odd counts put the extra on top (e.g. [5,4]). */
+  rowPlan: number[];
   cols: number;
   rows: number;
 }
 
 /**
- * Google Meet-style optimal grid calculation.
+ * Build an above/below row plan — never a single long horizontal strip for 3+.
  *
- * Given available viewport dimensions and participant count, finds the
- * column count that maximises tile area while fitting everything on screen.
- *
- * Approach: iterate over candidate column counts 1..n, compute the
- * resulting tile dimensions, and pick the candidate with the largest
- * tile area that respects minimum tile sizes.
+ * Examples:
+ *  5 → [3, 2]
+ *  7 → [4, 3]
+ *  9 → [5, 4]
+ *  10 → [5, 5]
+ *  11 → [4, 4, 3]
  */
-function computeGrid(
+function buildRowPlan(count: number, maxCols: number): number[] {
+  if (count <= 0) return [1];
+  if (count === 1) return [1];
+  if (count === 2) return [2]; // side-by-side is fine for 2
+
+  // Prefer 2 rows for small/medium; 3 rows when it would be too wide or crowded
+  let rowCount = 2;
+  if (count > 10 || Math.ceil(count / 2) > maxCols) {
+    rowCount = 3;
+  }
+  if (count > 16 || Math.ceil(count / 3) > maxCols) {
+    rowCount = Math.max(3, Math.ceil(count / maxCols));
+  }
+
+  // Distribute so top rows get the extras (ceil), bottom gets the remainder.
+  // e.g. 9 with 2 rows → [5, 4]; 11 with 3 rows → [4, 4, 3]
+  const base = Math.floor(count / rowCount);
+  let extra = count % rowCount;
+  const plan: number[] = [];
+  for (let i = 0; i < rowCount; i++) {
+    const n = base + (extra > 0 ? 1 : 0);
+    if (extra > 0) extra -= 1;
+    if (n > 0) plan.push(n);
+  }
+  return plan;
+}
+
+function maxColsForWidth(availW: number): number {
+  return Math.max(1, Math.floor((availW + TILE_GAP) / (MIN_TILE_W + TILE_GAP)));
+}
+
+function computeLayout(
   viewW: number,
   viewH: number,
   count: number,
   sidebarOpen: boolean,
-): { cols: number; rows: number; tileW: number; tileH: number } {
+): { rowPlan: number[]; cols: number; rows: number } {
   const sidebarW = sidebarOpen ? 320 : 0;
   const availW = Math.max(viewW - sidebarW - GRID_PADDING * 2, MIN_TILE_W);
   const availH = Math.max(viewH - CONTROLS_HEIGHT - HEADER_HEIGHT - GRID_PADDING * 2, MIN_TILE_H);
+  const maxCols = maxColsForWidth(availW);
 
-  if (count <= 0) return { cols: 1, rows: 1, tileW: availW, tileH: availH };
+  let rowPlan = buildRowPlan(count, maxCols);
 
-  let bestCols = 1;
-  let bestRows = count;
-  let bestArea = 0;
-
-  for (let cols = 1; cols <= count; cols++) {
-    const rows = Math.ceil(count / cols);
-
-    const tileW = (availW - TILE_GAP * (cols - 1)) / cols;
-    const tileH = (availH - TILE_GAP * (rows - 1)) / rows;
-
-    // Skip if tiles would be unreadably small
-    if (tileW < MIN_TILE_W || tileH < MIN_TILE_H) continue;
-
-    // Preserve 16:9-ish aspect ratio — cap tile dimensions
-    const aspectW = tileH * (16 / 9);
-    const effectiveW = Math.min(tileW, aspectW);
-    const area = effectiveW * tileH;
-
-    if (area > bestArea) {
-      bestArea = area;
-      bestCols = cols;
-      bestRows = rows;
+  // If widest row still overflows min width, add rows until it fits
+  while (Math.max(...rowPlan) > maxCols && rowPlan.length < count) {
+    rowPlan = buildRowPlan(count, Math.max(1, Math.max(...rowPlan) - 1));
+    // Force one more row by rebuilding with tighter cap
+    const tighter = Math.max(...rowPlan) - 1;
+    if (tighter < 1) break;
+    const forcedRows = Math.ceil(count / tighter);
+    const base = Math.floor(count / forcedRows);
+    let extra = count % forcedRows;
+    rowPlan = [];
+    for (let i = 0; i < forcedRows; i++) {
+      const n = base + (extra > 0 ? 1 : 0);
+      if (extra > 0) extra -= 1;
+      if (n > 0) rowPlan.push(n);
     }
   }
 
-  // Fallback: if nothing fit the minimums, use a simple heuristic
-  if (bestArea === 0) {
-    bestCols = Math.ceil(Math.sqrt(count * (availW / availH)));
-    bestCols = Math.max(1, Math.min(bestCols, count));
-    bestRows = Math.ceil(count / bestCols);
+  // Ensure tiles aren't too short: if too many rows for height, merge carefully
+  const maxRowsByHeight = Math.max(1, Math.floor((availH + TILE_GAP) / (MIN_TILE_H + TILE_GAP)));
+  while (rowPlan.length > maxRowsByHeight && rowPlan.length > 1) {
+    // Merge last two rows upward
+    const last = rowPlan.pop()!;
+    const prev = rowPlan.pop()!;
+    rowPlan.push(prev + last);
   }
 
-  const tileW = (availW - TILE_GAP * (bestCols - 1)) / bestCols;
-  const tileH = (availH - TILE_GAP * (bestRows - 1)) / bestRows;
-
-  return { cols: bestCols, rows: bestRows, tileW, tileH };
+  const cols = Math.max(...rowPlan);
+  return { rowPlan, cols, rows: rowPlan.length };
 }
 
 // ── Hook ────────────────────────────────────────────────────────────────────
@@ -128,28 +146,35 @@ export const useResponsiveGrid = (
       return {
         layout: 'presentation' as const,
         gridStyle: {} as CSSProperties,
+        rowPlan: [],
         cols: 0,
         rows: 0,
       };
     }
 
     const displayed = Math.max(1, participantCount);
-    const { cols, rows } = computeGrid(viewport.w, viewport.h, displayed, sidebarOpen);
+    const { rowPlan, cols, rows } = computeLayout(
+      viewport.w,
+      viewport.h,
+      displayed,
+      sidebarOpen,
+    );
 
     const gridStyle: CSSProperties = {
-      display: 'grid',
-      gridTemplateColumns: `repeat(${cols}, 1fr)`,
-      gridTemplateRows: `repeat(${rows}, 1fr)`,
+      display: 'flex',
+      flexDirection: 'column',
       gap: `${TILE_GAP}px`,
       width: '100%',
       height: '100%',
       padding: `${GRID_PADDING}px`,
       overflow: 'hidden',
+      boxSizing: 'border-box',
     };
 
     return {
       layout: 'gallery' as const,
       gridStyle,
+      rowPlan,
       cols,
       rows,
     };

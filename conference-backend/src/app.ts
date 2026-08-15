@@ -1,14 +1,15 @@
-import express, { Express, Request, Response, NextFunction } from 'express';
+import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { env, corsOrigins } from './config/env';
 import { authRouter } from './modules/auth/auth.routes';
-import { meetingsRouter } from './modules/meetings';
+import { meetingsRouter } from './modules/meetings/meetings.routes';
+import { recordingsRouter } from './modules/recordings/recordings.routes';
 import { logger } from './infrastructure/logging/logger';
 import { metrics } from './infrastructure/metrics/metrics.service';
-import { isAppError } from './shared/errors/AppError';
-import { workerManager } from './media/mediasoup/worker-manager';
-import { mediaEngine } from './media/mediasoup/media-engine';
+import { errorHandler } from './shared/middleware/error-handler';
+import { workerManager } from './media/managers/worker-manager';
+import { mediaEngine } from './media/media-engine';
 import { isMongoConnected } from './database/db';
 
 export const createApp = (): Express => {
@@ -148,6 +149,7 @@ export const createApp = (): Express => {
   // ── Application routes ─────────────────────────────────────────────────────
   app.use('/auth', authRouter);
   app.use('/meetings', meetingsRouter);
+  app.use('/recordings', recordingsRouter);
 
   // ── 404 ────────────────────────────────────────────────────────────────────
   app.use((_req: Request, res: Response) => {
@@ -155,14 +157,7 @@ export const createApp = (): Express => {
   });
 
   // ── Global error handler ───────────────────────────────────────────────────
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    if (isAppError(err)) {
-      logger.warn('Application error', { code: err.code, message: err.message });
-      return res.status(err.statusCode).json({ error: err.message, code: err.code });
-    }
-    logger.error('Unhandled server error', { err });
-    res.status(500).json({ error: 'Internal server error', code: 'INTERNAL_ERROR' });
-  });
+  app.use(errorHandler);
 
   return app;
 };

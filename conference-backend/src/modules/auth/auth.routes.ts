@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { User } from '../../models/User.model';
+import { User } from '../../database/models/User.model';
 import { env } from '../../config/env';
 import { authenticate, AuthRequest } from './auth.middleware';
 

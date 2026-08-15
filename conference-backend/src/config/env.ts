@@ -36,7 +36,10 @@ const envSchema = z.object({
   TURN_USERNAME: z.string().optional(),
   TURN_PASSWORD: z.string().optional(),
 
-  // Recording
+  // File storage — recordings, photos, other files
+  // Layout: {STORAGE_DIR}/recordings|photos|files/...
+  STORAGE_DIR: z.string().optional(),
+  // Optional override for recordings only (legacy). Default: {STORAGE_DIR}/recordings
   RECORDINGS_DIR: z.string().optional(),
   RECORDING_FFMPEG_PATH: z.string().optional(),
 

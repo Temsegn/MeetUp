@@ -12,8 +12,9 @@ dist/
 build/
 *.tsbuildinfo
 
-# Recordings
-recordings/
+# File storage on disk (root only — do not ignore source folders)
+/storage/
+/recordings/
 
 # Logs
 logs/

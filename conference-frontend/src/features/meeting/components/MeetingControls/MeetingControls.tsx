@@ -12,6 +12,7 @@ interface MeetingControlsProps {
   isSharingScreen: boolean;
   isSomeoneElseSharing?: boolean;
   isRecording?: boolean;
+  isRecordingBusy?: boolean;
   onToggleMute?: () => void;
   onToggleCamera?: () => void;
   onShareScreen: () => void;
@@ -32,6 +33,7 @@ export const MeetingControls: React.FC<MeetingControlsProps> = ({
   isSharingScreen,
   isSomeoneElseSharing,
   isRecording = false,
+  isRecordingBusy = false,
   onToggleMute,
   onToggleCamera,
   onShareScreen,
@@ -104,7 +106,15 @@ export const MeetingControls: React.FC<MeetingControlsProps> = ({
             onClick={onToggleRecording}
             variant={isRecording ? 'danger' : 'secondary'}
             icon={<Circle size={16} fill={isRecording ? 'currentColor' : 'none'} />}
-            label={isRecording ? 'Stop recording' : 'Start recording'}
+            label={
+              isRecordingBusy
+                ? 'Please wait…'
+                : isRecording
+                  ? 'Stop & save MP4'
+                  : 'Record meeting + chat'
+            }
+            disabled={isRecordingBusy}
+            className={isRecordingBusy ? 'opacity-50 cursor-not-allowed' : ''}
           />
         )}
         {onToggleRaiseHand && (

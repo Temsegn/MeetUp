@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useMeeting } from '../meeting/hooks/useMeeting';
@@ -11,6 +11,7 @@ import { useReactions } from '../collaboration/hooks/useReactions';
 import { PreJoinScreen } from '../meeting/components/PreJoinScreen/PreJoinScreen';
 import { useResponsiveGrid } from '../meeting/hooks/useResponsiveGrid';
 import { useActiveSpeakers } from '../media/hooks/useActiveSpeakers';
+import { useMeetingScreenRecorder } from '../media/recording/useMeetingScreenRecorder';
 import { Clock, Users as UsersIcon, X, MicOff, Hand } from 'lucide-react';
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -55,13 +56,42 @@ export const MeetingPage: React.FC = () => {
   const {
     joined, participantId, joinMeeting, leaveMeeting, session,
     peers, remoteStreams, creatorId,
-    isRecording, startRecording, stopRecording,
   } = useMeeting(roomId, token ?? '', user?.name ?? 'Guest', user?.id, addToast);
 
   const {
     localStream, screenStream,
     startLocalMedia, startScreenShare, stopScreenShare,
   } = useLocalMedia();
+
+  const stageRef = useRef<HTMLDivElement | null>(null);
+
+  const getAudioStreams = useCallback((): MediaStream[] => {
+    const streams: MediaStream[] = [];
+    if (localStream) streams.push(localStream);
+    if (screenStream) streams.push(screenStream);
+    peers.forEach((p) => {
+      const remote = remoteStreams.get(p.id);
+      if (remote?.audio) streams.push(remote.audio);
+      else if (remote?.camera) streams.push(remote.camera);
+      if (remote?.screen) streams.push(remote.screen);
+    });
+    return streams;
+  }, [localStream, screenStream, peers, remoteStreams]);
+
+  const {
+    isRecording,
+    isBusy: isRecordingBusy,
+    startRecording,
+    stopRecording,
+  } = useMeetingScreenRecorder({
+    roomId,
+    getStageEl: () => stageRef.current,
+    getAudioStreams,
+    onCaptureReady: () => {
+      setSidebarOpen('chat');
+    },
+    addToast,
+  });
 
   // Acquire camera/mic on mount
   useEffect(() => { startLocalMedia(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -137,12 +167,43 @@ export const MeetingPage: React.FC = () => {
   const overflowCount    = hasOverflow ? totalTiles - (visiblePeers.length + 1) : 0;
   const renderedTileCount = visiblePeers.length + 1 + (hasOverflow ? 1 : 0);
 
-  // Grid layout — never scrolls
-  const { layout, gridStyle } = useResponsiveGrid(
+  // Grid layout — above/below rows (e.g. 5 top, 4 bottom), never one long horizontal strip
+  const { layout, gridStyle, rowPlan } = useResponsiveGrid(
     renderedTileCount,
     !!activeScreenShare,
     !!sidebarOpen,
   );
+
+  const galleryTiles = useMemo(() => {
+    type GalleryTile =
+      | { key: string; kind: 'local' }
+      | { key: string; kind: 'peer'; peer: typeof visiblePeers[number] }
+      | { key: string; kind: 'overflow'; count: number };
+
+    const tiles: GalleryTile[] = [
+      { key: 'local', kind: 'local' },
+      ...visiblePeers.map((p) => ({ key: p.id, kind: 'peer' as const, peer: p })),
+    ];
+    if (hasOverflow) {
+      tiles.push({ key: 'overflow', kind: 'overflow', count: overflowCount });
+    }
+    return tiles;
+  }, [visiblePeers, hasOverflow, overflowCount]);
+
+  const galleryRows = useMemo(() => {
+    const plan = rowPlan.length ? rowPlan : [galleryTiles.length || 1];
+    const rows: typeof galleryTiles[] = [];
+    let idx = 0;
+    for (const size of plan) {
+      rows.push(galleryTiles.slice(idx, idx + size));
+      idx += size;
+    }
+    // Safety: any leftover tiles go into an extra row
+    if (idx < galleryTiles.length) {
+      rows.push(galleryTiles.slice(idx));
+    }
+    return rows;
+  }, [galleryTiles, rowPlan]);
 
   // ── Join handler ──────────────────────────────────────────────────────────
   const handleJoin = async () => {
@@ -218,6 +279,9 @@ export const MeetingPage: React.FC = () => {
 
   // ── Leave ─────────────────────────────────────────────────────────────────
   const handleLeave = async () => {
+    if (isRecording) {
+      try { await stopRecording(); } catch { /* ignore */ }
+    }
     localStream?.getTracks().forEach(t => t.stop());
     screenStream?.getTracks().forEach(t => t.stop());
     await leaveMeeting();
@@ -249,6 +313,9 @@ export const MeetingPage: React.FC = () => {
   // ════════════════════════════════════════════════════════════════════════════
   return (
     <div
+      ref={stageRef}
+      data-meeting-root
+      data-room-id={roomId}
       className="w-full bg-slate-900 text-white flex flex-col relative"
       style={{ height: '100dvh', overflow: 'hidden' }}
     >
@@ -323,40 +390,56 @@ export const MeetingPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            /* ── Gallery layout — fills screen, NEVER scrolls ────────── */
-            <div style={{ ...gridStyle, boxSizing: 'border-box' }}>
-              {/* Local tile (always first) */}
-              <ParticipantTile
-                stream={localStream}
-                name={user?.name || participantId}
-                isLocal
-                isHandRaised={raisedHands.has(participantId)}
-                isMuted={isMuted}
-                isCameraOff={isCameraOff}
-              />
-
-              {/* Remote peers */}
-              {visiblePeers.map(p => (
-                <ParticipantTile
-                  key={p.id}
-                  stream={remoteStreams.get(p.id)?.camera || null}
-                  audioStream={remoteStreams.get(p.id)?.audio || null}
-                  name={p.name}
-                  isHandRaised={raisedHands.has(p.id)}
-                  isMuted={p.isMuted}
-                  isCameraOff={p.isCameraOff}
-                />
-              ))}
-
-              {/* Overflow "+N" tile */}
-              {hasOverflow && (
-                <ParticipantTile
-                  stream={null}
-                  name=""
-                  overflowCount={overflowCount}
-                  onOverflowClick={() => setShowAllParticipants(true)}
-                />
-              )}
+            /* ── Gallery layout — rows above/below (odd counts: e.g. 5 then 4) ── */
+            <div style={gridStyle}>
+              {galleryRows.map((row, rowIdx) => {
+                const widest = Math.max(1, ...(rowPlan.length ? rowPlan : [row.length]));
+                const tilePct = 100 / widest;
+                return (
+                  <div
+                    key={`row-${rowIdx}`}
+                    className="flex-1 min-h-0 flex justify-center"
+                    style={{ gap: 6 }}
+                  >
+                    {row.map((tile) => (
+                      <div
+                        key={tile.key}
+                        className="h-full min-w-0"
+                        style={{ width: `calc(${tilePct}% - 4px)`, maxWidth: `calc(${tilePct}% - 4px)` }}
+                      >
+                        {tile.kind === 'local' && (
+                          <ParticipantTile
+                            stream={localStream}
+                            name={user?.name || participantId}
+                            isLocal
+                            isHandRaised={raisedHands.has(participantId)}
+                            isMuted={isMuted}
+                            isCameraOff={isCameraOff}
+                          />
+                        )}
+                        {tile.kind === 'peer' && (
+                          <ParticipantTile
+                            stream={remoteStreams.get(tile.peer.id)?.camera || null}
+                            audioStream={remoteStreams.get(tile.peer.id)?.audio || null}
+                            name={tile.peer.name}
+                            isHandRaised={raisedHands.has(tile.peer.id)}
+                            isMuted={tile.peer.isMuted}
+                            isCameraOff={tile.peer.isCameraOff}
+                          />
+                        )}
+                        {tile.kind === 'overflow' && (
+                          <ParticipantTile
+                            stream={null}
+                            name=""
+                            overflowCount={tile.count}
+                            onOverflowClick={() => setShowAllParticipants(true)}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           )}
         </main>
@@ -390,6 +473,7 @@ export const MeetingPage: React.FC = () => {
         isSharingScreen={!!screenStream}
         isSomeoneElseSharing={remoteScreenStreams.length > 0}
         isRecording={isRecording}
+        isRecordingBusy={isRecordingBusy}
         onToggleMute={handleToggleMute}
         onToggleCamera={handleToggleCamera}
         onShareScreen={handleShareScreen}
