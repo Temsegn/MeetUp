@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { getAccessToken } from '../../services/auth/auth.service';
 import { useMeeting } from '../meeting/hooks/useMeeting';
 import { useLocalMedia } from '../media/hooks/useLocalMedia';
 import { ParticipantTile } from '../meeting/components/ParticipantTile/ParticipantTile';
@@ -26,7 +27,7 @@ const MAX_VISIBLE_TILES = 10;
 
 export const MeetingPage: React.FC = () => {
   const { roomId = 'test-room' } = useParams<{ roomId: string }>();
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   // ── UI state ──────────────────────────────────────────────────────────────
@@ -56,7 +57,7 @@ export const MeetingPage: React.FC = () => {
   const {
     joined, participantId, joinMeeting, leaveMeeting, session,
     peers, remoteStreams, creatorId,
-  } = useMeeting(roomId, token ?? '', user?.name ?? 'Guest', user?.id, addToast);
+  } = useMeeting(roomId, getAccessToken() ?? '', user?.name ?? 'Guest', user?.id, addToast);
 
   const {
     localStream, screenStream,

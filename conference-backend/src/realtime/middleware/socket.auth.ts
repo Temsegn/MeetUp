@@ -28,18 +28,34 @@ export async function socketAuthMiddleware(
 
     const token = raw.startsWith('Bearer ') ? raw.slice(7) : raw;
 
-    let decoded: { userId: string };
+    let decoded: jwt.JwtPayload & { userId?: string };
     try {
-      decoded = jwt.verify(token, env.JWT_SECRET) as { userId: string };
+      decoded = jwt.verify(token, env.JWT_SECRET) as jwt.JwtPayload & { userId?: string };
     } catch {
       metrics.authFailures.inc();
       return next(new Error('AUTH_INVALID: Invalid or expired token'));
     }
 
-    const user = await User.findById(decoded.userId).select('name email').lean();
+    if (!decoded.userId) {
+      metrics.authFailures.inc();
+      return next(new Error('AUTH_INVALID: Invalid token payload'));
+    }
+
+    const user = await User.findById(decoded.userId).select('name email passwordChangedAt').lean();
     if (!user) {
       metrics.authFailures.inc();
       return next(new Error('AUTH_INVALID: User not found'));
+    }
+
+    // Reject access tokens issued before the user's last password change.
+    // iatMs (millisecond precision) avoids same-second JWT collisions.
+    if (
+      typeof decoded.iatMs === 'number' &&
+      user.passwordChangedAt &&
+      decoded.iatMs < new Date(user.passwordChangedAt).getTime()
+    ) {
+      metrics.authFailures.inc();
+      return next(new Error('AUTH_INVALID: Password changed — please sign in again'));
     }
 
     socket.data.user = {

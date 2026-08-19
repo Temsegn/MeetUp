@@ -6,7 +6,7 @@ import {
   RtpCapabilities,
   MediaKind,
 } from 'mediasoup/types';
-import { Meeting } from '../../database/models/Meeting.model';
+import { meetingsService } from '../../modules/meetings/services/meetings.service';
 import { mediaEngine } from '../../media/media-engine';
 import { mediasoupConfig } from '../../config/mediasoup';
 import { logger } from '../../infrastructure/logging/logger';
@@ -67,8 +67,8 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
         return callback({ error: 'Already in a room. Leave first.', code: 'ALREADY_JOINED' });
       }
 
-      // Fetch meeting creatorId (out of scope for media — used only for UI permission)
-      const meeting = await Meeting.findOne({ roomId }).lean();
+      // Meeting metadata for UI (creator) — not an SFU concern
+      const meeting = await meetingsService.findByRoomId(roomId);
 
       // Ensure router exists and get RTP capabilities
       const rtpCapabilities = await mediaEngine.getOrCreateRoom(roomId);
@@ -97,7 +97,7 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
       callback({
         participantId,
         rtpCapabilities,
-        creatorId: meeting?.createdBy?.toString() ?? null,
+        creatorId: meeting?.createdBy ?? null,
         // Return simulcast encoding config so client knows what to pass to produce()
         simulcastEncodings:   mediasoupConfig.simulcastEncodings,
         screenShareEncodings: mediasoupConfig.screenShareEncodings,

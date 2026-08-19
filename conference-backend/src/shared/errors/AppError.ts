@@ -16,8 +16,8 @@ export class AppError extends Error {
 }
 
 export class AuthError extends AppError {
-  constructor(message = 'Authentication required', details?: unknown) {
-    super(message, 'AUTH_ERROR', 401, details);
+  constructor(message = 'Authentication required', code = 'AUTH_ERROR', details?: unknown) {
+    super(message, code, 401, details);
   }
 }
 
@@ -28,8 +28,8 @@ export class ForbiddenError extends AppError {
 }
 
 export class ValidationError extends AppError {
-  constructor(message = 'Validation failed', details?: unknown) {
-    super(message, 'VALIDATION_ERROR', 400, details);
+  constructor(message = 'Validation failed', code = 'VALIDATION_ERROR', details?: unknown) {
+    super(message, code, 400, details);
   }
 }
 

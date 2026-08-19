@@ -1,97 +1,108 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import {
+  authService,
+  setAccessToken,
+  refreshSession,
+  getAccessToken,
+  User,
+} from '../services/auth/auth.service';
 
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  avatarColor?: string;
-  token: string; // JWT — needed for socket handshake
-}
-
-const TOKEN_KEY = 'conference_token';
-const LEGACY_TOKEN_KEY = 'meetspace_token';
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001';
+/**
+ * Auth state for the app.
+ *
+ * The access token is held in memory only (see auth.service) and restored on
+ * boot by exchanging the HttpOnly refresh cookie for a fresh access token.
+ * Nothing sensitive is written to localStorage — the old localStorage-based
+ * flow has been removed.
+ */
 
 interface AuthContextType {
   user: User | null;
+  /** In-memory access token — used for the Socket.IO handshake. */
   token: string | null;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (name: string, email: string, password: string) => Promise<void>;
-  signOut: () => void;
-  isLoading: boolean;
+  initializing: boolean;
+  signIn: (email: string, password: string, rememberMe: boolean) => Promise<void>;
+  signUp: (name: string, email: string, password: string, rememberMe: boolean) => Promise<void>;
+  signOut: () => Promise<void>;
+  signOutAll: () => Promise<void>;
+  /** Re-fetch the current user (e.g. after email verification). */
+  refreshUser: () => Promise<void>;
+  resendVerification: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-function readStoredToken(): string | null {
-  const current = localStorage.getItem(TOKEN_KEY);
-  if (current) return current;
-  const legacy = localStorage.getItem(LEGACY_TOKEN_KEY);
-  if (legacy) {
-    localStorage.setItem(TOKEN_KEY, legacy);
-    localStorage.removeItem(LEGACY_TOKEN_KEY);
-    return legacy;
-  }
-  return null;
-}
-
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data as T;
-}
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser]       = useState<User | null>(null);
-  const [isLoading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [initializing, setInitializing] = useState(true);
 
+  // Boot: restore the session from the refresh cookie.
   useEffect(() => {
-    const stored = readStoredToken();
-    if (!stored) { setLoading(false); return; }
-
-    apiFetch<Omit<User, 'token'>>('/auth/me', {
-      headers: { Authorization: `Bearer ${stored}`, 'Content-Type': 'application/json' },
-    })
-      .then(u => setUser({ ...u, token: stored }))
-      .catch(() => {
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(LEGACY_TOKEN_KEY);
-      })
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    (async () => {
+      try {
+        // getCurrentUser() auto-refreshes the access token on 401.
+        const u = await authService.getCurrentUser();
+        if (!cancelled) setUser(u);
+      } catch {
+        if (!cancelled) setUser(null);
+      } finally {
+        if (!cancelled) setInitializing(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    const { token, user: u } = await apiFetch<{ token: string; user: Omit<User, 'token'> }>(
-      '/auth/signin',
-      { method: 'POST', body: JSON.stringify({ email, password }) },
-    );
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.removeItem(LEGACY_TOKEN_KEY);
-    setUser({ ...u, token });
-  };
+  const signIn = useCallback(async (email: string, password: string, rememberMe: boolean) => {
+    const u = await authService.signIn({ email, password, rememberMe });
+    setUser(u);
+  }, []);
 
-  const signUp = async (name: string, email: string, password: string) => {
-    const { token, user: u } = await apiFetch<{ token: string; user: Omit<User, 'token'> }>(
-      '/auth/signup',
-      { method: 'POST', body: JSON.stringify({ name, email, password }) },
-    );
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.removeItem(LEGACY_TOKEN_KEY);
-    setUser({ ...u, token });
-  };
+  const signUp = useCallback(async (name: string, email: string, password: string, rememberMe: boolean) => {
+    const u = await authService.signUp({ name, email, password, rememberMe });
+    setUser(u);
+  }, []);
 
-  const signOut = () => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(LEGACY_TOKEN_KEY);
+  const signOut = useCallback(async () => {
+    await authService.signOut();
     setUser(null);
-  };
+  }, []);
+
+  const signOutAll = useCallback(async () => {
+    await authService.signOutAll();
+    setUser(null);
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    try {
+      const u = await authService.getCurrentUser();
+      setUser(u);
+    } catch {
+      setUser(null);
+    }
+  }, []);
+
+  const resendVerification = useCallback(async () => {
+    await authService.resendVerification();
+    await refreshUser();
+  }, [refreshUser]);
 
   return (
-    <AuthContext.Provider value={{ user, token: user?.token ?? null, signIn, signUp, signOut, isLoading }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token: getAccessToken(),
+        initializing,
+        signIn,
+        signUp,
+        signOut,
+        signOutAll,
+        refreshUser,
+        resendVerification,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -102,3 +113,5 @@ export const useAuth = () => {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 };
+
+export { setAccessToken, refreshSession };

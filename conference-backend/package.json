@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "tsx src/server.ts",
     "build": "tsc",
-    "test": "npx tsx --test tests/unit/media-engine.test.ts tests/unit/socket-schemas.test.ts",
-    "test:unit": "npx tsx --test tests/unit/media-engine.test.ts tests/unit/socket-schemas.test.ts",
+    "test": "cross-env BCRYPT_ROUNDS=4 npx tsx --test tests/unit/media-engine.test.ts tests/unit/socket-schemas.test.ts src/modules/auth/tests/signup.test.ts src/modules/auth/tests/login.test.ts src/modules/auth/tests/logout.test.ts src/modules/auth/tests/refresh.test.ts src/modules/auth/tests/forgot-password.test.ts src/modules/auth/tests/reset-password.test.ts src/modules/auth/tests/change-password.test.ts src/modules/auth/tests/email-verification.test.ts src/modules/auth/tests/session.test.ts",
+    "test:unit": "cross-env BCRYPT_ROUNDS=4 npx tsx --test tests/unit/media-engine.test.ts tests/unit/socket-schemas.test.ts src/modules/auth/tests/signup.test.ts src/modules/auth/tests/login.test.ts src/modules/auth/tests/logout.test.ts src/modules/auth/tests/refresh.test.ts src/modules/auth/tests/forgot-password.test.ts src/modules/auth/tests/reset-password.test.ts src/modules/auth/tests/change-password.test.ts src/modules/auth/tests/email-verification.test.ts src/modules/auth/tests/session.test.ts",
+    "test:auth": "cross-env BCRYPT_ROUNDS=4 npx tsx --test src/modules/auth/tests/signup.test.ts src/modules/auth/tests/login.test.ts src/modules/auth/tests/logout.test.ts src/modules/auth/tests/refresh.test.ts src/modules/auth/tests/forgot-password.test.ts src/modules/auth/tests/reset-password.test.ts src/modules/auth/tests/change-password.test.ts src/modules/auth/tests/email-verification.test.ts src/modules/auth/tests/session.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],
@@ -16,6 +17,7 @@
   "dependencies": {
     "@types/bcrypt": "^6.0.0",
     "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
@@ -24,15 +26,19 @@
     "jsonwebtoken": "^9.0.3",
     "mediasoup": "^3.24.1",
     "mongoose": "^9.9.1",
+    "nodemailer": "^9.0.5",
     "socket.io": "^4.8.3",
     "winston": "^3.19.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.2.0",
+    "@types/nodemailer": "^8.0.1",
+    "cross-env": "^10.1.0",
     "eslint": "^10.8.1",
     "nodemon": "^3.1.14",
     "prettier": "^3.9.6",

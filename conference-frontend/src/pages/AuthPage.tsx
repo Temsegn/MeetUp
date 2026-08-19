@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Video, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { Video, Mail, Lock, User, Eye, EyeOff, Info } from 'lucide-react';
+
+type Mode = 'signin' | 'signup';
 
 export const AuthPage: React.FC = () => {
   const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<Mode>('signin');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -18,17 +22,26 @@ export const AuthPage: React.FC = () => {
     setIsLoading(true);
     try {
       if (mode === 'signup') {
-        if (!name.trim()) { setError('Please enter your name.'); setIsLoading(false); return; }
-        await signUp(name, email, password);
+        if (!name.trim()) throw new Error('Please enter your name.');
+        await signUp(name.trim(), email, password, rememberMe);
       } else {
-        await signIn(email, password);
+        await signIn(email, password, rememberMe);
       }
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong.');
+      // PublicRoute redirects to / once the user is set.
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Something went wrong.';
+      if (message.includes('password') && mode === 'signup') {
+        setError('Password must be at least 10 characters with uppercase, lowercase, and a number.');
+      } else {
+        setError(message);
+      }
     } finally {
       setIsLoading(false);
     }
   };
+
+  const passwordHint =
+    mode === 'signup' ? 'At least 10 characters with upper & lowercase letters and a number.' : '';
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
@@ -96,9 +109,39 @@ export const AuthPage: React.FC = () => {
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
               {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
+          </div>
+
+          {passwordHint && (
+            <p className="flex items-start gap-1.5 text-xs text-slate-500">
+              <Info size={13} className="mt-0.5 flex-shrink-0" />
+              {passwordHint}
+            </p>
+          )}
+
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={e => setRememberMe(e.target.checked)}
+                className="w-4 h-4 rounded bg-slate-800 border-slate-600 accent-blue-600"
+              />
+              Remember me
+              <span className="text-xs text-slate-600">(7 days)</span>
+            </label>
+
+            {mode === 'signin' && (
+              <Link
+                to="/auth/forgot-password"
+                className="text-sm text-blue-400 hover:text-blue-300 font-medium transition"
+              >
+                Forgot password?
+              </Link>
+            )}
           </div>
 
           <button
@@ -108,8 +151,8 @@ export const AuthPage: React.FC = () => {
           >
             {isLoading ? (
               <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
             ) : null}
             {isLoading ? 'Please wait...' : mode === 'signin' ? 'Sign in' : 'Create account'}

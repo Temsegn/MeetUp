@@ -1,6 +1,7 @@
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import { env, corsOrigins } from './config/env';
 import { authRouter } from './modules/auth/auth.routes';
 import { meetingsRouter } from './modules/meetings/meetings.routes';
@@ -34,6 +35,8 @@ export const createApp = (): Express => {
   // ── Body parsing ───────────────────────────────────────────────────────────
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+  // Required for reading the HttpOnly refresh cookie in auth routes.
+  app.use(cookieParser());
 
   // ── Global rate limit ──────────────────────────────────────────────────────
   // const globalLimiter = rateLimit({

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MeetingScreenRecorder } from './meeting-screen-recorder';
+import { getAccessToken } from '../../../services/auth/auth.service';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4001';
-const TOKEN_KEY = 'conference_token';
 
 interface UseMeetingScreenRecorderOptions {
   roomId: string;
@@ -25,7 +25,7 @@ interface SaveRecordingResponse {
 }
 
 async function uploadRecording(roomId: string, blob: Blob): Promise<SaveRecordingResponse> {
-  const token = localStorage.getItem(TOKEN_KEY) ?? '';
+  const token = getAccessToken() ?? '';
   const res = await fetch(`${API_URL}/recordings/${encodeURIComponent(roomId)}`, {
     method: 'POST',
     headers: {

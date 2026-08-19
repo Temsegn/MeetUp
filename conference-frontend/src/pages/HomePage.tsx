@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { authService, authHeaders } from '../services/auth/auth.service';
-import { Video, Link2, LogOut, Copy, Check, Users, Clock, ExternalLink, RefreshCw, Calendar, X, Zap, Trash2 } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4001';
+import { authService, authedFetch } from '../services/auth/auth.service';
+import { Video, Link2, LogOut, Copy, Check, Users, Clock, ExternalLink, RefreshCw, Calendar, X, Zap, Trash2, Shield, AlertTriangle, Mail } from 'lucide-react';
 
 interface Meeting {
   _id: string;
@@ -41,17 +39,11 @@ export const HomePage: React.FC = () => {
     setMeetingsLoading(true);
     setListError(null);
     try {
-      const res = await fetch(`${API_URL}/meetings`, { headers: authHeaders() });
-      if (res.ok) {
-        const data = await res.json();
-        setMeetings(Array.isArray(data) ? data : data.meetings || []);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setListError(data.error || 'Failed to load meetings. Try signing in again.');
-      }
+      const data = await authedFetch<Meeting[] | { meetings: Meeting[] }>('/meetings');
+      setMeetings(Array.isArray(data) ? data : data.meetings || []);
     } catch (e) {
       console.error('Failed to fetch meetings', e);
-      setListError('Failed to load meetings.');
+      setListError(e instanceof Error ? e.message : 'Failed to load meetings.');
     } finally {
       setMeetingsLoading(false);
     }
@@ -61,15 +53,10 @@ export const HomePage: React.FC = () => {
 
   const handleNewInstantMeeting = async () => {
     try {
-      const res = await fetch(`${API_URL}/meetings`, {
+      await authedFetch('/meetings', {
         method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ roomId: newRoomId, type: 'instant', title: 'Instant Meeting' }),
+        body: { roomId: newRoomId, type: 'instant', title: 'Instant Meeting' },
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        console.error('Failed to save instant meeting', data);
-      }
     } catch (e) {
       console.error('Failed to save instant meeting', e);
     }
@@ -86,31 +73,24 @@ export const HomePage: React.FC = () => {
     const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
 
     try {
-      const res = await fetch(`${API_URL}/meetings`, {
+      await authedFetch('/meetings', {
         method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({
+        body: {
           roomId: scheduledRoomId,
           type: 'scheduled',
           title: scheduleTitle.trim() || 'Scheduled Meeting',
           scheduledAt: scheduledDateTime,
           duration: parseInt(scheduleDuration, 10),
-        }),
+        },
       });
-
-      if (res.ok) {
-        setShowScheduleModal(false);
-        setScheduleTitle('');
-        setScheduleDate('');
-        setScheduleTime('');
-        await fetchMeetings();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setScheduleError(data.error || 'Failed to schedule meeting.');
-      }
+      setShowScheduleModal(false);
+      setScheduleTitle('');
+      setScheduleDate('');
+      setScheduleTime('');
+      await fetchMeetings();
     } catch (e) {
       console.error('Failed to schedule meeting', e);
-      setScheduleError('Failed to schedule meeting.');
+      setScheduleError(e instanceof Error ? e.message : 'Failed to schedule meeting.');
     } finally {
       setIsScheduling(false);
     }
@@ -121,19 +101,11 @@ export const HomePage: React.FC = () => {
       return;
     }
     try {
-      const res = await fetch(`${API_URL}/meetings/${meeting._id}`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-      });
-      if (res.ok) {
-        setMeetings((prev) => prev.filter((m) => m._id !== meeting._id));
-      } else {
-        const data = await res.json().catch(() => ({}));
-        alert(data.error || 'Failed to delete meeting.');
-      }
+      await authedFetch(`/meetings/${meeting._id}`, { method: 'DELETE' });
+      setMeetings((prev) => prev.filter((m) => m._id !== meeting._id));
     } catch (e) {
       console.error('Failed to delete meeting', e);
-      alert('Failed to delete meeting.');
+      alert(e instanceof Error ? e.message : 'Failed to delete meeting.');
     }
   };
 
@@ -185,8 +157,16 @@ export const HomePage: React.FC = () => {
               <p className="text-xs text-slate-500 mt-0.5">{user?.email}</p>
             </div>
           </div>
+          <Link
+            to="/settings/security"
+            className="flex items-center gap-2 text-slate-400 hover:text-white text-sm transition px-2.5 py-1.5 rounded-lg hover:bg-slate-800"
+            title="Security settings"
+          >
+            <Shield size={16} />
+            <span className="hidden sm:inline">Security</span>
+          </Link>
           <button
-            onClick={signOut}
+            onClick={() => { void signOut(); }}
             className="flex items-center gap-2 text-slate-400 hover:text-white text-sm transition px-2.5 py-1.5 rounded-lg hover:bg-slate-800"
           >
             <LogOut size={16} />
@@ -194,6 +174,22 @@ export const HomePage: React.FC = () => {
           </button>
         </div>
       </header>
+
+      {/* Unverified email banner */}
+      {user && !user.emailVerified && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-xs sm:text-sm text-amber-300 flex items-center gap-2">
+            <AlertTriangle size={14} className="flex-shrink-0" />
+            Please verify your email address to secure your account.
+          </p>
+          <Link
+            to="/settings/security"
+            className="text-xs font-medium text-amber-200 hover:text-white transition inline-flex items-center gap-1.5"
+          >
+            <Mail size={13} /> Verify now
+          </Link>
+        </div>
+      )}
 
       {/* Main */}
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-8 flex flex-col gap-8 overflow-y-auto">
