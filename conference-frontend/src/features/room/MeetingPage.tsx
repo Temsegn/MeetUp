@@ -13,7 +13,15 @@ import { PreJoinScreen } from '../meeting/components/PreJoinScreen/PreJoinScreen
 import { useResponsiveGrid } from '../meeting/hooks/useResponsiveGrid';
 import { useActiveSpeakers } from '../media/hooks/useActiveSpeakers';
 import { useMeetingScreenRecorder } from '../media/recording/useMeetingScreenRecorder';
-import { Clock, Users as UsersIcon, X, MicOff, Hand } from 'lucide-react';
+import { Clock, Users as UsersIcon, X, MicOff, Hand, MonitorUp } from 'lucide-react';
+import {
+  ControlRequestDialog,
+  ParticipantControlMenu,
+  RemoteControlBanner,
+  RemoteCursorOverlay,
+  useRemoteControl,
+} from '../remote-control';
+import type { CommandHandlerMap } from '../remote-control/types';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -39,6 +47,9 @@ export const MeetingPage: React.FC = () => {
   const [toasts,               setToasts]               = useState<{ id: string; message: string }[]>([]);
   const [currentTime,          setCurrentTime]          = useState(new Date());
   const [showAllParticipants,  setShowAllParticipants]  = useState(false);
+  const [layoutOverride,       setLayoutOverride]       = useState<'gallery' | 'presentation' | null>(null);
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
+  const [pendingRemoteShare, setPendingRemoteShare] = useState(false);
 
   // Clock
   useEffect(() => {
@@ -56,7 +67,7 @@ export const MeetingPage: React.FC = () => {
   // ── Meeting / media hooks ─────────────────────────────────────────────────
   const {
     joined, participantId, joinMeeting, leaveMeeting, session,
-    peers, remoteStreams, creatorId,
+    peers, remoteStreams, creatorId, socket,
   } = useMeeting(roomId, getAccessToken() ?? '', user?.name ?? 'Guest', user?.id, addToast);
 
   const {
@@ -98,7 +109,7 @@ export const MeetingPage: React.FC = () => {
   useEffect(() => { startLocalMedia(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Reactions ─────────────────────────────────────────────────────────────
-  const { activeReactions, sendReaction, raisedHands, toggleRaiseHand } = useReactions(
+  const { activeReactions, sendReaction, raisedHands, toggleRaiseHand, setRaiseHand } = useReactions(
     roomId,
     participantId || '__pre_join__',
   );
@@ -264,18 +275,164 @@ export const MeetingPage: React.FC = () => {
       if (!sess) return;
       for (const track of stream.getTracks()) {
         const producer = await sess.produce(track, 'screen');
-        track.addEventListener('ended', () => sess.closeProducer(producer.id));
+        track.addEventListener('ended', () => {
+          sess.closeProducer(producer.id);
+          setLayoutOverride(null);
+        });
       }
+      setLayoutOverride('presentation');
     } catch (err) { console.error('Screen share failed', err); }
+  };
+
+  const confirmRemoteShare = () => {
+    setPendingRemoteShare(false);
+    void handleShareScreen();
   };
 
   const handleStopScreenShare = async () => {
     stopScreenShare();
+    setLayoutOverride(null);
     const sess = session.current;
     if (!sess) return;
     for (const p of sess.getProducersBySource('screen')) {
       await sess.closeProducer(p.id);
     }
+  };
+
+  const toggleSidebar = (panel: 'chat' | 'participants') => {
+    setSidebarOpen(s => s === panel ? null : panel);
+  };
+
+  const remoteHandlers: CommandHandlerMap = {
+    OPEN_CHAT: () => setSidebarOpen('chat'),
+    CLOSE_CHAT: () => setSidebarOpen((s) => (s === 'chat' ? null : s)),
+    OPEN_PARTICIPANTS: () => setSidebarOpen('participants'),
+    CLOSE_PARTICIPANTS: () => setSidebarOpen((s) => (s === 'participants' ? null : s)),
+    TOGGLE_CHAT_PANEL: () => toggleSidebar('chat'),
+    TOGGLE_PARTICIPANTS_PANEL: () => toggleSidebar('participants'),
+    SELECT_PARTICIPANT: (payload) => {
+      if (typeof payload.participantId === 'string') {
+        setSelectedParticipantId(payload.participantId);
+      }
+    },
+    CHANGE_LAYOUT: (payload) => {
+      if (payload.layout === 'gallery' || payload.layout === 'presentation') {
+        setLayoutOverride(payload.layout);
+      }
+    },
+    SCROLL_PANEL: (payload) => {
+      const el = document.querySelector<HTMLElement>('[data-rc-panel-scroll]');
+      if (el && typeof payload.deltaY === 'number') {
+        el.scrollTop += payload.deltaY;
+      }
+    },
+    TOGGLE_MUTE: () => { void handleToggleMute(); },
+    TOGGLE_CAMERA: () => { void handleToggleCamera(); },
+    START_SCREEN_SHARE: () => {
+      if (screenStream) return;
+      setPendingRemoteShare(true);
+    },
+    STOP_SCREEN_SHARE: () => {
+      setPendingRemoteShare(false);
+      void handleStopScreenShare();
+    },
+    RAISE_HAND: () => setRaiseHand(true),
+    LOWER_HAND: () => setRaiseHand(false),
+    SEND_CHAT: (payload) => {
+      const text = typeof payload.content === 'string' ? payload.content.trim() : '';
+      if (!text) return;
+      socket?.emit('send-message', { roomId, content: text });
+    },
+    SEND_REACTION: (payload) => {
+      if (typeof payload.reaction === 'string') sendReaction(payload.reaction);
+    },
+  };
+
+  const remoteControl = useRemoteControl({
+    socket,
+    roomId,
+    localParticipantId: participantId,
+    handlers: remoteHandlers,
+    addToast,
+  });
+
+  const isControlling = remoteControl.session?.role === 'controlling';
+  const isControlled = remoteControl.session?.role === 'controlled';
+  const inRemoteView = isControlling && remoteControl.viewMode === 'remote';
+  const remoteUi = remoteControl.remoteUiState;
+  const controlledPeer = isControlling
+    ? peers.find((p) => p.id === remoteControl.session?.controlledUserId)
+    : undefined;
+
+  const sendOrLocal = (command: Parameters<typeof remoteControl.sendAction>[0], local: () => void, payload: Record<string, unknown> = {}) => {
+    if (inRemoteView) {
+      void remoteControl.sendAction(command, payload);
+      return;
+    }
+    local();
+  };
+
+  const handleToggleChatUi = () => sendOrLocal('TOGGLE_CHAT_PANEL', () => toggleSidebar('chat'));
+  const handleToggleParticipantsUi = () => sendOrLocal('TOGGLE_PARTICIPANTS_PANEL', () => toggleSidebar('participants'));
+
+  const uiVersionRef = useRef(0);
+  useEffect(() => {
+    if (!isControlled || !remoteControl.session) return;
+    const id = window.setTimeout(() => {
+      uiVersionRef.current += 1;
+      remoteControl.publishUiState({
+        version: uiVersionRef.current,
+        sidebar: sidebarOpen,
+        layout:
+          layoutOverride === 'gallery'
+            ? 'gallery'
+            : screenStream || layoutOverride === 'presentation'
+              ? 'presentation'
+              : 'gallery',
+        selectedParticipantId: selectedParticipantId || null,
+        isMuted,
+        isCameraOff,
+        isSharingScreen: !!screenStream,
+        isHandRaised: raisedHands.has(participantId),
+        chatDraft: remoteControl.chatDraft,
+        showAllParticipants,
+        scrollTop: document.querySelector<HTMLElement>('[data-rc-panel-scroll]')?.scrollTop ?? 0,
+      });
+    }, 80);
+    return () => window.clearTimeout(id);
+  }, [
+    isControlled,
+    remoteControl.session,
+    remoteControl.publishUiState,
+    remoteControl.chatDraft,
+    remoteControl.syncTick,
+    sidebarOpen,
+    layoutOverride,
+    selectedParticipantId,
+    isMuted,
+    isCameraOff,
+    screenStream,
+    raisedHands,
+    participantId,
+    showAllParticipants,
+  ]);
+
+  useEffect(() => {
+    if (screenStream) setPendingRemoteShare(false);
+  }, [screenStream]);
+
+  useEffect(() => {
+    if (!isControlled) setPendingRemoteShare(false);
+  }, [isControlled]);
+
+  const emitCursor = (e: React.PointerEvent, visible: boolean) => {
+    if (!isControlled && !inRemoteView) return;
+    const el = stageRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = Math.min(1, Math.max(0, (e.clientX - rect.left) / Math.max(1, rect.width)));
+    const y = Math.min(1, Math.max(0, (e.clientY - rect.top) / Math.max(1, rect.height)));
+    remoteControl.sendCursor(x, y, visible);
   };
 
   // ── Leave ─────────────────────────────────────────────────────────────────
@@ -287,10 +444,6 @@ export const MeetingPage: React.FC = () => {
     screenStream?.getTracks().forEach(t => t.stop());
     await leaveMeeting();
     navigate('/');
-  };
-
-  const toggleSidebar = (panel: 'chat' | 'participants') => {
-    setSidebarOpen(s => s === panel ? null : panel);
   };
 
   // ── Pre-join ──────────────────────────────────────────────────────────────
@@ -309,6 +462,37 @@ export const MeetingPage: React.FC = () => {
     );
   }
 
+  const layoutChoice = inRemoteView ? (remoteUi?.layout ?? layoutOverride) : layoutOverride;
+  const presentationMode = !!activeScreenShare && layoutChoice !== 'gallery' && (
+    layoutChoice === 'presentation' || layout === 'presentation'
+  );
+
+  const displaySidebar = inRemoteView ? (remoteUi?.sidebar ?? null) : sidebarOpen;
+  const displaySelected = inRemoteView ? (remoteUi?.selectedParticipantId ?? selectedParticipantId) : selectedParticipantId;
+  const overlayCursor =
+    isControlled && remoteControl.remoteCursor?.source === 'controller'
+      ? remoteControl.remoteCursor
+      : inRemoteView && remoteControl.remoteCursor?.source === 'controlled'
+        ? remoteControl.remoteCursor
+        : null;
+
+  const renderPeerControlMenu = (p: { id: string; name: string }) => (
+    <ParticipantControlMenu
+      participantName={p.name}
+      pending={remoteControl.outgoingTargetId === p.id && remoteControl.outgoingStatus === 'sent'}
+      disabled={!!remoteControl.session || (remoteControl.outgoingStatus === 'sent' && remoteControl.outgoingTargetId !== p.id)}
+      onRequestControl={() => { void remoteControl.requestControl(p.id); }}
+    />
+  );
+
+  const onPeerSelect = (id: string) => {
+    if (inRemoteView) {
+      void remoteControl.sendAction('SELECT_PARTICIPANT', { participantId: id });
+      return;
+    }
+    setSelectedParticipantId(id);
+  };
+
   // ════════════════════════════════════════════════════════════════════════════
   // RENDER — meeting in session
   // ════════════════════════════════════════════════════════════════════════════
@@ -319,6 +503,8 @@ export const MeetingPage: React.FC = () => {
       data-room-id={roomId}
       className="w-full bg-slate-900 text-white flex flex-col relative"
       style={{ height: '100dvh', overflow: 'hidden' }}
+      onPointerMove={(e) => emitCursor(e, true)}
+      onPointerLeave={(e) => emitCursor(e, false)}
     >
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header className="flex-shrink-0 h-[52px] flex items-center justify-between px-3 sm:px-5 z-30">
@@ -332,22 +518,34 @@ export const MeetingPage: React.FC = () => {
           <span className="text-[10px] sm:text-xs text-slate-500 font-mono">{roomId}</span>
         </div>
 
-        <button
-          onClick={() => toggleSidebar('participants')}
-          className="bg-slate-800/80 backdrop-blur rounded-full px-3 py-1.5 flex items-center gap-1.5 text-xs sm:text-sm font-medium border border-slate-700 shadow-lg hover:bg-slate-700 transition"
-        >
-          <UsersIcon size={14} className="text-blue-400" />
-          <span>{totalTiles}</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          {remoteControl.session && (
+            <RemoteControlBanner
+              session={remoteControl.session}
+              viewMode={remoteControl.viewMode}
+              onStop={() => void remoteControl.stop()}
+              onSwitchView={isControlling ? (view) => void remoteControl.switchView(view) : undefined}
+            />
+          )}
+          <button
+            onClick={handleToggleParticipantsUi}
+            className="bg-slate-800/80 backdrop-blur rounded-full px-3 py-1.5 flex items-center gap-1.5 text-xs sm:text-sm font-medium border border-slate-700 shadow-lg hover:bg-slate-700 transition"
+          >
+            <UsersIcon size={14} className="text-blue-400" />
+            <span>{totalTiles}</span>
+          </button>
+        </div>
       </header>
+
+      <RemoteCursorOverlay cursor={overlayCursor} />
 
       {/* ── Video area ──────────────────────────────────────────────────── */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
         <main
-          className={`flex-1 min-h-0 min-w-0 transition-all duration-300 ${sidebarOpen ? 'md:mr-80' : ''}`}
+          className={`flex-1 min-h-0 min-w-0 transition-all duration-300 ${displaySidebar ? 'md:mr-80' : ''}`}
           style={{ overflow: 'hidden' }}
         >
-          {layout === 'presentation' && activeScreenShare ? (
+          {presentationMode && activeScreenShare ? (
             /* ── Presentation layout ─────────────────────────────────── */
             <div className="w-full h-full flex flex-col gap-1.5 p-1.5 sm:p-2">
               {/* Main screen share */}
@@ -377,7 +575,11 @@ export const MeetingPage: React.FC = () => {
                   </div>
                 )}
                 {sortedPeers.map(p => (
-                  <div key={p.id} className="flex-shrink-0 aspect-video h-full">
+                  <div
+                    key={p.id}
+                    className={`flex-shrink-0 aspect-video h-full ${displaySelected === p.id ? 'ring-2 ring-blue-400 rounded-xl' : ''}`}
+                    onClick={() => onPeerSelect(p.id)}
+                  >
                     <ParticipantTile
                       stream={remoteStreams.get(p.id)?.camera || null}
                       audioStream={remoteStreams.get(p.id)?.audio || null}
@@ -419,21 +621,32 @@ export const MeetingPage: React.FC = () => {
                           />
                         )}
                         {tile.kind === 'peer' && (
-                          <ParticipantTile
-                            stream={remoteStreams.get(tile.peer.id)?.camera || null}
-                            audioStream={remoteStreams.get(tile.peer.id)?.audio || null}
-                            name={tile.peer.name}
-                            isHandRaised={raisedHands.has(tile.peer.id)}
-                            isMuted={tile.peer.isMuted}
-                            isCameraOff={tile.peer.isCameraOff}
-                          />
+                          <div
+                            className={`h-full ${displaySelected === tile.peer.id ? 'ring-2 ring-blue-400 rounded-xl' : ''}`}
+                            onClick={() => onPeerSelect(tile.peer.id)}
+                          >
+                            <ParticipantTile
+                              stream={remoteStreams.get(tile.peer.id)?.camera || null}
+                              audioStream={remoteStreams.get(tile.peer.id)?.audio || null}
+                              name={tile.peer.name}
+                              isHandRaised={raisedHands.has(tile.peer.id)}
+                              isMuted={tile.peer.isMuted}
+                              isCameraOff={tile.peer.isCameraOff}
+                            />
+                          </div>
                         )}
                         {tile.kind === 'overflow' && (
                           <ParticipantTile
                             stream={null}
                             name=""
                             overflowCount={tile.count}
-                            onOverflowClick={() => setShowAllParticipants(true)}
+                            onOverflowClick={() => {
+                              if (inRemoteView) {
+                                void remoteControl.sendAction('OPEN_PARTICIPANTS');
+                                return;
+                              }
+                              setShowAllParticipants(true);
+                            }}
                           />
                         )}
                       </div>
@@ -446,19 +659,48 @@ export const MeetingPage: React.FC = () => {
         </main>
 
         {/* ── Sidebar ────────────────────────────────────────────────────── */}
-        {sidebarOpen && (
+        {displaySidebar && (
           <>
             <div
               className="fixed inset-0 bg-black/50 z-20 md:hidden"
-              onClick={() => setSidebarOpen(null)}
+              onClick={() => {
+                if (inRemoteView) {
+                  void remoteControl.sendAction(displaySidebar === 'chat' ? 'CLOSE_CHAT' : 'CLOSE_PARTICIPANTS');
+                  return;
+                }
+                setSidebarOpen(null);
+              }}
             />
-            <div className="fixed md:absolute top-0 right-0 bottom-[72px] w-80 max-w-full bg-slate-800 border-l border-slate-700 shadow-2xl z-30">
+            <div
+              className="fixed md:absolute top-0 right-0 bottom-[72px] w-80 max-w-full bg-slate-800 border-l border-slate-700 shadow-2xl z-30"
+              onWheel={(e) => {
+                if (!inRemoteView || !displaySidebar) return;
+                const deltaY = Math.max(-2000, Math.min(2000, e.deltaY));
+                void remoteControl.sendAction('SCROLL_PANEL', { panel: displaySidebar, deltaY });
+              }}
+            >
               <MeetingSidebar
                 roomId={roomId}
                 peerId={participantId}
                 userId={user?.id ?? ''}
                 peers={peers}
                 userName={user?.name ?? 'Guest'}
+                panel={displaySidebar}
+                selectedPeerId={displaySelected}
+                onPeerClick={onPeerSelect}
+                renderPeerActions={renderPeerControlMenu}
+                chatValue={inRemoteView || isControlled ? remoteControl.chatDraft : undefined}
+                onChatValueChange={(value) => {
+                  if (inRemoteView) remoteControl.sendDraft(value);
+                  else remoteControl.setChatDraft(value);
+                }}
+                onChatSubmit={
+                  inRemoteView
+                    ? (value) => {
+                        void remoteControl.sendAction('SEND_CHAT', { content: value });
+                      }
+                    : undefined
+                }
               />
             </div>
           </>
@@ -469,27 +711,53 @@ export const MeetingPage: React.FC = () => {
       <MeetingControls
         roomId={roomId}
         peerId={participantId}
-        isMuted={isMuted}
-        isCameraOff={isCameraOff}
-        isSharingScreen={!!screenStream}
-        isSomeoneElseSharing={remoteScreenStreams.length > 0}
+        isMuted={inRemoteView ? (remoteUi?.isMuted ?? !!controlledPeer?.isMuted) : isMuted}
+        isCameraOff={inRemoteView ? (remoteUi?.isCameraOff ?? !!controlledPeer?.isCameraOff) : isCameraOff}
+        isSharingScreen={
+          inRemoteView
+            ? (remoteUi?.isSharingScreen ?? remoteScreenStreams.some((s) => s.id === remoteControl.session?.controlledUserId))
+            : !!screenStream
+        }
+        isSomeoneElseSharing={inRemoteView ? false : remoteScreenStreams.length > 0}
         isRecording={isRecording}
         isRecordingBusy={isRecordingBusy}
-        onToggleMute={handleToggleMute}
-        onToggleCamera={handleToggleCamera}
-        onShareScreen={handleShareScreen}
-        onStopScreenShare={handleStopScreenShare}
-        onToggleRecording={isRecording ? stopRecording : startRecording}
-        onSendReaction={sendReaction}
-        isHandRaised={raisedHands.has(participantId)}
-        onToggleRaiseHand={toggleRaiseHand}
-        onToggleChat={() => toggleSidebar('chat')}
-        onToggleParticipants={() => toggleSidebar('participants')}
+        onToggleMute={() => sendOrLocal('TOGGLE_MUTE', () => { void handleToggleMute(); })}
+        onToggleCamera={() => sendOrLocal('TOGGLE_CAMERA', () => { void handleToggleCamera(); })}
+        onShareScreen={() => {
+          if (inRemoteView) {
+            void remoteControl.sendAction('START_SCREEN_SHARE');
+            addToast('Screen picker opens on their computer — they must choose a window or screen');
+            return;
+          }
+          void handleShareScreen();
+        }}
+        onStopScreenShare={() => sendOrLocal('STOP_SCREEN_SHARE', () => { void handleStopScreenShare(); })}
+        onToggleRecording={inRemoteView ? undefined : (isRecording ? stopRecording : startRecording)}
+        onSendReaction={
+          inRemoteView
+            ? (reaction) => { void remoteControl.sendAction('SEND_REACTION', { reaction }); }
+            : sendReaction
+        }
+        isHandRaised={
+          inRemoteView
+            ? (remoteUi?.isHandRaised ?? (remoteControl.session ? raisedHands.has(remoteControl.session.controlledUserId) : false))
+            : raisedHands.has(participantId)
+        }
+        onToggleRaiseHand={() => {
+          if (inRemoteView && remoteControl.session) {
+            const raised = remoteUi?.isHandRaised ?? raisedHands.has(remoteControl.session.controlledUserId);
+            void remoteControl.sendAction(raised ? 'LOWER_HAND' : 'RAISE_HAND');
+            return;
+          }
+          toggleRaiseHand();
+        }}
+        onToggleChat={handleToggleChatUi}
+        onToggleParticipants={handleToggleParticipantsUi}
         onLeave={handleLeave}
       />
 
       {/* ── All-participants modal (opened from "+N" tile) ───────────── */}
-      {showAllParticipants && (
+      {(inRemoteView ? !!remoteUi?.showAllParticipants : showAllParticipants) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowAllParticipants(false)} />
           <div className="relative bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm max-h-[75dvh] flex flex-col overflow-hidden">
@@ -527,20 +795,23 @@ export const MeetingPage: React.FC = () => {
 
               {/* All peers */}
               {sortedPeers.map(p => (
-                <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-700/40 hover:bg-slate-700/60 transition-colors">
-                  <div className="w-9 h-9 rounded-full bg-slate-500 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
-                    {p.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{p.name}</p>
-                    <div className="flex items-center gap-2 text-xs text-slate-400">
-                      {activeSpeakers.has(p.id) && <span className="text-blue-400">Speaking</span>}
-                      {p.isMuted && <span>Muted</span>}
-                      {raisedHands.has(p.id) && <span className="text-amber-400">✋ Hand raised</span>}
+                <div key={p.id} className={`flex items-center gap-3 p-2.5 rounded-xl ${displaySelected === p.id ? 'bg-blue-600/20 border border-blue-500/40' : 'bg-slate-700/40 hover:bg-slate-700/60'} transition-colors`}>
+                  <button type="button" className="flex flex-1 items-center gap-3 min-w-0 text-left" onClick={() => onPeerSelect(p.id)}>
+                    <div className="w-9 h-9 rounded-full bg-slate-500 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
+                      {p.name.charAt(0).toUpperCase()}
                     </div>
-                  </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{p.name}</p>
+                      <div className="flex items-center gap-2 text-xs text-slate-400">
+                        {activeSpeakers.has(p.id) && <span className="text-blue-400">Speaking</span>}
+                        {p.isMuted && <span>Muted</span>}
+                        {raisedHands.has(p.id) && <span className="text-amber-400">✋ Hand raised</span>}
+                      </div>
+                    </div>
+                  </button>
                   {p.isMuted && <MicOff size={14} className="text-red-400 flex-shrink-0" />}
                   {raisedHands.has(p.id) && <Hand size={14} className="text-amber-400 flex-shrink-0" />}
+                  {renderPeerControlMenu(p)}
                 </div>
               ))}
             </div>
@@ -560,12 +831,51 @@ export const MeetingPage: React.FC = () => {
         ))}
       </div>
 
+      {isControlled && pendingRemoteShare && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 max-w-md w-[calc(100%-1.5rem)] rounded-xl border border-blue-500/40 bg-slate-800 px-4 py-3 shadow-2xl">
+          <div className="flex items-start gap-3">
+            <MonitorUp size={18} className="text-blue-400 mt-0.5 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-white">Share your screen?</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                The person controlling your meeting asked to present. Choose a window or screen here — the picker cannot open on their computer.
+              </p>
+              <div className="flex gap-2 mt-2.5">
+                <button
+                  type="button"
+                  onClick={confirmRemoteShare}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-medium text-white"
+                >
+                  Choose screen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingRemoteShare(false)}
+                  className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-medium text-slate-200"
+                >
+                  Not now
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Reactions ───────────────────────────────────────────────────── */}
       <ReactionOverlay
         reactions={activeReactions}
         peerNames={peerNames}
         ownParticipantId={participantId}
       />
+
+      {remoteControl.incoming && (
+        <ControlRequestDialog
+          request={remoteControl.incoming}
+          roomId={roomId}
+          onAccept={() => void remoteControl.accept()}
+          onDecline={() => void remoteControl.decline()}
+        />
+      )}
     </div>
   );
 };

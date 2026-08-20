@@ -76,15 +76,17 @@ export const useReactions = (roomId: string, peerId: string) => {
     }
   }, [roomId, peerId]);
 
-  const toggleRaiseHand = useCallback(() => {
+  const setRaiseHand = useCallback((raised?: boolean) => {
     const socket = socketClient.getSocket();
     setRaisedHands(prev => {
       const next = new Set(prev);
-      const isRaised = !next.has(peerId);
-      
+      const currently = next.has(peerId);
+      const isRaised = raised === undefined ? !currently : raised;
+      if (currently === isRaised) return prev;
+
       if (isRaised) next.add(peerId);
       else next.delete(peerId);
-      
+
       if (socket) {
         socket.emit('raise-hand', { roomId, peerId, isRaised });
       }
@@ -92,5 +94,9 @@ export const useReactions = (roomId: string, peerId: string) => {
     });
   }, [roomId, peerId]);
 
-  return { activeReactions, sendReaction, raisedHands, toggleRaiseHand };
+  const toggleRaiseHand = useCallback(() => {
+    setRaiseHand();
+  }, [setRaiseHand]);
+
+  return { activeReactions, sendReaction, raisedHands, toggleRaiseHand, setRaiseHand };
 };

@@ -8,14 +8,42 @@ interface MeetingSidebarProps {
   userId: string;    // JWT userId — matches msg.senderId in chat messages
   peers: { id: string; name: string }[];
   userName: string;
+  panel?: 'chat' | 'participants';
+  selectedPeerId?: string | null;
+  onPeerClick?: (participantId: string) => void;
+  renderPeerActions?: (peer: { id: string; name: string }) => React.ReactNode;
+  chatValue?: string;
+  onChatValueChange?: (value: string) => void;
+  onChatSubmit?: (value: string) => void;
+  sendingAsName?: string;
 }
 
-export const MeetingSidebar: React.FC<MeetingSidebarProps> = ({ roomId, peerId, userId, peers, userName }) => {
-  const [activeTab, setActiveTab] = useState<'chat' | 'participants' | 'settings'>('chat');
+export const MeetingSidebar: React.FC<MeetingSidebarProps> = ({
+  roomId,
+  peerId,
+  userId,
+  peers,
+  userName,
+  panel = 'chat',
+  selectedPeerId,
+  onPeerClick,
+  renderPeerActions,
+  chatValue,
+  onChatValueChange,
+  onChatSubmit,
+  sendingAsName,
+}) => {
+  const [activeTab, setActiveTab] = useState<'chat' | 'participants' | 'settings'>(panel);
   const { messages, sendMessage } = useChat(roomId, peerId);
   const [inputText, setInputText] = useState('');
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (panel === 'chat' || panel === 'participants') {
+      setActiveTab(panel);
+    }
+  }, [panel]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -25,10 +53,20 @@ export const MeetingSidebar: React.FC<MeetingSidebarProps> = ({ roomId, peerId, 
     navigator.mediaDevices.enumerateDevices().then(setDevices).catch(console.error);
   }, []);
 
+  const draft = chatValue !== undefined ? chatValue : inputText;
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (inputText.trim()) {
-      sendMessage(inputText.trim());
+    const text = draft.trim();
+    if (!text) return;
+    if (onChatSubmit) {
+      onChatSubmit(text);
+    } else {
+      sendMessage(text);
+    }
+    if (chatValue !== undefined) {
+      onChatValueChange?.('');
+    } else {
       setInputText('');
     }
   };
@@ -57,7 +95,7 @@ export const MeetingSidebar: React.FC<MeetingSidebarProps> = ({ roomId, peerId, 
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4" data-rc-panel-scroll>
         {activeTab === 'chat' ? (
           <div className="flex flex-col gap-3">
             {messages.map(msg => {
@@ -91,11 +129,23 @@ export const MeetingSidebar: React.FC<MeetingSidebarProps> = ({ roomId, peerId, 
               <span className="text-sm font-medium">You ({userName})</span>
             </div>
             {peers.map(p => (
-              <div key={p.id} className="flex items-center gap-3 p-2 rounded-lg bg-slate-700/50">
-                <div className="w-8 h-8 rounded-full bg-slate-500 flex items-center justify-center text-xs font-bold text-white">
-                  {p.name.charAt(0).toUpperCase()}
-                </div>
-                <span className="text-sm font-medium">{p.name}</span>
+              <div
+                key={p.id}
+                className={`flex items-center gap-3 p-2 rounded-lg ${
+                  selectedPeerId === p.id ? 'bg-blue-600/20 ring-1 ring-blue-400/50' : 'bg-slate-700/50'
+                }`}
+              >
+                <button
+                  type="button"
+                  className="flex flex-1 items-center gap-3 min-w-0 text-left"
+                  onClick={() => onPeerClick?.(p.id)}
+                >
+                  <div className="w-8 h-8 rounded-full bg-slate-500 flex items-center justify-center text-xs font-bold text-white">
+                    {p.name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-sm font-medium truncate">{p.name}</span>
+                </button>
+                {renderPeerActions?.(p)}
               </div>
             ))}
           </div>
@@ -123,17 +173,23 @@ export const MeetingSidebar: React.FC<MeetingSidebarProps> = ({ roomId, peerId, 
 
       {activeTab === 'chat' && (
         <div className="p-4 border-t border-slate-700">
+          {sendingAsName && (
+            <p className="text-[10px] text-amber-300/90 mb-2">Sending as {sendingAsName}</p>
+          )}
           <form onSubmit={handleSend} className="flex gap-2">
             <input
               type="text"
-              value={inputText}
-              onChange={e => setInputText(e.target.value)}
+              value={draft}
+              onChange={e => {
+                if (chatValue !== undefined) onChatValueChange?.(e.target.value);
+                else setInputText(e.target.value);
+              }}
               placeholder="Type a message..."
               className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
             />
             <button
               type="submit"
-              disabled={!inputText.trim()}
+              disabled={!draft.trim()}
               className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-3 py-2 rounded-lg transition-colors"
             >
               🚀

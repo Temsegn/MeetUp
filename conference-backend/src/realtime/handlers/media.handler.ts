@@ -37,6 +37,7 @@ import {
 } from '../../shared/validation/socket.schemas';
 import type { TransportDirection, ProducerAppData } from '../../media/media.types';
 import { participantManager } from '../../media/managers/participant-manager';
+import { remoteControlService } from '../../modules/remote-control';
 
 type Callback = (res: unknown) => void;
 
@@ -698,6 +699,7 @@ export function _cleanupPeer(
   roomId: string,
   participantId: string,
 ): void {
+  remoteControlService.onParticipantLeft(roomId, participantId);
   mediaEngine.removePeer(roomId, participantId);
   socket.leave(roomId);
   socket.data.currentRoom = undefined;

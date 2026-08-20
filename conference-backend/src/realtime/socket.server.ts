@@ -3,10 +3,13 @@ import { socketAuthMiddleware } from './middleware/socket.auth';
 import { registerMediaHandlers, _cleanupPeer } from './handlers/media.handler';
 import { registerChatHandlers, clearSocketRateLimit } from './handlers/chat.handler';
 import { registerReactionHandlers } from './handlers/reaction.handler';
+import { bindRemoteControlIo, registerRemoteControlHandlers } from '../modules/remote-control';
 import { logger } from '../infrastructure/logging/logger';
 import { metrics } from '../infrastructure/metrics/metrics.service';
 
 export const setupSocketServer = (io: SocketIOServer): void => {
+  bindRemoteControlIo(io);
+
   // ── Authentication middleware ──────────────────────────────────────────────
   io.use(socketAuthMiddleware);
 
@@ -25,6 +28,7 @@ export const setupSocketServer = (io: SocketIOServer): void => {
     registerMediaHandlers(io, socket);
     registerChatHandlers(io, socket);
     registerReactionHandlers(io, socket);
+    registerRemoteControlHandlers(io, socket);
 
     // ── Disconnect ────────────────────────────────────────────────────────────
     socket.on('disconnect', (reason) => {

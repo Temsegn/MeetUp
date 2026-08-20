@@ -125,7 +125,7 @@ export const GetChatHistorySchema = z.object({ roomId });
 
 export const SendReactionSchema = z.object({
   roomId,
-  reaction: z.string().min(1).max(10),
+  reaction: z.string().min(1).max(64),
   peerId:   z.string().optional(),
 });
 

@@ -42,6 +42,7 @@ export const useMeeting = (
   const [peers,         setPeers]         = useState<PeerInfo[]>([]);
   const [remoteStreams, setRemoteStreams]  = useState<Map<string, PeerStreams>>(new Map());
   const [isRecording,   setIsRecording]   = useState(false);
+  const [socket,        setSocket]        = useState<Socket | null>(null);
 
   const socketRef  = useRef<Socket | null>(null);
   const sessionRef = useRef<MediaSession | null>(null);
@@ -56,6 +57,7 @@ export const useMeeting = (
       sessionRef.current = null;
     }
     socketRef.current = null;
+    setSocket(null);
     setJoined(false);
     setPeers([]);
     setRemoteStreams(new Map());
@@ -174,6 +176,7 @@ export const useMeeting = (
         }
       });
 
+      setSocket(socket);
       setJoined(true);
     } finally {
       joiningRef.current = false;
@@ -237,6 +240,7 @@ export const useMeeting = (
     isRecording,
     startRecording,
     stopRecording,
+    socket,
   };
 };
 

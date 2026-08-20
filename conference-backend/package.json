@@ -4,10 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "tsx src/server.ts",
+    "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "test": "cross-env BCRYPT_ROUNDS=4 npx tsx --test tests/unit/media-engine.test.ts tests/unit/socket-schemas.test.ts src/modules/auth/tests/signup.test.ts src/modules/auth/tests/login.test.ts src/modules/auth/tests/logout.test.ts src/modules/auth/tests/refresh.test.ts src/modules/auth/tests/forgot-password.test.ts src/modules/auth/tests/reset-password.test.ts src/modules/auth/tests/change-password.test.ts src/modules/auth/tests/email-verification.test.ts src/modules/auth/tests/session.test.ts",
-    "test:unit": "cross-env BCRYPT_ROUNDS=4 npx tsx --test tests/unit/media-engine.test.ts tests/unit/socket-schemas.test.ts src/modules/auth/tests/signup.test.ts src/modules/auth/tests/login.test.ts src/modules/auth/tests/logout.test.ts src/modules/auth/tests/refresh.test.ts src/modules/auth/tests/forgot-password.test.ts src/modules/auth/tests/reset-password.test.ts src/modules/auth/tests/change-password.test.ts src/modules/auth/tests/email-verification.test.ts src/modules/auth/tests/session.test.ts",
+    "test": "cross-env BCRYPT_ROUNDS=4 npx tsx --test tests/unit/media-engine.test.ts tests/unit/socket-schemas.test.ts src/modules/auth/tests/signup.test.ts src/modules/auth/tests/login.test.ts src/modules/auth/tests/logout.test.ts src/modules/auth/tests/refresh.test.ts src/modules/auth/tests/forgot-password.test.ts src/modules/auth/tests/reset-password.test.ts src/modules/auth/tests/change-password.test.ts src/modules/auth/tests/email-verification.test.ts src/modules/auth/tests/session.test.ts src/modules/remote-control/tests/remote-control.test.ts",
+    "test:unit": "cross-env BCRYPT_ROUNDS=4 npx tsx --test tests/unit/media-engine.test.ts tests/unit/socket-schemas.test.ts src/modules/auth/tests/signup.test.ts src/modules/auth/tests/login.test.ts src/modules/auth/tests/logout.test.ts src/modules/auth/tests/refresh.test.ts src/modules/auth/tests/forgot-password.test.ts src/modules/auth/tests/reset-password.test.ts src/modules/auth/tests/change-password.test.ts src/modules/auth/tests/email-verification.test.ts src/modules/auth/tests/session.test.ts src/modules/remote-control/tests/remote-control.test.ts",
+    "test:remote-control": "npx tsx --test src/modules/remote-control/tests/remote-control.test.ts",
     "test:auth": "cross-env BCRYPT_ROUNDS=4 npx tsx --test src/modules/auth/tests/signup.test.ts src/modules/auth/tests/login.test.ts src/modules/auth/tests/logout.test.ts src/modules/auth/tests/refresh.test.ts src/modules/auth/tests/forgot-password.test.ts src/modules/auth/tests/reset-password.test.ts src/modules/auth/tests/change-password.test.ts src/modules/auth/tests/email-verification.test.ts src/modules/auth/tests/session.test.ts",
     "typecheck": "tsc --noEmit"
   },

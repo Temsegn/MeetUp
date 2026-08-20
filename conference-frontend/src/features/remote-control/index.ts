@@ -1,0 +1,13 @@
+export { useRemoteControl } from './hooks/useRemoteControl';
+export { useControlSession } from './hooks/useControlSession';
+export { ControlRequestDialog } from './components/ControlRequestDialog';
+export { RemoteControlBanner } from './components/RemoteControlBanner';
+export { RemoteControlCommandBar } from './components/RemoteControlCommandBar';
+export { ParticipantControlMenu } from './components/ParticipantControlMenu';
+export { RequestControlButton } from './components/RequestControlButton';
+export { StopControlButton } from './components/StopControlButton';
+export { dispatchRemoteCommand } from './commands/commandDispatcher';
+export { useRemoteControlStore } from './store/remoteControl.store';
+export { ViewSwitcher } from './components/ViewSwitcher';
+export { RemoteCursorOverlay } from './components/RemoteCursorOverlay';
+export type { RemoteUiCommand, IncomingControlRequest, ActiveControlSession, ControlledUiState } from './types';
