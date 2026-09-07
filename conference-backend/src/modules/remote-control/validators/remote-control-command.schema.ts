@@ -95,6 +95,7 @@ export const ControlledUiStateSchema = z.object({
   chatDraft: z.string().max(2000),
   showAllParticipants: z.boolean(),
   scrollTop: z.number().min(0).max(100_000),
+  whiteboardOpen: z.boolean().optional().default(false),
 });
 
 export const RemoteControlUiStateSchema = z.object({

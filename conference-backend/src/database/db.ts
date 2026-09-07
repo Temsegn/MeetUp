@@ -35,6 +35,27 @@ export const connectDB = async (): Promise<void> => {
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
     });
+    // Repair legacy unique googleId index that treated null as a value (breaks local invites).
+    try {
+      const users = mongoose.connection.collection('users');
+      const indexes = await users.indexes();
+      const bad = indexes.find(
+        (idx) =>
+          idx.name === 'googleId_1' &&
+          idx.unique === true &&
+          idx.sparse !== true,
+      );
+      if (bad?.name) {
+        await users.dropIndex(bad.name);
+        logger.warn('Dropped non-sparse googleId unique index');
+      }
+      await users.updateMany({ googleId: null }, { $unset: { googleId: '' } });
+      await users.createIndex({ googleId: 1 }, { unique: true, sparse: true });
+    } catch (idxErr) {
+      logger.warn('googleId index repair skipped', {
+        err: idxErr instanceof Error ? idxErr.message : String(idxErr),
+      });
+    }
     // _connected set via 'connected' event above
   } catch (error: any) {
     logger.error('MongoDB initial connection failed', { err: error.message });

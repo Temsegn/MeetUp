@@ -26,7 +26,7 @@ const envSchema = z.object({
   // Password-reset token lifetime.
   PASSWORD_RESET_TOKEN_TTL_SECONDS: z.string().default('1800').transform(Number), // 30 min
   // Email-verification token lifetime.
-  EMAIL_VERIFICATION_TOKEN_TTL_SECONDS: z.string().default('86400').transform(Number), // 24 h
+  EMAIL_VERIFICATION_TOKEN_TTL_SECONDS: z.string().default('3600').transform(Number), // 1 h
   // Login lockout: max failed attempts per (email + IP) window.
   LOGIN_MAX_FAILED_ATTEMPTS: z.string().default('5').transform(Number),
   LOGIN_LOCKOUT_WINDOW_MS: z.string().default('900000').transform(Number), // 15 min
@@ -35,6 +35,14 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().default('http://localhost:5173'),
   // Optional cookie domain (e.g. '.example.com') for cross-subdomain auth.
   COOKIE_DOMAIN: z.string().optional(),
+
+  // Google OAuth (optional — /auth/google returns 503 when unset).
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REDIRECT_URI: z
+    .string()
+    .optional()
+    .default('http://localhost:4001/auth/google/callback'),
 
   // ── Email (SMTP) — optional. When unset, emails are logged to the console
   //    (development mode) so flows remain testable without a mail server.

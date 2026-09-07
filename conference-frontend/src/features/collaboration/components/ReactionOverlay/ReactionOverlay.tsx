@@ -3,42 +3,42 @@ import { ReactionEvent } from '../../hooks/useReactions';
 
 interface ReactionOverlayProps {
   reactions: ReactionEvent[];
-  /** participantId → display name */
   peerNames?: Map<string, string>;
-  /** This user's participantId */
   ownParticipantId?: string;
+  ownUserName?: string;
 }
 
 export const ReactionOverlay: React.FC<ReactionOverlayProps> = ({
   reactions,
   peerNames,
   ownParticipantId,
+  ownUserName,
 }) => {
-  return (
-    <div className="pointer-events-none fixed inset-0 z-50 overflow-hidden">
-      {reactions.map(r => {
-        const isOwn = r.peerId === ownParticipantId;
-        const senderName = isOwn
-          ? 'You'
-          : (peerNames?.get(r.peerId) ?? '');
+  if (reactions.length === 0) return null;
 
-        return (
-          <div
-            key={r.id}
-            className="absolute bottom-24 flex flex-col items-center gap-0.5 animate-float-up"
-            style={{ left: `${r.offsetX}%` }}
-          >
-            <span className="text-4xl sm:text-5xl drop-shadow-lg select-none">
-              {r.reaction}
-            </span>
-            {senderName && (
-              <span className="text-[10px] sm:text-xs font-semibold text-white bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded-full whitespace-nowrap shadow-md">
-                {senderName}
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-20 z-40 h-32">
+      <div className="relative mx-auto h-full w-full max-w-4xl">
+        {reactions.map((r) => {
+          const isOwn = r.peerId === ownParticipantId;
+          const displayName = isOwn
+            ? (ownUserName ?? peerNames?.get(ownParticipantId ?? '') ?? 'You')
+            : (peerNames?.get(r.peerId) ?? 'Guest');
+
+          return (
+            <div
+              key={r.id}
+              className="absolute bottom-0 flex flex-col items-center gap-1 animate-reaction-pop"
+              style={{ left: `${r.offsetX}%` }}
+            >
+              <span className="text-4xl drop-shadow-lg select-none sm:text-5xl">{r.reaction}</span>
+              <span className="max-w-[140px] truncate rounded-full bg-black/70 px-2.5 py-0.5 text-[10px] font-semibold text-white shadow-md">
+                {displayName}
               </span>
-            )}
-          </div>
-        );
-      })}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

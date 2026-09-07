@@ -10,31 +10,52 @@ import { RequestContext, UserRecord } from '../auth.types';
 /**
  * Email verification lifecycle: issuing tokens and consuming them.
  *
- * Tokens are opaque, single-use, hashed at rest, and expire after 24h.
- * Each new send revokes outstanding tokens so only the latest link works.
+ * Tokens are opaque, single-use, hashed at rest, and expire after the configured TTL.
+ * Each new issue revokes outstanding tokens so only the latest link works.
  */
 
 export function createEmailVerificationService(deps: AuthDeps = authRepository) {
+  async function issueToken(input: {
+    user: UserRecord;
+    ctx?: RequestContext;
+  }): Promise<{ alreadyVerified: boolean; token: string | null }> {
+    const { user, ctx } = input;
+    if (user.emailVerifiedAt) return { alreadyVerified: true, token: null };
+
+    await deps.revokeUserEmailVerificationTokens(user.id);
+
+    const rawToken = generateSecureToken();
+    await deps.createEmailVerificationToken({
+      userId: user.id,
+      tokenHash: hashToken(rawToken),
+      expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_SECONDS * 1000),
+    });
+
+    deps.audit({
+      action: 'EMAIL_VERIFICATION_ISSUED',
+      userId: user.id,
+      ip: ctx?.ip,
+      userAgent: ctx?.userAgent,
+    });
+
+    return { alreadyVerified: false, token: rawToken };
+  }
+
   return {
+    /** Create a verification token without emailing (for combined invite email). */
+    issueToken,
+
     /** Issue a fresh verification token and email it. No-op if already verified. */
     async sendVerification(input: {
       user: UserRecord;
       ctx?: RequestContext;
     }): Promise<{ alreadyVerified: boolean }> {
       const { user, ctx } = input;
-      if (user.emailVerifiedAt) return { alreadyVerified: true };
-
-      await deps.revokeUserEmailVerificationTokens(user.id);
-
-      const rawToken = generateSecureToken();
-      await deps.createEmailVerificationToken({
-        userId: user.id,
-        tokenHash: hashToken(rawToken),
-        expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_SECONDS * 1000),
-      });
+      const issued = await issueToken({ user, ctx });
+      if (issued.alreadyVerified || !issued.token) return { alreadyVerified: true };
 
       try {
-        await emailService.send({ to: user.email, ...verificationEmail(user, rawToken) });
+        await emailService.send({ to: user.email, ...verificationEmail(user, issued.token) });
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('Failed to send verification email', {
@@ -78,7 +99,6 @@ export function createEmailVerificationService(deps: AuthDeps = authRepository) 
       const user = await deps.findUserById(record.userId);
       if (!user) throw invalid();
       if (user.emailVerifiedAt) {
-        // Idempotent: already verified — treat as success, consume the token.
         await deps.markEmailVerificationTokenUsed(record.id, new Date());
         return { user };
       }
@@ -95,7 +115,6 @@ export function createEmailVerificationService(deps: AuthDeps = authRepository) 
         userAgent: input.ctx?.userAgent,
       });
 
-      // Re-fetch so the response reflects the just-applied verification.
       const updated = await deps.findUserById(user.id);
       return { user: updated ?? { ...user, emailVerifiedAt: verifiedAt } };
     },

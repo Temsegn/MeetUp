@@ -7,6 +7,7 @@ import { mediaEngine } from './media/media-engine';
 import { setupSocketServer } from './realtime/socket.server';
 import { logger } from './infrastructure/logging/logger';
 import { storage } from './infrastructure/storage/local.storage';
+import { seedPlans } from './modules/workspace/org.bootstrap';
 
 let isShuttingDown = false;
 
@@ -20,6 +21,8 @@ const startServer = async () => {
       methods:     ['GET', 'POST'],
       credentials: true,
     },
+    // Whiteboard + DM call signaling / small payloads.
+    maxHttpBufferSize: 8e6,
     // Ping/pong detects stale connections; tune to your expected network latency
     pingTimeout:  20_000,
     pingInterval: 25_000,
@@ -27,6 +30,7 @@ const startServer = async () => {
 
   // Connect to MongoDB
   await connectDB();
+  await seedPlans();
 
   // Ensure storage/recordings, storage/photos, storage/files exist
   await storage.ensureBuckets();

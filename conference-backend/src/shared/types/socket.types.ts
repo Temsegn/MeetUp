@@ -94,10 +94,20 @@ export interface SocketData {
     userId: string;
     name:   string;
     email:  string;
+    avatarUrl?: string | null;
+    avatarColor?: string | null;
+    isGuest?: boolean;
+    guestRoomId?: string;
+    guestEmail?: string;
   };
   currentRoom?: {
     roomId:        string;
     participantId: string;
+  };
+  waitingRequest?: {
+    roomId: string;
+    requestId: string;
+    name: string;
   };
 }
 

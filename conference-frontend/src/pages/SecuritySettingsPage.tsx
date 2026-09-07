@@ -118,7 +118,7 @@ export const SecuritySettingsPage: React.FC = () => {
       {/* Header */}
       <header className="border-b border-slate-800 px-4 sm:px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link to="/" className="text-slate-400 hover:text-white transition p-1.5 -ml-1.5" title="Back to home">
+          <Link to="/home" className="text-slate-400 hover:text-white transition p-1.5 -ml-1.5" title="Back to home">
             <ArrowLeft size={18} />
           </Link>
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">

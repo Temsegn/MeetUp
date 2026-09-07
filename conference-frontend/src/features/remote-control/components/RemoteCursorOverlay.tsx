@@ -9,7 +9,7 @@ export const RemoteCursorOverlay: React.FC<RemoteCursorOverlayProps> = ({ cursor
   if (!cursor?.visible) return null;
   return (
     <div
-      className="pointer-events-none absolute z-[70]"
+      className="pointer-events-none absolute z-[140]"
       style={{
         left: `${cursor.x * 100}%`,
         top: `${cursor.y * 100}%`,

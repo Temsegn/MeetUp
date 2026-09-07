@@ -1,15 +1,42 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #3b82f6;
+  --font-sans: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+  --font-meeting: "Inter", system-ui, sans-serif;
+
+  --color-brand: #016be6;
+  --color-brand-hover: #0056ef;
+  --color-brand-link: #006dec;
+  --color-signup: #4f5fe0;
+  --color-signup-hover: #3f4fd0;
+  --color-auth-promo: #f1f6fd;
+  --color-auth-text: #1c2842;
+  --color-auth-muted: #62748e;
+  --color-auth-border: #e2e8f0;
+  --color-brand-soft: #d4e3ff;
+  --color-brand-muted: #e2f0ff;
+  --color-cta: #dc6c7c;
+  --color-danger: #df1e39;
+  --color-badge: #e7000b;
+  --color-success: #00a45c;
+
+  --color-app-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-text: #151d2b;
+  --color-text-muted: #6f7b8c;
+  --color-border-app: #e1e7ee;
+
+  --color-primary: #016be6;
   --color-primary-foreground: #ffffff;
   --color-background: #0a0e1a;
   --color-foreground: #f8fafc;
   --color-muted: #1e293b;
   --color-muted-foreground: #94a3b8;
   --color-border: #334155;
+
   --animate-slideUp: slideUp 150ms ease-out;
   --animate-float-up: float-up 3s ease-out forwards;
+  --animate-reaction-pop: reaction-pop 4.5s ease-out forwards;
 }
 
 @keyframes slideUp {
@@ -21,6 +48,21 @@
   0% { opacity: 1; transform: translateY(0) scale(1); }
   80% { opacity: 1; }
   100% { opacity: 0; transform: translateY(-200px) scale(1.4); }
+}
+
+@keyframes reaction-pop {
+  0% { opacity: 0; transform: translateX(-50%) translateY(12px) scale(0.6); }
+  12% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.1); }
+  22% { transform: translateX(-50%) translateY(-4px) scale(1); }
+  75% { opacity: 1; transform: translateX(-50%) translateY(-8px) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-20px) scale(0.95); }
+}
+
+@keyframes msgEmojiPop {
+  0% { opacity: 0; transform: scale(0.35) translateY(10px); }
+  55% { opacity: 1; transform: scale(1.18) translateY(0); }
+  75% { transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
 :root {
@@ -38,7 +80,7 @@ body {
   min-height: 100svh;
   background-color: var(--color-background);
   color: var(--color-foreground);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
@@ -52,7 +94,14 @@ body {
   flex-direction: column;
 }
 
-/* Scrollbar styling */
+/* Light dashboard / auth surfaces — scroll is owned by layout mains */
+.samtal-light {
+  color-scheme: light;
+  background-color: var(--color-app-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -63,6 +112,18 @@ body {
   background: #334155;
   border-radius: 3px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+.samtal-light::-webkit-scrollbar-thumb,
+.samtal-light *::-webkit-scrollbar-thumb {
+  background: #c5ced9;
+}
+
+/* Scroll without visible scrollbar (sidebar nav, etc.) */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }

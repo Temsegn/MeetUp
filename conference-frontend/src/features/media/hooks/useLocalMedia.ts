@@ -98,14 +98,24 @@ export const useLocalMedia = () => {
 
   const startScreenShare = useCallback(async (): Promise<MediaStream | null> => {
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          width: { ideal: 1920, max: 1920 },
+          height: { ideal: 1080, max: 1080 },
+          frameRate: { ideal: 24, max: 30 },
+        },
+        audio: false,
+      });
       setScreenStream(stream);
 
-      stream.getVideoTracks()[0].onended = () => setScreenStream(null);
+      const track = stream.getVideoTracks()[0];
+      if (track) {
+        track.onended = () => setScreenStream(null);
+      }
 
       return stream;
-    } catch (err: any) {
-      setError(err);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err : new Error('Screen share failed'));
       return null;
     }
   }, []);

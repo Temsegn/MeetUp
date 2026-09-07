@@ -37,7 +37,7 @@ export const ParticipantControlMenu: React.FC<ParticipantControlMenuProps> = ({
         <MoreVertical size={16} />
       </button>
       {open && (
-        <div className="absolute right-0 top-8 z-50 w-52 bg-slate-800 border border-slate-600 rounded-xl shadow-xl p-1">
+        <div className="absolute right-0 top-8 z-[200] w-52 bg-slate-800 border border-slate-600 rounded-xl shadow-xl p-1">
           <RequestControlButton
             pending={pending}
             disabled={disabled}

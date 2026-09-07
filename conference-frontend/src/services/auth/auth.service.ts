@@ -25,11 +25,67 @@ export const setAccessToken = (t: string | null): void => {
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
+export interface UserSettings {
+  notifications: {
+    meetings: boolean;
+    email: boolean;
+    push: boolean;
+    messages: boolean;
+  };
+  audioVideo: {
+    microphone: string;
+    camera: string;
+    speaker: string;
+  };
+  recording: {
+    autoRecord: boolean;
+    quality: string;
+  };
+  security: {
+    meetingPassword: boolean;
+    waitingRoom: boolean;
+  };
+  integrations: {
+    googleCalendar: boolean;
+    slack: boolean;
+    outlook: boolean;
+  };
+  language: string;
+  appearance: string;
+  account: {
+    plan: string;
+    meetingCapacity: number;
+    role: string;
+  };
+}
+
+export const DEFAULT_USER_SETTINGS: UserSettings = {
+  notifications: { meetings: true, email: true, push: false, messages: true },
+  audioVideo: {
+    microphone: 'Default — System Microphone',
+    camera: 'Default — System Camera',
+    speaker: 'Default — System Speakers',
+  },
+  recording: { autoRecord: true, quality: 'High (1080p)' },
+  security: { meetingPassword: true, waitingRoom: true },
+  integrations: { googleCalendar: true, slack: true, outlook: false },
+  language: 'English',
+  appearance: 'System',
+  account: { plan: 'Team Plan', meetingCapacity: 100, role: 'Admin' },
+};
+
 export interface User {
   id: string;
   name: string;
   email: string;
   avatarColor: string;
+  avatarUrl: string | null;
+  jobTitle: string;
+  department: string;
+  phone?: string;
+  mustChangePassword?: boolean;
+  settings: UserSettings;
+  authProvider: 'local' | 'google';
   emailVerified: boolean;
   createdAt: string;
 }
@@ -127,15 +183,17 @@ export async function refreshSession(): Promise<boolean> {
 }
 
 interface FetchOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   /** Attach the Bearer access token (default true). */
   auth?: boolean;
+  /** Extra headers to merge in. */
+  headers?: Record<string, string>;
 }
 
-async function apiFetch<T>(path: string, opts: FetchOptions = {}, allowRetry = true): Promise<T> {
+export async function apiFetch<T>(path: string, opts: FetchOptions = {}, allowRetry = true): Promise<T> {
   const { method = 'GET', body, auth = true } = opts;
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(opts.headers ?? {}) };
   if (auth && accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
   let res: Response;
@@ -165,17 +223,62 @@ async function apiFetch<T>(path: string, opts: FetchOptions = {}, allowRetry = t
   return data as T;
 }
 
+function normalizeUser(raw: User): User {
+  return {
+    ...raw,
+    avatarUrl: raw.avatarUrl ?? null,
+    jobTitle: raw.jobTitle ?? '',
+    department: raw.department ?? '',
+    authProvider: raw.authProvider === 'google' ? 'google' : 'local',
+    settings: {
+      ...DEFAULT_USER_SETTINGS,
+      ...(raw.settings ?? {}),
+      notifications: {
+        ...DEFAULT_USER_SETTINGS.notifications,
+        ...(raw.settings?.notifications ?? {}),
+      },
+      audioVideo: {
+        ...DEFAULT_USER_SETTINGS.audioVideo,
+        ...(raw.settings?.audioVideo ?? {}),
+      },
+      recording: {
+        ...DEFAULT_USER_SETTINGS.recording,
+        ...(raw.settings?.recording ?? {}),
+      },
+      security: {
+        ...DEFAULT_USER_SETTINGS.security,
+        ...(raw.settings?.security ?? {}),
+      },
+      integrations: {
+        ...DEFAULT_USER_SETTINGS.integrations,
+        ...(raw.settings?.integrations ?? {}),
+      },
+      account: {
+        ...DEFAULT_USER_SETTINGS.account,
+        ...(raw.settings?.account ?? {}),
+      },
+    },
+  };
+}
+
 // ── Endpoints ───────────────────────────────────────────────────────────────
 
 export const authService = {
-  async signUp(input: { name: string; email: string; password: string; rememberMe: boolean }): Promise<User> {
+  async signUp(input: {
+    name: string;
+    email: string;
+    password: string;
+    rememberMe: boolean;
+    company?: string;
+    teamSize?: string;
+  }): Promise<User> {
     const data = await apiFetch<AuthResponse>('/auth/signup', {
       method: 'POST',
       body: input,
       auth: false,
     });
     accessToken = extractAccessToken(data);
-    return data.user;
+    return normalizeUser(data.user);
   },
 
   async signIn(input: { email: string; password: string; rememberMe: boolean }): Promise<User> {
@@ -200,7 +303,7 @@ export const authService = {
       }
     }
     accessToken = extractAccessToken(data);
-    return data.user;
+    return normalizeUser(data.user);
   },
 
   async signOut(): Promise<void> {
@@ -219,8 +322,27 @@ export const authService = {
   },
 
   async getCurrentUser(): Promise<User> {
-    const data = await apiFetch<User>('/auth/me');
-    return data;
+    const data = await apiFetch<{ user: User } | User>('/auth/me');
+    const raw = data && typeof data === 'object' && 'user' in data && data.user
+      ? data.user
+      : (data as User);
+    return normalizeUser(raw);
+  },
+
+  async updateProfile(input: {
+    name?: string;
+    jobTitle?: string;
+    department?: string;
+    phone?: string;
+    avatarUrl?: string | null;
+  }): Promise<User> {
+    const data = await apiFetch<User>('/auth/me', { method: 'PATCH', body: input });
+    return normalizeUser(data);
+  },
+
+  async updateSettings(input: Partial<UserSettings>): Promise<User> {
+    const data = await apiFetch<User>('/auth/me/settings', { method: 'PATCH', body: input });
+    return normalizeUser(data);
   },
 
   async forgotPassword(email: string): Promise<void> {
@@ -246,11 +368,20 @@ export const authService = {
       `/auth/verify-email?token=${encodeURIComponent(token)}`,
       { auth: false },
     );
-    return data.user;
+    return normalizeUser(data.user);
   },
 
   async resendVerification(): Promise<void> {
     await apiFetch('/auth/resend-verification', { method: 'POST' });
+  },
+
+  /** Public resend — used on login/signup when the user is not authenticated. */
+  async resendVerificationEmail(email: string): Promise<void> {
+    await apiFetch('/auth/resend-verification-email', {
+      method: 'POST',
+      body: { email },
+      auth: false,
+    });
   },
 
   async getSessions(): Promise<SessionInfo[]> {

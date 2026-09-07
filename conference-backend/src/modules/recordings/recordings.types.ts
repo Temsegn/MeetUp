@@ -10,4 +10,5 @@ export interface UploadRecordingInput {
   roomId: string;
   userId: string;
   body: Buffer;
+  workspaceId?: string | null;
 }

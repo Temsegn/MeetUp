@@ -45,25 +45,82 @@ export function makeStubDeps(overrides: Partial<AuthDeps> = {}) {
     createUser: async (data) => {
       const user: UserRecord = {
         id: `u${++userSeq}`,
-        ...data,
+        name: data.name,
+        email: data.email,
+        passwordHash: data.passwordHash ?? '',
+        authProvider: data.authProvider ?? 'local',
+        googleId: data.googleId ?? null,
         avatarColor: 'hsl(210, 60%, 50%)',
-        emailVerifiedAt: null,
+        avatarUrl: data.avatarUrl ?? null,
+        jobTitle: '',
+        department: data.department ?? '',
+        phone: data.phone ?? '',
+        mustChangePassword: data.mustChangePassword ?? false,
+        settings: data.settings ?? {
+          notifications: { meetings: true, email: true, push: false, messages: true },
+          audioVideo: {
+            microphone: 'Default — System Microphone',
+            camera: 'Default — System Camera',
+            speaker: 'Default — System Speakers',
+          },
+          recording: { autoRecord: true, quality: 'High (1080p)' },
+          security: { meetingPassword: true, waitingRoom: true },
+          integrations: { googleCalendar: true, slack: true, outlook: false },
+          language: 'English',
+          appearance: 'System',
+          account: { plan: 'Team Plan', meetingCapacity: 100, role: 'Admin' },
+        },
+        emailVerifiedAt: data.emailVerifiedAt ?? null,
         passwordChangedAt: null,
         createdAt: new Date(),
       };
       state.users.set(user.id, user);
       return user;
     },
+    findUserByGoogleId: async (googleId) =>
+      [...state.users.values()].find((u) => u.googleId === googleId) ?? null,
     updateUserPassword: async (userId, passwordHash, changedAt) => {
       const u = state.users.get(userId);
       if (u) {
         u.passwordHash = passwordHash;
         u.passwordChangedAt = changedAt;
+        u.mustChangePassword = false;
       }
+    },
+    clearMustChangePassword: async (userId) => {
+      const u = state.users.get(userId);
+      if (u) u.mustChangePassword = false;
+    },
+    setMustChangePassword: async (userId, value) => {
+      const u = state.users.get(userId);
+      if (u) u.mustChangePassword = value;
+    },
+    updateUserPhone: async (userId, phone) => {
+      const u = state.users.get(userId);
+      if (u) u.phone = phone;
+    },
+    updateUserEmail: async (userId, email) => {
+      const u = state.users.get(userId);
+      if (!u) return null;
+      u.email = email;
+      u.emailVerifiedAt = null;
+      return u;
     },
     markEmailVerified: async (userId, at) => {
       const u = state.users.get(userId);
       if (u) u.emailVerifiedAt = at;
+    },
+    updateUserProfile: async (userId, patch) => {
+      const u = state.users.get(userId);
+      if (!u) return null;
+      Object.assign(u, patch);
+      return u;
+    },
+    updateUserSettings: async (userId, settings) => {
+      const u = state.users.get(userId);
+      if (!u) return null;
+      u.settings = settings;
+      return u;
     },
 
     // ── Sessions ───────────────────────────────────────────────────────

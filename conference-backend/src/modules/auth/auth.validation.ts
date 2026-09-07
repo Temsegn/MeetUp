@@ -19,6 +19,12 @@ export {
   type ChangePasswordInput,
 } from './validators/change-password.validator';
 export { RefreshTokenSchema, type RefreshTokenInput } from './validators/refresh-token.validator';
+export {
+  UpdateProfileSchema,
+  UpdateSettingsSchema,
+  type UpdateProfileInput,
+  type UpdateSettingsInput,
+} from './validators/update-profile.validator';
 
 /** Validate `req.body` (or any value) against a zod schema; throw on failure. */
 export function parseBody<T extends z.ZodType>(schema: T, data: unknown): z.infer<T> {

@@ -9,15 +9,16 @@ import { emailService } from './email.service';
 import { createSessionService } from './session.service';
 import { verificationEmail } from '../templates/verification-email';
 import { welcomeEmail } from '../templates/welcome-email';
-import { RequestContext, UserRecord } from '../auth.types';
+import { DEFAULT_USER_SETTINGS, mergeSettings, RequestContext, UserRecord } from '../auth.types';
+import { ensureWorkspaceForUser } from '../../workspace/org.bootstrap';
 
 /**
  * Account registration.
  *
  * Responsibilities: normalize + uniqueness check (with a race-safe unique
  * index backstop), secure hashing, email-verification token issuance,
- * welcome/verification emails, and an auto-login session so the user lands
- * in the app with a "verify your email" banner.
+ * welcome/verification emails, and a temporary session (clients should
+ * sign out and prompt email verification before full app access).
  */
 
 export interface SignupResult {
@@ -30,6 +31,14 @@ const isDuplicateKeyError = (err: unknown): boolean => {
   return e?.code === 11000;
 };
 
+function teamSizeToCapacity(teamSize: string): number {
+  if (teamSize.includes('1000+') || teamSize.includes('201')) return 500;
+  if (teamSize.includes('51')) return 200;
+  if (teamSize.includes('11')) return 100;
+  if (teamSize.includes('1')) return 50;
+  return 100;
+}
+
 export function createSignupService(deps: AuthDeps = authRepository) {
   const sessions = createSessionService(deps);
 
@@ -39,6 +48,8 @@ export function createSignupService(deps: AuthDeps = authRepository) {
       email: string;
       password: string;
       rememberMe: boolean;
+      company?: string;
+      teamSize?: string;
       ctx?: RequestContext;
     }): Promise<SignupResult> {
       const email = normalizeEmail(input.email);
@@ -52,19 +63,34 @@ export function createSignupService(deps: AuthDeps = authRepository) {
           ip: input.ctx?.ip,
           userAgent: input.ctx?.userAgent,
         });
-        // Same message as a fresh-email success would never return, but it is
-        // identical to the login-time message — this is an intentional,
-        // documented enumeration trade-off at signup (creating an account for
-        // a taken email must fail loudly for the legitimate owner).
         throw new ConflictError(
           'An account with this email already exists. Try signing in instead.'
         );
       }
 
       const passwordHash = await hashPassword(input.password);
+      const company = (input.company ?? '').trim();
+      const teamSize = (input.teamSize ?? '').trim();
+      const settings = mergeSettings({
+        ...DEFAULT_USER_SETTINGS,
+        account: {
+          ...DEFAULT_USER_SETTINGS.account,
+          meetingCapacity: teamSize
+            ? teamSizeToCapacity(teamSize)
+            : DEFAULT_USER_SETTINGS.account.meetingCapacity,
+        },
+      });
+
       let user: UserRecord;
       try {
-        user = await deps.createUser({ name: input.name.trim(), email, passwordHash });
+        user = await deps.createUser({
+          name: input.name.trim(),
+          email,
+          passwordHash,
+          authProvider: 'local',
+          department: company,
+          settings,
+        });
       } catch (err: unknown) {
         if (isDuplicateKeyError(err)) {
           throw new ConflictError(
@@ -74,7 +100,6 @@ export function createSignupService(deps: AuthDeps = authRepository) {
         throw err;
       }
 
-      // ── Emails (best-effort; failures must not block signup) ────────────
       const rawToken = generateSecureToken();
       await deps.createEmailVerificationToken({
         userId: user.id,
@@ -99,7 +124,6 @@ export function createSignupService(deps: AuthDeps = authRepository) {
         userAgent: input.ctx?.userAgent,
       });
 
-      // ── Auto-login session ──────────────────────────────────────────────
       const { session, refreshToken } = await sessions.createSession({
         userId: user.id,
         rememberMe: input.rememberMe,
@@ -113,6 +137,8 @@ export function createSignupService(deps: AuthDeps = authRepository) {
         ip: input.ctx?.ip,
         userAgent: input.ctx?.userAgent,
       });
+
+      await ensureWorkspaceForUser(user);
 
       return {
         user,

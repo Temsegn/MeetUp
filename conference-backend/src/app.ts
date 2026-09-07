@@ -4,8 +4,18 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { env, corsOrigins } from './config/env';
 import { authRouter } from './modules/auth/auth.routes';
+import { createGuestAuthRouter } from './modules/auth/guest-auth.routes';
 import { meetingsRouter } from './modules/meetings/meetings.routes';
 import { recordingsRouter } from './modules/recordings/recordings.routes';
+import { workspaceMeetingsRouter } from './modules/meetings/workspace-meetings.routes';
+import { workspaceRoomsRouter } from './modules/rooms/workspace-rooms.routes';
+import { workspaceTeamsRouter } from './modules/teams/workspace-teams.routes';
+import { dashboardRouter } from './modules/dashboard/dashboard.routes';
+import { calendarRouter } from './modules/calendar/calendar.routes';
+import { messagesRouter } from './modules/messages/messages.routes';
+import { reportsRouter } from './modules/reports/reports.routes';
+import { workspaceRouter } from './modules/workspace/workspace.routes';
+import { billingRouter } from './modules/billing/billing.routes';
 import { logger } from './infrastructure/logging/logger';
 import { metrics } from './infrastructure/metrics/metrics.service';
 import { errorHandler } from './shared/middleware/error-handler';
@@ -29,12 +39,13 @@ export const createApp = (): Express => {
       cb(new Error(`CORS: Origin ${origin} not allowed`));
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   }));
 
   // ── Body parsing ───────────────────────────────────────────────────────────
-  app.use(express.json({ limit: '100kb' }));
-  app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+  // Chat attachments (images/audio/short video) travel as base64 JSON — allow headroom.
+  app.use(express.json({ limit: '8mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '8mb' }));
   // Required for reading the HttpOnly refresh cookie in auth routes.
   app.use(cookieParser());
 
@@ -151,7 +162,17 @@ export const createApp = (): Express => {
 
   // ── Application routes ─────────────────────────────────────────────────────
   app.use('/auth', authRouter);
+  app.use('/auth', createGuestAuthRouter());
+  app.use('/workspaces', workspaceRouter);
+  app.use('/billing', billingRouter);
   app.use('/meetings', meetingsRouter);
+  app.use('/workspace-meetings', workspaceMeetingsRouter);
+  app.use('/workspace-rooms', workspaceRoomsRouter);
+  app.use('/workspace-teams', workspaceTeamsRouter);
+  app.use('/dashboard', dashboardRouter);
+  app.use('/calendar', calendarRouter);
+  app.use('/messages', messagesRouter);
+  app.use('/reports', reportsRouter);
   app.use('/recordings', recordingsRouter);
 
   // ── 404 ────────────────────────────────────────────────────────────────────

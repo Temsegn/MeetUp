@@ -8,10 +8,14 @@
     "build": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "test:remote-control": "tsx --test src/features/remote-control/commands/commandDispatcher.test.ts"
+    "test:remote-control": "tsx --test src/features/remote-control/commands/commandDispatcher.test.ts",
+    "test:auth": "node --test src/features/auth/schemas/auth.schemas.test.mjs",
+    "test:whiteboard": "tsx --test src/features/whiteboard/utils/sceneMerge.test.ts"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "file:excalidraw.tgz",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-virtual": "^3.14.10",
     "@types/react-router-dom": "^5.3.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -35,6 +39,7 @@
     "eslint": "^8.56.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "tsx": "^4.23.12",
     "typescript": "^5.2.2",
     "vite": "^5.1.0"
   }

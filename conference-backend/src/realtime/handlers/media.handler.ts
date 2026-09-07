@@ -7,6 +7,16 @@ import {
   MediaKind,
 } from 'mediasoup/types';
 import { meetingsService } from '../../modules/meetings/services/meetings.service';
+import { Meeting } from '../../database/models/Meeting.model';
+import {
+  onParticipantJoin,
+  onParticipantLeave,
+  resolveWorkspaceId,
+  endLiveMeeting,
+} from '../../modules/meetings/meetings.metering';
+import { isMeetingJoinable } from '../../modules/meetings/services/meetings-workspace.service';
+import { assertCanAccessMeeting } from '../../modules/meetings/services/meeting-join-authz.service';
+import { isAppError } from '../../shared/errors/AppError';
 import { mediaEngine } from '../../media/media-engine';
 import { mediasoupConfig } from '../../config/mediasoup';
 import { logger } from '../../infrastructure/logging/logger';
@@ -15,6 +25,8 @@ import {
   validatePayload,
   JoinRoomSchema,
   LeaveRoomSchema,
+  WaitingAdmitSchema,
+  WaitingDenySchema,
   GetRoomStateSchema,
   CreateTransportSchema,
   ConnectTransportSchema,
@@ -38,6 +50,15 @@ import {
 import type { TransportDirection, ProducerAppData } from '../../media/media.types';
 import { participantManager } from '../../media/managers/participant-manager';
 import { remoteControlService } from '../../modules/remote-control';
+import { whiteboardRoomService, onWhiteboardPeerLeft } from '../../modules/whiteboard';
+import {
+  addWaitingRequest,
+  findHostSockets,
+  getWaiting,
+  listWaiting,
+  removeWaitingBySocket,
+  removeWaitingRequest,
+} from '../waiting-room';
 
 type Callback = (res: unknown) => void;
 
@@ -53,61 +74,222 @@ function authzError(callback: Callback, message = 'Forbidden') {
 // ── Handler registration ──────────────────────────────────────────────────────
 
 export const registerMediaHandlers = (io: Server, socket: Socket) => {
-  const user = socket.data.user as { userId: string; name: string; email: string };
+  const user = socket.data.user as {
+    userId: string;
+    name: string;
+    email: string;
+    avatarUrl?: string | null;
+    avatarColor?: string | null;
+    isGuest?: boolean;
+    guestRoomId?: string;
+    guestEmail?: string;
+  };
 
   // ────────────────────────────────────────────────────────────────────────────
-  // join-room
+  // join-room (non-hosts wait for host admit)
   // ────────────────────────────────────────────────────────────────────────────
   socket.on('join-room', async (payload: unknown, callback: Callback) => {
     const v = validatePayload(JoinRoomSchema, payload);
     if (!v.success) return validationError(callback, v.error);
-    const { roomId } = v.data;
+    const { roomId, displayName } = v.data;
 
     try {
       if (socket.data.currentRoom) {
         return callback({ error: 'Already in a room. Leave first.', code: 'ALREADY_JOINED' });
       }
+      if (socket.data.waitingRequest) {
+        return callback({ error: 'Already waiting to join.', code: 'ALREADY_WAITING' });
+      }
 
-      // Meeting metadata for UI (creator) — not an SFU concern
       const meeting = await meetingsService.findByRoomId(roomId);
+      const workspaceMeeting = await Meeting.findOne({ roomId }).lean();
+      if (workspaceMeeting?.status === 'cancelled') {
+        return callback({ error: 'Meeting is cancelled.', code: 'MEETING_CANCELLED' });
+      }
+      if (workspaceMeeting?.status === 'ended') {
+        return callback({ error: 'Meeting has ended.', code: 'MEETING_ENDED' });
+      }
+      if (workspaceMeeting && !isMeetingJoinable(workspaceMeeting)) {
+        return callback({
+          error: 'Meeting has not started yet. You can join at the scheduled time.',
+          code: 'MEETING_NOT_STARTED',
+        });
+      }
 
-      // Ensure router exists and get RTP capabilities
-      const rtpCapabilities = await mediaEngine.getOrCreateRoom(roomId);
+      const creatorId = meeting?.createdBy ? String(meeting.createdBy) : null;
+      const isHost = Boolean(creatorId && creatorId === user.userId);
+      const name = (displayName?.trim() || user.name || 'Guest').slice(0, 80);
+      const isGuest = Boolean(user.isGuest) || user.userId.startsWith('guest_');
 
-      // Generate server-controlled participant ID
-      const participantId = randomUUID();
+      if (isGuest && user.guestRoomId && user.guestRoomId !== roomId) {
+        return callback({
+          error: 'This guest session is not valid for this meeting.',
+          code: 'GUEST_ROOM_MISMATCH',
+        });
+      }
 
-      // Register peer in ParticipantManager
-      mediaEngine.addPeer(roomId, participantId, socket.id, user.userId, user.name);
+      if (workspaceMeeting) {
+        try {
+          await assertCanAccessMeeting({
+            meeting: workspaceMeeting,
+            joinerUserId: user.userId,
+            isGuest,
+            guestEmail: user.guestEmail || user.email || null,
+          });
+        } catch (err) {
+          const message = isAppError(err)
+            ? err.message
+            : 'You are not allowed to join this meeting.';
+          const code = isAppError(err) ? err.code : 'JOIN_FORBIDDEN';
+          return callback({ error: message, code });
+        }
+      }
 
-      // Join Socket.IO room for broadcasts
-      socket.join(roomId);
+      // Guests always request. Members request only when meeting waiting room is on.
+      const waitingRoomEnabled = Boolean(workspaceMeeting?.settings?.waitingRoom);
+      const requiresAdmit = !isHost && (isGuest || waitingRoomEnabled);
 
-      // Track current room on socket for ownership checks and cleanup
-      socket.data.currentRoom = { roomId, participantId };
+      if (requiresAdmit) {
+        const requestId = randomUUID();
+        const waiting = {
+          requestId,
+          roomId,
+          socketId: socket.id,
+          userId: user.userId,
+          name,
+          avatarUrl: user.avatarUrl ?? null,
+          avatarColor: user.avatarColor ?? null,
+          isGuest,
+          requestedAt: Date.now(),
+        };
+        addWaitingRequest(waiting);
+        socket.data.waitingRequest = { roomId, requestId, name };
 
-      // Notify existing peers
-      socket.to(roomId).emit('peer-joined', {
-        participantId,
-        name:   user.name,
+        for (const hostSock of findHostSockets(io, roomId, creatorId ?? '')) {
+          hostSock.emit('waiting-join-request', waiting);
+        }
+
+        logger.info('Peer waiting for admit', {
+          roomId,
+          requestId,
+          userId: user.userId,
+          isGuest,
+          waitingRoomEnabled,
+        });
+        return callback({
+          status: 'waiting',
+          requestId,
+          message: 'Waiting for the host to let you in',
+        });
+      }
+
+      const joinResult = await _completeJoin(io, socket, {
+        roomId,
         userId: user.userId,
+        name,
+        avatarUrl: user.avatarUrl ?? null,
+        avatarColor: user.avatarColor ?? null,
+        creatorId,
+        muteOnEntry: Boolean(workspaceMeeting?.settings?.muteOnEntry),
       });
-
-      logger.info('Peer joined room', { roomId, participantId, userId: user.userId });
-
-      callback({
-        participantId,
-        rtpCapabilities,
-        creatorId: meeting?.createdBy ?? null,
-        // Return simulcast encoding config so client knows what to pass to produce()
-        simulcastEncodings:   mediasoupConfig.simulcastEncodings,
-        screenShareEncodings: mediasoupConfig.screenShareEncodings,
-      });
+      callback(joinResult);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error('join-room error', { err: msg, roomId, userId: user.userId });
       callback({ error: msg });
     }
+  });
+
+  socket.on('admit-waiting', async (payload: unknown, callback?: Callback) => {
+    const v = validatePayload(WaitingAdmitSchema, payload);
+    if (!v.success) return callback && validationError(callback, v.error);
+    const { roomId, requestId } = v.data;
+
+    try {
+      const current = socket.data.currentRoom as { roomId: string } | undefined;
+      if (!current || current.roomId !== roomId) {
+        return callback?.({ error: 'Not in this room', code: 'NOT_IN_ROOM' });
+      }
+      const meeting = await meetingsService.findByRoomId(roomId);
+      const creatorId = meeting?.createdBy ? String(meeting.createdBy) : null;
+      if (!creatorId || creatorId !== user.userId) {
+        return callback?.({ error: 'Only the host can admit participants.', code: 'FORBIDDEN' });
+      }
+
+      const waiting = removeWaitingRequest(roomId, requestId);
+      if (!waiting) return callback?.({ error: 'Request not found', code: 'NOT_FOUND' });
+
+      const target = io.sockets.sockets.get(waiting.socketId);
+      if (!target) return callback?.({ error: 'Participant left the lobby', code: 'GONE' });
+
+      try {
+        const workspaceMeeting = await Meeting.findOne({ roomId }).lean();
+        const joinResult = await _completeJoin(io, target, {
+          roomId,
+          userId: waiting.userId,
+          name: waiting.name,
+          avatarUrl: waiting.avatarUrl ?? null,
+          avatarColor: waiting.avatarColor ?? null,
+          creatorId,
+          muteOnEntry: Boolean(workspaceMeeting?.settings?.muteOnEntry),
+        });
+        delete target.data.waitingRequest;
+        target.emit('waiting-admitted', joinResult);
+        io.to(roomId).emit('waiting-request-resolved', { requestId, admitted: true });
+        callback?.({ success: true });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        target.emit('waiting-denied', { reason: msg });
+        callback?.({ error: msg });
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error('admit-waiting error', { err: msg });
+      callback?.({ error: msg });
+    }
+  });
+
+  socket.on('deny-waiting', async (payload: unknown, callback?: Callback) => {
+    const v = validatePayload(WaitingDenySchema, payload);
+    if (!v.success) return callback && validationError(callback, v.error);
+    const { roomId, requestId } = v.data;
+
+    try {
+      const current = socket.data.currentRoom as { roomId: string } | undefined;
+      if (!current || current.roomId !== roomId) {
+        return callback?.({ error: 'Not in this room', code: 'NOT_IN_ROOM' });
+      }
+      const meeting = await meetingsService.findByRoomId(roomId);
+      const creatorId = meeting?.createdBy ? String(meeting.createdBy) : null;
+      if (!creatorId || creatorId !== user.userId) {
+        return callback?.({ error: 'Only the host can deny participants.', code: 'FORBIDDEN' });
+      }
+
+      const waiting = removeWaitingRequest(roomId, requestId);
+      if (!waiting) return callback?.({ error: 'Request not found', code: 'NOT_FOUND' });
+
+      const target = io.sockets.sockets.get(waiting.socketId);
+      if (target) {
+        delete target.data.waitingRequest;
+        target.emit('waiting-denied', { reason: 'Host declined your request to join' });
+      }
+      io.to(roomId).emit('waiting-request-resolved', { requestId, admitted: false });
+      callback?.({ success: true });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      callback?.({ error: msg });
+    }
+  });
+
+  socket.on('list-waiting', (payload: unknown, callback?: Callback) => {
+    const v = validatePayload(LeaveRoomSchema, payload);
+    if (!v.success) return callback && validationError(callback, v.error);
+    const { roomId } = v.data;
+    const current = socket.data.currentRoom as { roomId: string } | undefined;
+    if (!current || current.roomId !== roomId) {
+      return callback?.({ error: 'Not in this room', code: 'NOT_IN_ROOM' });
+    }
+    callback?.({ waiting: listWaiting(roomId) });
   });
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -119,6 +301,13 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
     const { roomId } = v.data;
 
     try {
+      const waiting = removeWaitingBySocket(socket.id);
+      if (waiting) {
+        delete socket.data.waitingRequest;
+        io.to(roomId).emit('waiting-request-resolved', { requestId: waiting.requestId, admitted: false });
+        return callback?.({ success: true });
+      }
+
       const { participantId } = socket.data.currentRoom ?? {};
       if (!participantId) return callback?.({ error: 'Not in room', code: 'NOT_IN_ROOM' });
 
@@ -127,6 +316,32 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error('leave-room error', { err: msg });
+      callback?.({ error: msg });
+    }
+  });
+
+  // Host ends the live meeting for everyone (leave alone does not end it).
+  socket.on('end-meeting', async (payload: unknown, callback?: Callback) => {
+    const v = validatePayload(LeaveRoomSchema, payload);
+    if (!v.success) return callback && validationError(callback, v.error);
+    const { roomId } = v.data;
+    try {
+      // Only the meeting creator (host) may end the call
+      const meeting = await Meeting.findOne({ roomId }).lean();
+      if (!meeting || String(meeting.createdBy) !== user.userId) {
+        return callback?.({ error: 'Only the host can end this meeting.', code: 'FORBIDDEN' });
+      }
+      const result = await endLiveMeeting({ roomId, userId: user.userId, hostOnly: true });
+      if (!result.ended) {
+        return callback?.({ error: 'Only the host can end this meeting.', code: 'FORBIDDEN' });
+      }
+      io.to(roomId).emit('meeting-ended', { roomId, endedBy: user.userId });
+      const { participantId } = socket.data.currentRoom ?? {};
+      if (participantId) _cleanupPeer(io, socket, roomId, participantId);
+      callback?.({ success: true });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error('end-meeting error', { err: msg });
       callback?.({ error: msg });
     }
   });
@@ -145,7 +360,13 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
       const peers = mediaEngine
         .getPeersInRoom(roomId)
         .filter(p => p.id !== myParticipantId)
-        .map(p => ({ id: p.id, name: p.name, userId: p.userId }));
+        .map(p => ({
+          id: p.id,
+          name: p.name,
+          userId: p.userId,
+          avatarUrl: p.avatarUrl ?? null,
+          avatarColor: p.avatarColor ?? null,
+        }));
 
       const producers = mediaEngine
         .getAllProducersInRoom(roomId)
@@ -260,6 +481,21 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
 
       if (!mediaEngine.ownsTransport(roomId, participantId, transportId)) {
         return authzError(callback, 'Transport not owned by you');
+      }
+
+      const source = (appData as { source?: string } | undefined)?.source;
+      if (source === 'screen') {
+        for (const peer of mediaEngine.getPeersInRoom(roomId)) {
+          for (const producer of peer.producers.values()) {
+            const prodSource = (producer.appData as { source?: string } | undefined)?.source;
+            if (prodSource === 'screen' && !producer.closed) {
+              return callback({
+                error: 'Someone else is already sharing their screen.',
+                code: 'SCREEN_SHARE_ACTIVE',
+              });
+            }
+          }
+        }
       }
 
       const producerId = await mediaEngine.produce(
@@ -689,6 +925,72 @@ function _producerMeta(
   };
 }
 
+async function _completeJoin(
+  io: Server,
+  socket: Socket,
+  opts: {
+    roomId: string;
+    userId: string;
+    name: string;
+    avatarUrl: string | null;
+    avatarColor: string | null;
+    creatorId: string | null;
+    muteOnEntry?: boolean;
+  },
+) {
+  const { roomId, userId, name, avatarUrl, avatarColor, creatorId, muteOnEntry = false } = opts;
+
+  const rtpCapabilities = await mediaEngine.getOrCreateRoom(roomId);
+  const participantId = randomUUID();
+
+  mediaEngine.addPeer(
+    roomId,
+    participantId,
+    socket.id,
+    userId,
+    name,
+    avatarUrl,
+    avatarColor,
+  );
+
+  socket.join(roomId);
+
+  const workspaceId = userId.startsWith('guest_')
+    ? null
+    : await resolveWorkspaceId(userId);
+  const { sessionId } = await onParticipantJoin({ roomId, userId, workspaceId });
+  socket.data.currentRoom = { roomId, participantId, joinedAt: new Date(), workspaceId, sessionId };
+
+  socket.to(roomId).emit('peer-joined', {
+    participantId,
+    name,
+    userId,
+    avatarUrl,
+    avatarColor,
+  });
+
+  // Host just joined — push any pending waiting requests
+  if (creatorId && creatorId === userId) {
+    for (const waiting of listWaiting(roomId)) {
+      socket.emit('waiting-join-request', waiting);
+    }
+  }
+
+  logger.info('Peer joined room', { roomId, participantId, userId });
+
+  return {
+    status: 'joined' as const,
+    participantId,
+    rtpCapabilities,
+    creatorId,
+    avatarUrl,
+    avatarColor,
+    muteOnEntry,
+    simulcastEncodings: mediasoupConfig.simulcastEncodings,
+    screenShareEncodings: mediasoupConfig.screenShareEncodings,
+  };
+}
+
 /**
  * Fully clean up a peer: remove from MediaEngine, leave socket room,
  * broadcast peer-left, and schedule router cleanup if room is now empty.
@@ -700,11 +1002,37 @@ export function _cleanupPeer(
   participantId: string,
 ): void {
   remoteControlService.onParticipantLeft(roomId, participantId);
+  whiteboardRoomService.detachSocket(roomId, socket.id);
   mediaEngine.removePeer(roomId, participantId);
+  const user = socket.data.user as { name?: string } | undefined;
+  onWhiteboardPeerLeft(
+    io,
+    roomId,
+    participantId,
+    mediaEngine.getRoomParticipantCount(roomId),
+    user?.name,
+  );
   socket.leave(roomId);
+  const { joinedAt, workspaceId, sessionId } = (socket.data.currentRoom ?? {}) as {
+    joinedAt?: Date;
+    workspaceId?: string | null;
+    sessionId?: string | null;
+  };
   socket.data.currentRoom = undefined;
 
   io.to(roomId).emit('peer-left', { participantId });
+
+  if (joinedAt) {
+    const isLastPeer = mediaEngine.getRoomParticipantCount(roomId) === 0;
+    void onParticipantLeave({
+      roomId,
+      userId: (socket.data.user as { userId: string }).userId,
+      workspaceId: workspaceId ?? null,
+      joinedAt,
+      sessionId: sessionId ?? null,
+      isLastPeer,
+    });
+  }
 
   logger.info('Peer left room', {
     roomId,

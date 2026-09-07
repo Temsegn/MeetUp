@@ -28,6 +28,8 @@ export class ParticipantManager {
     socketId: string,
     userId: string,
     name: string,
+    avatarUrl?: string | null,
+    avatarColor?: string | null,
   ): Peer {
     if (!this.roomPeers.has(roomId)) {
       this.roomPeers.set(roomId, new Map());
@@ -44,6 +46,8 @@ export class ParticipantManager {
       id:                  participantId,
       userId,
       name,
+      avatarUrl: avatarUrl ?? null,
+      avatarColor: avatarColor ?? null,
       roomId,
       socketId,
       transports:          new Map<string, WebRtcTransport>(),

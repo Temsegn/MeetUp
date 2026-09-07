@@ -25,7 +25,9 @@ export type AuditAction =
   | 'EMAIL_VERIFICATION_SENT'
   | 'EMAIL_VERIFIED'
   | 'EMAIL_VERIFICATION_INVALID'
-  | 'ACCESS_DENIED';
+  | 'ACCESS_DENIED'
+  | 'PROFILE_UPDATED'
+  | 'SETTINGS_UPDATED';
 
 export interface IAuditLog extends Document {
   action: AuditAction;

@@ -2,8 +2,8 @@ import { env } from '../../../config/env';
 import { UserRecord } from '../auth.types';
 
 /**
- * Email-verification template. The link embeds the opaque single-use token
- * in the query string; the reset page submits it to the API.
+ * Org self-register: verify email only (no password — they set it at signup).
+ * Brand: Samhal.
  */
 export function verificationEmail(user: UserRecord, token: string): {
   subject: string;
@@ -11,33 +11,40 @@ export function verificationEmail(user: UserRecord, token: string): {
   html: string;
 } {
   const url = `${env.FRONTEND_URL}/auth/verify-email?token=${encodeURIComponent(token)}`;
-  const subject = 'Verify your email address';
+  const firstName = user.name.split(' ')[0] || 'there';
+  const subject = 'Verify your email — Samhal';
   const text = [
-    `Hi ${user.name},`,
+    `Hi ${firstName},`,
     '',
-    'Thanks for signing up for MeetSpace. Please verify your email address by opening the link below:',
+    'Thanks for registering your organization on Samhal.',
+    'Please verify your email address by opening the link below:',
     '',
     url,
     '',
-    'This link expires in 24 hours. If you did not create an account, you can safely ignore this email.',
+    'This link expires in 1 hour. After you verify, sign in with the password you created.',
+    '',
+    'If you did not create a Samhal account, you can safely ignore this email.',
+    '',
+    '— The Samhal team',
   ].join('\n');
   const html = `
     <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0f172a">
       <h2 style="margin-bottom:4px">Verify your email</h2>
-      <p style="color:#475569">Hi ${escapeHtml(user.name)}, thanks for signing up for MeetSpace.</p>
-      <p style="color:#475569">Confirm your email address to activate your account:</p>
+      <p style="color:#475569">Hi ${escapeHtml(firstName)}, thanks for registering your organization on <strong>Samhal</strong>.</p>
+      <p style="color:#475569">Confirm your email address to activate your account, then sign in with the password you created.</p>
       <p style="margin:24px 0">
         <a href="${url}"
-           style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">
+           style="background:#016BE6;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">
           Verify email address
         </a>
       </p>
       <p style="color:#64748b;font-size:13px">
-        Or copy this link: <a href="${url}" style="color:#2563eb;word-break:break-all">${url}</a>
+        Or copy this link: <a href="${url}" style="color:#016BE6;word-break:break-all">${url}</a>
       </p>
       <p style="color:#94a3b8;font-size:12px;margin-top:32px">
-        This link expires in 24 hours. If you did not create a MeetSpace account, ignore this email.
+        This link expires in 1 hour. If you did not create a Samhal account, ignore this email.
       </p>
+      <p style="color:#94a3b8;font-size:12px">— The Samhal team</p>
     </div>`;
   return { subject, text, html };
 }

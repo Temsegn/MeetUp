@@ -107,6 +107,8 @@ export interface Peer {
   id: string;
   userId: string;
   name: string;
+  avatarUrl?: string | null;
+  avatarColor?: string | null;
   roomId: string;
   socketId: string;
   transports: Map<string, WebRtcTransport>;

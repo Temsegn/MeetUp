@@ -8,6 +8,7 @@ import {
   SessionRecord,
   toSafeUser,
 } from '../auth.types';
+import { workspaceService } from '../../workspace/workspace.service';
 
 /**
  * Session management endpoints: current user, session list, revocation.
@@ -29,7 +30,13 @@ export function createSessionController(deps: AuthDeps = authRepository) {
   return {
     /** GET /auth/me */
     async me(req: AuthRequest, res: Response): Promise<void> {
-      res.json(toSafeUser(req.user!));
+      const workspaces = await workspaceService.listMine(req.user!);
+      res.json({
+        user: toSafeUser(req.user!),
+        workspaces,
+        activeWorkspaceId: workspaces[0]?.workspaceId ?? null,
+        role: workspaces[0]?.role ?? null,
+      });
     },
 
     /** GET /auth/sessions */

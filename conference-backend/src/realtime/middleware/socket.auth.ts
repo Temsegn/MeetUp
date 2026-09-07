@@ -28,9 +28,16 @@ export async function socketAuthMiddleware(
 
     const token = raw.startsWith('Bearer ') ? raw.slice(7) : raw;
 
-    let decoded: jwt.JwtPayload & { userId?: string };
+    let decoded: jwt.JwtPayload & {
+      userId?: string;
+      guest?: boolean;
+      name?: string;
+      email?: string;
+      roomId?: string;
+      iatMs?: number;
+    };
     try {
-      decoded = jwt.verify(token, env.JWT_SECRET) as jwt.JwtPayload & { userId?: string };
+      decoded = jwt.verify(token, env.JWT_SECRET) as typeof decoded;
     } catch {
       metrics.authFailures.inc();
       return next(new Error('AUTH_INVALID: Invalid or expired token'));
@@ -41,7 +48,29 @@ export async function socketAuthMiddleware(
       return next(new Error('AUTH_INVALID: Invalid token payload'));
     }
 
-    const user = await User.findById(decoded.userId).select('name email passwordChangedAt').lean();
+    // Guest tokens: name + invited email (no User document)
+    if (decoded.guest === true) {
+      const guestName = typeof decoded.name === 'string' && decoded.name.trim()
+        ? decoded.name.trim().slice(0, 80)
+        : 'Guest';
+      const guestEmail =
+        typeof decoded.email === 'string' ? decoded.email.trim().toLowerCase() : '';
+      socket.data.user = {
+        userId: decoded.userId,
+        name: guestName,
+        email: guestEmail,
+        avatarUrl: null,
+        avatarColor: null,
+        isGuest: true,
+        guestRoomId: typeof decoded.roomId === 'string' ? decoded.roomId : undefined,
+        guestEmail,
+      };
+      return next();
+    }
+
+    const user = await User.findById(decoded.userId)
+      .select('name email passwordChangedAt avatarUrl avatarColor')
+      .lean();
     if (!user) {
       metrics.authFailures.inc();
       return next(new Error('AUTH_INVALID: User not found'));
@@ -62,6 +91,9 @@ export async function socketAuthMiddleware(
       userId: decoded.userId,
       name:   user.name,
       email:  user.email,
+      avatarUrl: user.avatarUrl ?? null,
+      avatarColor: user.avatarColor ?? null,
+      isGuest: false,
     };
 
     logger.debug('Socket authenticated', {

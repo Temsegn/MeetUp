@@ -13,7 +13,20 @@ const consumerId  = z.string().uuid('consumerId must be a valid UUID');
 // Client → Server event schemas
 // ---------------------------------------------------------------------------
 
-export const JoinRoomSchema = z.object({ roomId });
+export const JoinRoomSchema = z.object({
+  roomId,
+  displayName: z.string().trim().min(1).max(80).optional(),
+});
+
+export const WaitingAdmitSchema = z.object({
+  roomId,
+  requestId: z.string().min(1),
+});
+
+export const WaitingDenySchema = z.object({
+  roomId,
+  requestId: z.string().min(1),
+});
 
 export const LeaveRoomSchema = z.object({ roomId });
 

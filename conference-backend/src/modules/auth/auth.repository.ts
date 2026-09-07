@@ -10,6 +10,8 @@ import {
   SessionRecord,
   PasswordResetTokenRecord,
   EmailVerificationTokenRecord,
+  mergeSettings,
+  type UserSettings,
 } from './auth.types';
 
 /**
@@ -43,13 +45,40 @@ export interface AuthDeps {
   // ── Users ──────────────────────────────────────────────────────────────
   findUserByEmail(email: string): Promise<UserRecord | null>;
   findUserById(id: string): Promise<UserRecord | null>;
+  findUserByGoogleId(googleId: string): Promise<UserRecord | null>;
   createUser(data: {
     name: string;
     email: string;
-    passwordHash: string;
+    passwordHash?: string;
+    authProvider?: 'local' | 'google';
+    googleId?: string | null;
+    department?: string;
+    phone?: string;
+    mustChangePassword?: boolean;
+    settings?: UserSettings;
+    emailVerifiedAt?: Date | null;
+    avatarUrl?: string | null;
   }): Promise<UserRecord>;
   updateUserPassword(userId: string, passwordHash: string, changedAt: Date): Promise<void>;
+  clearMustChangePassword(userId: string): Promise<void>;
+  setMustChangePassword(userId: string, value: boolean): Promise<void>;
+  updateUserPhone(userId: string, phone: string): Promise<void>;
+  updateUserEmail(userId: string, email: string): Promise<UserRecord | null>;
   markEmailVerified(userId: string, at: Date): Promise<void>;
+  updateUserProfile(
+    userId: string,
+    patch: {
+      name?: string;
+      phone?: string;
+      jobTitle?: string;
+      department?: string;
+      avatarUrl?: string | null;
+      googleId?: string | null;
+      authProvider?: 'local' | 'google';
+      emailVerifiedAt?: Date | null;
+    }
+  ): Promise<UserRecord | null>;
+  updateUserSettings(userId: string, settings: UserSettings): Promise<UserRecord | null>;
 
   // ── Refresh sessions ───────────────────────────────────────────────────
   createSession(data: NewSessionData): Promise<SessionRecord>;
@@ -111,8 +140,16 @@ const toUserRecord = (u: any): UserRecord => ({
   id: u.id ?? String(u._id),
   name: u.name,
   email: u.email,
-  passwordHash: u.passwordHash,
+  passwordHash: u.passwordHash ?? '',
+  authProvider: u.authProvider === 'google' ? 'google' : 'local',
+  googleId: u.googleId ?? null,
   avatarColor: u.avatarColor,
+  avatarUrl: u.avatarUrl ?? null,
+  jobTitle: u.jobTitle ?? '',
+  department: u.department ?? '',
+  phone: u.phone ?? '',
+  mustChangePassword: Boolean(u.mustChangePassword),
+  settings: mergeSettings(u.settings),
   emailVerifiedAt: u.emailVerifiedAt ?? null,
   passwordChangedAt: u.passwordChangedAt ?? null,
   createdAt: u.createdAt,
@@ -162,18 +199,74 @@ export const authRepository: AuthDeps = {
     const u = await User.findById(id).exec();
     return u ? toUserRecord(u) : null;
   },
+  findUserByGoogleId: async (googleId) => {
+    const u = await User.findOne({ googleId }).exec();
+    return u ? toUserRecord(u) : null;
+  },
   createUser: async (data) => {
-    const u = await User.create(data);
+    // Never persist googleId: null — a non-sparse unique index treats every null as a duplicate.
+    const doc: Record<string, unknown> = {
+      name: data.name,
+      email: data.email,
+      passwordHash: data.passwordHash ?? '',
+      authProvider: data.authProvider ?? 'local',
+      department: data.department ?? '',
+      phone: data.phone ?? '',
+      mustChangePassword: data.mustChangePassword ?? false,
+      settings: data.settings,
+      emailVerifiedAt: data.emailVerifiedAt ?? null,
+      avatarUrl: data.avatarUrl ?? null,
+    };
+    if (data.googleId) doc.googleId = data.googleId;
+    const u = await User.create(doc);
     return toUserRecord(u);
   },
   updateUserPassword: async (userId, passwordHash, changedAt) => {
     await User.updateOne(
       { _id: toObjectId(userId) },
-      { $set: { passwordHash, passwordChangedAt: changedAt } }
+      { $set: { passwordHash, passwordChangedAt: changedAt, mustChangePassword: false } },
     );
+  },
+  clearMustChangePassword: async (userId) => {
+    await User.updateOne({ _id: toObjectId(userId) }, { $set: { mustChangePassword: false } });
+  },
+  setMustChangePassword: async (userId, value) => {
+    await User.updateOne({ _id: toObjectId(userId) }, { $set: { mustChangePassword: value } });
+  },
+  updateUserPhone: async (userId, phone) => {
+    await User.updateOne({ _id: toObjectId(userId) }, { $set: { phone } });
+  },
+  updateUserEmail: async (userId, email) => {
+    const u = await User.findByIdAndUpdate(
+      userId,
+      { $set: { email, emailVerifiedAt: null } },
+      { new: true },
+    ).exec();
+    return u ? toUserRecord(u) : null;
   },
   markEmailVerified: async (userId, at) => {
     await User.updateOne({ _id: toObjectId(userId) }, { $set: { emailVerifiedAt: at } });
+  },
+  updateUserProfile: async (userId, patch) => {
+    const $set: Record<string, unknown> = {};
+    if (patch.name !== undefined) $set.name = patch.name;
+    if (patch.phone !== undefined) $set.phone = patch.phone;
+    if (patch.jobTitle !== undefined) $set.jobTitle = patch.jobTitle;
+    if (patch.department !== undefined) $set.department = patch.department;
+    if (patch.avatarUrl !== undefined) $set.avatarUrl = patch.avatarUrl;
+    if (patch.googleId !== undefined) $set.googleId = patch.googleId;
+    if (patch.authProvider !== undefined) $set.authProvider = patch.authProvider;
+    if (patch.emailVerifiedAt !== undefined) $set.emailVerifiedAt = patch.emailVerifiedAt;
+    const u = await User.findByIdAndUpdate(userId, { $set }, { new: true }).exec();
+    return u ? toUserRecord(u) : null;
+  },
+  updateUserSettings: async (userId, settings) => {
+    const u = await User.findByIdAndUpdate(
+      userId,
+      { $set: { settings } },
+      { new: true }
+    ).exec();
+    return u ? toUserRecord(u) : null;
   },
 
   // ── Refresh sessions ───────────────────────────────────────────────────

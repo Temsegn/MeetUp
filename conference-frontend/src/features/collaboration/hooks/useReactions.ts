@@ -24,15 +24,15 @@ export const useReactions = (roomId: string, peerId: string) => {
         peerId: senderId,
         reaction,
         timestamp: Date.now(),
-        offsetX: 30 + Math.random() * 40
+        offsetX: 15 + Math.random() * 70
       };
       
       setActiveReactions(prev => [...prev, reactionEvent]);
 
-      // Remove after animation (3 seconds)
+      // Remove after animation completes
       setTimeout(() => {
         setActiveReactions(prev => prev.filter(r => r.id !== reactionEvent.id));
-      }, 3000);
+      }, 4500);
     };
 
     // Backend sends { participantId, isRaised } — NOT { peerId, isRaised }
@@ -63,16 +63,16 @@ export const useReactions = (roomId: string, peerId: string) => {
       peerId,
       reaction,
       timestamp: Date.now(),
-      offsetX: 30 + Math.random() * 40
+      offsetX: 15 + Math.random() * 70
     };
     
     setActiveReactions(prev => [...prev, reactionEvent]);
     setTimeout(() => {
       setActiveReactions(prev => prev.filter(r => r.id !== reactionEvent.id));
-    }, 3000);
+    }, 4500);
 
     if (socket) {
-      socket.emit('send-reaction', { roomId, peerId, reaction });
+      socket.emit('send-reaction', { roomId, reaction });
     }
   }, [roomId, peerId]);
 

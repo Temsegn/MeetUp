@@ -13,6 +13,7 @@ export function emptyUiState(): ControlledUiState {
     chatDraft: '',
     showAllParticipants: false,
     scrollTop: 0,
+    whiteboardOpen: false,
   };
 }
 

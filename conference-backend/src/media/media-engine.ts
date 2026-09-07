@@ -147,8 +147,18 @@ export class MediaEngine {
     socketId: string,
     userId: string,
     name: string,
+    avatarUrl?: string | null,
+    avatarColor?: string | null,
   ): void {
-    participantManager.addPeer(roomId, participantId, socketId, userId, name);
+    participantManager.addPeer(
+      roomId,
+      participantId,
+      socketId,
+      userId,
+      name,
+      avatarUrl,
+      avatarColor,
+    );
     metrics.activeParticipants.inc();
     metrics.participantsJoined.inc();
   }

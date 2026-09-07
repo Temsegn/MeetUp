@@ -1,16 +1,28 @@
 import { Request } from 'express';
+import { DEFAULT_USER_SETTINGS, type IUserSettings } from '../../database/models/User.model';
+import type { WorkspaceRole } from '../workspace/workspace.types';
 
 /**
  * Plain record shapes produced by the repository and consumed by services.
  * Keeping services free of Mongoose documents makes them trivially testable.
  */
 
+export type UserSettings = IUserSettings;
+
 export interface UserRecord {
   id: string;
   name: string;
   email: string;
   passwordHash: string;
+  authProvider: 'local' | 'google';
+  googleId: string | null;
   avatarColor: string;
+  avatarUrl: string | null;
+  jobTitle: string;
+  department: string;
+  phone: string;
+  mustChangePassword: boolean;
+  settings: UserSettings;
   emailVerifiedAt: Date | null;
   passwordChangedAt: Date | null;
   createdAt: Date;
@@ -56,6 +68,13 @@ export interface SafeUser {
   name: string;
   email: string;
   avatarColor: string;
+  avatarUrl: string | null;
+  jobTitle: string;
+  department: string;
+  phone: string;
+  mustChangePassword: boolean;
+  settings: UserSettings;
+  authProvider: 'local' | 'google';
   emailVerified: boolean;
   createdAt: string;
 }
@@ -88,6 +107,8 @@ export interface AuthRequest extends Request {
   user?: UserRecord;
   /** Refresh-session id that minted the current access token (authenticated flows). */
   sessionId?: string;
+  workspaceId?: string;
+  workspaceRole?: WorkspaceRole;
 }
 
 /** Context captured from a request for audit + session metadata. */
@@ -96,12 +117,35 @@ export interface RequestContext {
   userAgent?: string;
 }
 
+function mergeSettings(raw: unknown): UserSettings {
+  const base = structuredClone(DEFAULT_USER_SETTINGS);
+  if (!raw || typeof raw !== 'object') return base;
+  const s = raw as Partial<UserSettings>;
+  return {
+    notifications: { ...base.notifications, ...(s.notifications ?? {}) },
+    audioVideo: { ...base.audioVideo, ...(s.audioVideo ?? {}) },
+    recording: { ...base.recording, ...(s.recording ?? {}) },
+    security: { ...base.security, ...(s.security ?? {}) },
+    integrations: { ...base.integrations, ...(s.integrations ?? {}) },
+    language: s.language ?? base.language,
+    appearance: s.appearance ?? base.appearance,
+    account: { ...base.account, ...(s.account ?? {}) },
+  };
+}
+
 export function toSafeUser(u: UserRecord): SafeUser {
   return {
     id: u.id,
     name: u.name,
     email: u.email,
     avatarColor: u.avatarColor,
+    avatarUrl: u.avatarUrl ?? null,
+    jobTitle: u.jobTitle ?? '',
+    department: u.department ?? '',
+    phone: u.phone ?? '',
+    mustChangePassword: Boolean(u.mustChangePassword),
+    settings: mergeSettings(u.settings),
+    authProvider: u.authProvider ?? 'local',
     emailVerified: Boolean(u.emailVerifiedAt),
     createdAt: u.createdAt.toISOString(),
   };
@@ -114,3 +158,5 @@ export function getRequestContext(req: Request): RequestContext {
     userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined,
   };
 }
+
+export { mergeSettings, DEFAULT_USER_SETTINGS };

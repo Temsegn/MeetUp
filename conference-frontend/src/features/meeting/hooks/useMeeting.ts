@@ -14,6 +14,8 @@ export interface PeerInfo {
   id: string;
   name: string;
   userId: string;
+  avatarUrl?: string | null;
+  avatarColor?: string | null;
   isHost?: boolean;
   isMuted?: boolean;
   isCameraOff?: boolean;
@@ -32,11 +34,12 @@ function emptyPeerStreams(): PeerStreams {
 export const useMeeting = (
   roomId: string,
   token: string,
-  _userName: string,
+  displayName: string,
   _userId: string | undefined,
   addToast?: (msg: string) => void,
 ) => {
   const [joined,        setJoined]        = useState(false);
+  const [waiting,       setWaiting]       = useState(false);
   const [participantId, setParticipantId] = useState<string>('');
   const [creatorId,     setCreatorId]     = useState<string | null>(null);
   const [peers,         setPeers]         = useState<PeerInfo[]>([]);
@@ -49,8 +52,15 @@ export const useMeeting = (
   const joiningRef = useRef(false);
   const participantIdRef = useRef('');
   const creatorIdRef = useRef<string | null>(null);
+  const displayNameRef = useRef(displayName);
+  displayNameRef.current = displayName;
+  const joinMeetingRef = useRef<() => Promise<void>>(async () => {});
 
   const leaveMeeting = useCallback(async () => {
+    const sock = socketRef.current;
+    if (sock) {
+      sock.emit('leave-room', { roomId });
+    }
     const session = sessionRef.current;
     if (session) {
       await session.cleanup();
@@ -59,6 +69,7 @@ export const useMeeting = (
     socketRef.current = null;
     setSocket(null);
     setJoined(false);
+    setWaiting(false);
     setPeers([]);
     setRemoteStreams(new Map());
     setParticipantId('');
@@ -66,59 +77,26 @@ export const useMeeting = (
     participantIdRef.current = '';
     creatorIdRef.current = null;
     joiningRef.current = false;
-  }, []);
+  }, [roomId]);
 
-  const joinMeeting = useCallback(async () => {
-    if (joiningRef.current) return;
-    joiningRef.current = true;
-
-    try {
-      // Tear down any previous session before creating a new socket
-      if (sessionRef.current) {
-        try {
-          await sessionRef.current.cleanup();
-        } catch { /* ignore */ }
-        sessionRef.current = null;
-      }
-
-      const socket = createSocketClient(token);
-      socketRef.current = socket;
-
-      await new Promise<void>((resolve, reject) => {
-        if (socket.connected) { resolve(); return; }
-        const t = setTimeout(
-          () => reject(new Error('Connection timeout — is the backend running?')),
-          JOIN_TIMEOUT_MS,
-        );
-        socket.once('connect', () => { clearTimeout(t); resolve(); });
-        socket.once('connect_error', (e) => {
-          clearTimeout(t);
-          reject(new Error(`Connection failed: ${e.message}`));
-        });
-      });
-
-      const joinRes = await new Promise<{
+  const enterMediaSession = useCallback(
+    async (
+      sock: Socket,
+      joinRes: {
         participantId: string;
         rtpCapabilities: unknown;
         creatorId: string | null;
         simulcastEncodings?: object[];
         screenShareEncodings?: object[];
-      }>((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error('join-room timed out')), JOIN_TIMEOUT_MS);
-        socket.emit('join-room', { roomId }, (res: any) => {
-          clearTimeout(t);
-          if (res?.error) return reject(new Error(res.error));
-          resolve(res);
-        });
-      });
-
+      },
+    ) => {
       const pid = joinRes.participantId;
       participantIdRef.current = pid;
       creatorIdRef.current = joinRes.creatorId;
       setParticipantId(pid);
       setCreatorId(joinRes.creatorId);
 
-      const session = new MediaSession(socket, roomId, pid);
+      const session = new MediaSession(sock, roomId, pid);
       session.setEncodingConfig({
         simulcastEncodings: joinRes.simulcastEncodings,
         screenShareEncodings: joinRes.screenShareEncodings,
@@ -129,11 +107,10 @@ export const useMeeting = (
       await session.createSendTransport();
       await session.createRecvTransport();
 
-      // Attach media listeners BEFORE get-room-state to avoid missing new-producer
-      _attachMediaListeners(socket, session, addToast, setPeers, setRemoteStreams, setIsRecording);
+      _attachMediaListeners(sock, session, addToast, setPeers, setRemoteStreams, setIsRecording);
 
       await new Promise<void>((resolve) => {
-        socket.emit('get-room-state', { roomId }, async (res: any) => {
+        sock.emit('get-room-state', { roomId }, async (res: any) => {
           if (!res?.error && res?.peers) {
             const existingPeers: PeerInfo[] = res.peers
               .filter((p: any) => p.id !== pid)
@@ -141,6 +118,8 @@ export const useMeeting = (
                 id:     p.id,
                 name:   p.name,
                 userId: p.userId,
+                avatarUrl: p.avatarUrl ?? null,
+                avatarColor: p.avatarColor ?? null,
                 isHost: p.userId === joinRes.creatorId,
               }));
             setPeers(existingPeers);
@@ -160,46 +139,125 @@ export const useMeeting = (
         });
       });
 
-      socket.emit('get-recording-status', { roomId }, (res: any) => {
+      sock.emit('get-recording-status', { roomId }, (res: any) => {
         if (res && !res.error) setIsRecording(!!res.recording);
       });
 
-      // Safe reconnect: full clean rejoin (socket disconnect already cleaned server peer)
-      socket.io.off('reconnect');
-      socket.io.on('reconnect', async () => {
+      sock.io.off('reconnect');
+      sock.io.on('reconnect', async () => {
         addToast?.('Reconnected — rejoining meeting...');
         try {
           await leaveMeeting();
-          await joinMeeting();
+          await joinMeetingRef.current();
         } catch {
           addToast?.('Failed to rejoin — please refresh.');
         }
       });
 
-      setSocket(socket);
+      setSocket(sock);
+      setWaiting(false);
       setJoined(true);
+    },
+    [roomId, addToast, leaveMeeting],
+  );
+
+  const joinMeeting = useCallback(async (tokenOverride?: string) => {
+    if (joiningRef.current) return;
+    joiningRef.current = true;
+
+    try {
+      if (sessionRef.current) {
+        try {
+          await sessionRef.current.cleanup();
+        } catch { /* ignore */ }
+        sessionRef.current = null;
+      }
+
+      const authToken = tokenOverride || token;
+      if (!authToken) throw new Error('Not signed in');
+      const sock = createSocketClient(authToken);
+      socketRef.current = sock;
+
+      await new Promise<void>((resolve, reject) => {
+        if (sock.connected) { resolve(); return; }
+        const t = setTimeout(
+          () => reject(new Error('Connection timeout — is the backend running?')),
+          JOIN_TIMEOUT_MS,
+        );
+        sock.once('connect', () => { clearTimeout(t); resolve(); });
+        sock.once('connect_error', (e) => {
+          clearTimeout(t);
+          reject(new Error(`Connection failed: ${e.message}`));
+        });
+      });
+
+      const joinRes = await new Promise<any>((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error('join-room timed out')), JOIN_TIMEOUT_MS);
+        sock.emit(
+          'join-room',
+          { roomId, displayName: displayNameRef.current || undefined },
+          (res: any) => {
+            clearTimeout(t);
+            if (res?.error) return reject(new Error(res.error));
+            resolve(res);
+          },
+        );
+      });
+
+      if (joinRes.status === 'waiting') {
+        setWaiting(true);
+        setSocket(sock);
+        setCreatorId(null);
+
+        const onAdmitted = async (payload: any) => {
+          sock.off('waiting-admitted', onAdmitted);
+          sock.off('waiting-denied', onDenied);
+          try {
+            await enterMediaSession(sock, payload);
+            addToast?.('Host let you in');
+          } catch (err) {
+            addToast?.(err instanceof Error ? err.message : 'Failed to join after admit');
+            setWaiting(false);
+          }
+        };
+        const onDenied = (payload: { reason?: string }) => {
+          sock.off('waiting-admitted', onAdmitted);
+          sock.off('waiting-denied', onDenied);
+          setWaiting(false);
+          socketRef.current = null;
+          setSocket(null);
+          addToast?.(payload.reason || 'Host declined your request to join');
+        };
+        sock.on('waiting-admitted', onAdmitted);
+        sock.on('waiting-denied', onDenied);
+        return;
+      }
+
+      await enterMediaSession(sock, joinRes);
     } finally {
       joiningRef.current = false;
     }
-  }, [roomId, token, addToast, leaveMeeting]);
+  }, [roomId, token, addToast, enterMediaSession]);
+
+  joinMeetingRef.current = joinMeeting;
 
   // Cleanup listeners when leaving
   useEffect(() => {
     if (!joined) return;
     return () => {
-      const socket = socketRef.current;
-      if (!socket) return;
-      socket.off('new-producer');
-      socket.off('peer-joined');
-      socket.off('peer-left');
-      socket.off('producer-closed');
-      socket.off('consumer-closed');
-      socket.off('producer-paused');
-      socket.off('producer-resumed');
-      socket.off('transport-failed');
-      socket.off('worker-died');
-      socket.off('recording-started');
-      socket.off('recording-stopped');
+      const sock = socketRef.current;
+      if (!sock) return;
+      sock.off('new-producer');
+      sock.off('peer-joined');
+      sock.off('peer-left');
+      sock.off('producer-closed');
+      sock.off('consumer-closed');
+      sock.off('producer-paused');
+      sock.off('producer-resumed');
+      sock.off('transport-failed');
+      sock.off('worker-died');
+      sock.off('recording-started');
+      sock.off('recording-stopped');
     };
   }, [joined]);
 
@@ -230,6 +288,7 @@ export const useMeeting = (
   }, [addToast]);
   return {
     joined,
+    waiting,
     participantId,
     joinMeeting,
     leaveMeeting,
@@ -277,11 +336,20 @@ function _attachMediaListeners(
     }
   });
 
-  socket.on('peer-joined', ({ participantId: newPid, name, userId: newUserId }: any) => {
+  socket.on('peer-joined', ({ participantId: newPid, name, userId: newUserId, avatarUrl, avatarColor }: any) => {
     setPeers((prev) => {
       if (prev.some((p) => p.id === newPid)) return prev;
       addToast?.(`${name} joined`);
-      return [...prev, { id: newPid, name, userId: newUserId }];
+      return [
+        ...prev,
+        {
+          id: newPid,
+          name,
+          userId: newUserId,
+          avatarUrl: avatarUrl ?? null,
+          avatarColor: avatarColor ?? null,
+        },
+      ];
     });
   });
 

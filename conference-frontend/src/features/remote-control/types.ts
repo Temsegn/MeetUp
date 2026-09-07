@@ -90,6 +90,7 @@ export interface ControlledUiState {
   chatDraft: string;
   showAllParticipants: boolean;
   scrollTop: number;
+  whiteboardOpen: boolean;
 }
 
 export interface RemoteCursorState {

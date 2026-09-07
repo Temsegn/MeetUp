@@ -60,7 +60,7 @@ export const HomePage: React.FC = () => {
     } catch (e) {
       console.error('Failed to save instant meeting', e);
     }
-    navigate(`/room/${newRoomId}`);
+    navigate(`/app/meeting/${newRoomId}`);
   };
 
   const handleScheduleMeeting = async (e: React.FormEvent) => {
@@ -111,12 +111,12 @@ export const HomePage: React.FC = () => {
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = joinRoomId.trim().replace(/^.*\/room\//, '');
-    if (clean) navigate(`/room/${clean}`);
+    const clean = joinRoomId.trim().replace(/^.*\/(?:room|app\/meeting)\//, '');
+    if (clean) navigate(`/app/meeting/${clean}`);
   };
 
   const copyLink = (roomId: string) => {
-    navigator.clipboard.writeText(`${window.location.origin}/room/${roomId}`);
+    navigator.clipboard.writeText(`${window.location.origin}/app/meeting/${roomId}`);
     setCopied(roomId);
     setTimeout(() => setCopied(null), 2000);
   };
@@ -392,7 +392,7 @@ export const HomePage: React.FC = () => {
                         <Trash2 size={14} />
                       </button>
                       <button
-                        onClick={() => navigate(`/room/${m.roomId}`)}
+                        onClick={() => navigate(`/app/meeting/${m.roomId}`)}
                         className={`flex items-center gap-1.5 text-xs text-white transition px-3 py-2 rounded-xl font-medium shadow-md ${isScheduled ? 'bg-purple-600 hover:bg-purple-700' : 'bg-blue-600 hover:bg-blue-700'}`}
                       >
                         <ExternalLink size={13} />

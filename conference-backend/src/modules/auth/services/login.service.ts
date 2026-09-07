@@ -64,6 +64,21 @@ export function createLoginService(deps: AuthDeps = authRepository) {
       }
 
       const user = await deps.findUserByEmail(email);
+      if (user && user.authProvider === 'google' && !user.passwordHash) {
+        await deps.recordLoginAttempt({ email, ip, succeeded: false });
+        deps.audit({
+          action: 'LOGIN_FAILED',
+          email,
+          ip,
+          userAgent: input.ctx?.userAgent,
+          metadata: { reason: 'google_only' },
+        });
+        throw new AuthError(
+          'This account uses Google sign-in. Please continue with Google.',
+          'GOOGLE_ONLY'
+        );
+      }
+
       const valid = user ? await verifyPassword(input.password, user.passwordHash) : false;
 
       if (!user || !valid) {
@@ -75,6 +90,20 @@ export function createLoginService(deps: AuthDeps = authRepository) {
           userAgent: input.ctx?.userAgent,
         });
         throw new AuthError('Invalid email or password.', 'INVALID_CREDENTIALS');
+      }
+
+      if (!user.emailVerifiedAt) {
+        deps.audit({
+          action: 'LOGIN_FAILED',
+          email,
+          ip,
+          userAgent: input.ctx?.userAgent,
+          metadata: { reason: 'email_unverified' },
+        });
+        throw new AuthError(
+          'Please verify your email before signing in. Check your inbox for the verification link.',
+          'EMAIL_NOT_VERIFIED',
+        );
       }
 
       await deps.recordLoginAttempt({ email, ip, succeeded: true });

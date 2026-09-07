@@ -3,12 +3,16 @@ import { socketAuthMiddleware } from './middleware/socket.auth';
 import { registerMediaHandlers, _cleanupPeer } from './handlers/media.handler';
 import { registerChatHandlers, clearSocketRateLimit } from './handlers/chat.handler';
 import { registerReactionHandlers } from './handlers/reaction.handler';
+import { registerModerationHandlers } from './handlers/moderation.handler';
 import { bindRemoteControlIo, registerRemoteControlHandlers } from '../modules/remote-control';
+import { registerWhiteboardHandlers, clearWhiteboardRateLimit } from '../modules/whiteboard';
+import { bindMessagesIo, registerMessagesHandlers } from '../modules/messages/messages.gateway';
 import { logger } from '../infrastructure/logging/logger';
 import { metrics } from '../infrastructure/metrics/metrics.service';
 
 export const setupSocketServer = (io: SocketIOServer): void => {
   bindRemoteControlIo(io);
+  bindMessagesIo(io);
 
   // ── Authentication middleware ──────────────────────────────────────────────
   io.use(socketAuthMiddleware);
@@ -28,12 +32,16 @@ export const setupSocketServer = (io: SocketIOServer): void => {
     registerMediaHandlers(io, socket);
     registerChatHandlers(io, socket);
     registerReactionHandlers(io, socket);
+    registerModerationHandlers(io, socket);
     registerRemoteControlHandlers(io, socket);
+    registerWhiteboardHandlers(io, socket);
+    registerMessagesHandlers(io, socket);
 
     // ── Disconnect ────────────────────────────────────────────────────────────
     socket.on('disconnect', (reason) => {
       metrics.socketConnections.dec();
       clearSocketRateLimit(socket.id);
+      clearWhiteboardRateLimit(socket.id);
 
       logger.info('Socket disconnected', {
         socketId: socket.id,

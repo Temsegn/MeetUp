@@ -6,6 +6,7 @@ import {
   getAccessToken,
   User,
 } from '../services/auth/auth.service';
+import { workspaceService, WorkspaceMembership } from '../services/workspace/workspace.service';
 
 /**
  * Auth state for the app.
@@ -21,12 +22,24 @@ interface AuthContextType {
   /** In-memory access token — used for the Socket.IO handshake. */
   token: string | null;
   initializing: boolean;
+  workspaces: WorkspaceMembership[];
+  activeWorkspace: WorkspaceMembership | null;
   signIn: (email: string, password: string, rememberMe: boolean) => Promise<void>;
-  signUp: (name: string, email: string, password: string, rememberMe: boolean) => Promise<void>;
+  signUp: (
+    name: string,
+    email: string,
+    password: string,
+    rememberMe: boolean,
+    extras?: { company?: string; teamSize?: string },
+  ) => Promise<void>;
   signOut: () => Promise<void>;
   signOutAll: () => Promise<void>;
   /** Re-fetch the current user (e.g. after email verification). */
   refreshUser: () => Promise<void>;
+  /** Re-fetch workspace memberships (e.g. after renaming a workspace). */
+  refreshWorkspaces: () => Promise<void>;
+  /** Replace in-memory user after profile/settings saves. */
+  setUser: (user: User) => void;
   resendVerification: () => Promise<void>;
 }
 
@@ -35,6 +48,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [initializing, setInitializing] = useState(true);
+  const [workspaces, setWorkspaces] = useState<WorkspaceMembership[]>([]);
 
   // Boot: restore the session from the refresh cookie.
   useEffect(() => {
@@ -43,7 +57,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         // getCurrentUser() auto-refreshes the access token on 401.
         const u = await authService.getCurrentUser();
-        if (!cancelled) setUser(u);
+        if (!cancelled) {
+          setUser(u);
+          workspaceService.listMine().then((ws) => { if (!cancelled) setWorkspaces(ws); }).catch(() => {});
+        }
       } catch {
         if (!cancelled) setUser(null);
       } finally {
@@ -58,12 +75,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = useCallback(async (email: string, password: string, rememberMe: boolean) => {
     const u = await authService.signIn({ email, password, rememberMe });
     setUser(u);
+    workspaceService.listMine().then(setWorkspaces).catch(() => {});
   }, []);
 
-  const signUp = useCallback(async (name: string, email: string, password: string, rememberMe: boolean) => {
-    const u = await authService.signUp({ name, email, password, rememberMe });
-    setUser(u);
-  }, []);
+  const signUp = useCallback(
+    async (
+      name: string,
+      email: string,
+      password: string,
+      rememberMe: boolean,
+      extras?: { company?: string; teamSize?: string },
+    ) => {
+      const u = await authService.signUp({
+        name,
+        email,
+        password,
+        rememberMe,
+        company: extras?.company,
+        teamSize: extras?.teamSize,
+      });
+      setUser(u);
+      workspaceService.listMine().then(setWorkspaces).catch(() => {});
+    },
+    [],
+  );
 
   const signOut = useCallback(async () => {
     await authService.signOut();
@@ -84,6 +119,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const refreshWorkspaces = useCallback(async () => {
+    try {
+      const ws = await workspaceService.listMine();
+      setWorkspaces(ws);
+    } catch {
+      /* keep current list */
+    }
+  }, []);
+
+  const setUserSafe = useCallback((u: User) => {
+    setUser(u);
+  }, []);
+
   const resendVerification = useCallback(async () => {
     await authService.resendVerification();
     await refreshUser();
@@ -95,11 +143,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         token: getAccessToken(),
         initializing,
+        workspaces,
+        activeWorkspace: workspaces[0] ?? null,
         signIn,
         signUp,
         signOut,
         signOutAll,
         refreshUser,
+        refreshWorkspaces,
+        setUser: setUserSafe,
         resendVerification,
       }}
     >

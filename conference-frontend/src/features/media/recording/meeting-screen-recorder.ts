@@ -269,11 +269,70 @@ export class MeetingScreenRecorder {
       ctx.stroke();
     });
 
+    // Whiteboard (when open) — capture Excalidraw canvases so recording includes drawings
+    this._paintWhiteboard(ctx, root, rect, sx, sy);
+
     // Chat panel (drawn from DOM messages — no browser share UI)
     this._paintChat(ctx, root, rect, sx, sy);
 
     // Horizontal elapsed timeline (minutes:seconds) — burned into the video
     this._paintTimeline(ctx, canvas);
+  }
+
+  private _paintWhiteboard(
+    ctx: CanvasRenderingContext2D,
+    root: HTMLElement,
+    rootRect: DOMRect,
+    sx: number,
+    sy: number,
+  ): void {
+    const board = root.querySelector<HTMLElement>('[data-meeting-whiteboard]');
+    if (!board) return;
+
+    const br = board.getBoundingClientRect();
+    const x = (br.left - rootRect.left) * sx;
+    const y = (br.top - rootRect.top) * sy;
+    const tw = br.width * sx;
+    const th = br.height * sy;
+    if (tw < 8 || th < 8) return;
+
+    ctx.save();
+    this._roundRect(ctx, x, y, tw, th, Math.min(12 * sx, 12));
+    ctx.clip();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x, y, tw, th);
+
+    const canvases = board.querySelectorAll('canvas');
+    let painted = false;
+    canvases.forEach((c) => {
+      if (c.width < 2 || c.height < 2) return;
+      const cr = c.getBoundingClientRect();
+      if (cr.width < 2 || cr.height < 2) return;
+      const cx = (cr.left - rootRect.left) * sx;
+      const cy = (cr.top - rootRect.top) * sy;
+      const cw = cr.width * sx;
+      const ch = cr.height * sy;
+      try {
+        ctx.drawImage(c, cx, cy, cw, ch);
+        painted = true;
+      } catch {
+        /* tainted canvas — skip */
+      }
+    });
+
+    if (!painted) {
+      ctx.fillStyle = '#64748b';
+      ctx.font = `600 ${Math.max(14, 16 * sy)}px system-ui,sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Whiteboard', x + tw / 2, y + th / 2);
+    }
+
+    ctx.restore();
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = Math.max(1, 2 * sx);
+    this._roundRect(ctx, x, y, tw, th, Math.min(12 * sx, 12));
+    ctx.stroke();
   }
 
   private _paintTimeline(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void {

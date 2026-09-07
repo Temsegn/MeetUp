@@ -10,10 +10,12 @@ export function createRecordingsController(deps?: RecordingServiceDeps) {
     /** POST /recordings/:roomId */
     async upload(req: AuthRequest, res: Response): Promise<void> {
       const { roomId } = res.locals.params as RoomIdParams;
+      const workspaceHeader = req.header('x-workspace-id') || req.header('X-Workspace-Id');
       const saved = await service.saveComposite({
         roomId,
         userId: req.user!.id,
         body: req.body as Buffer,
+        workspaceId: workspaceHeader || req.workspaceId || null,
       });
 
       res.status(201).json({

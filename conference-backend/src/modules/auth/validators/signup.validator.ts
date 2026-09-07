@@ -16,6 +16,8 @@ export const SignupSchema = z.object({
     .regex(/[A-Z]/, 'Password must contain at least one uppercase letter.')
     .regex(/[0-9]/, 'Password must contain at least one number.'),
   rememberMe: z.boolean().optional().default(false),
+  company: z.string().trim().max(120).optional().default(''),
+  teamSize: z.string().trim().max(60).optional().default(''),
 });
 
 export type SignupInput = z.infer<typeof SignupSchema>;

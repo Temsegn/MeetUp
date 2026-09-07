@@ -19,6 +19,11 @@ export function errorHandler(
     res.status(403).json({ error: 'Forbidden', code: 'CSRF_ORIGIN' });
     return;
   }
-  logger.error('Unhandled server error', { err });
+  logger.error('Unhandled server error', {
+    err:
+      err instanceof Error
+        ? { name: err.name, message: err.message, stack: err.stack }
+        : String(err),
+  });
   res.status(500).json({ error: 'Internal server error', code: 'INTERNAL_ERROR' });
 }

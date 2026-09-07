@@ -29,7 +29,7 @@ export function createPasswordResetService(deps: AuthDeps = authRepository) {
       const email = normalizeEmail(input.email);
       const user = await deps.findUserByEmail(email);
 
-      if (user) {
+      if (user && !(user.authProvider === 'google' && !user.passwordHash)) {
         // Single active link per account: revoke outstanding tokens first.
         await deps.revokeUserPasswordResetTokens(user.id);
 

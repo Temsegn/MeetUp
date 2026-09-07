@@ -13,6 +13,8 @@ import {
   ForgotPasswordSchema,
   ResetPasswordSchema,
   ChangePasswordSchema,
+  UpdateProfileSchema,
+  UpdateSettingsSchema,
 } from './auth.validation';
 import { createSignupController } from './controllers/signup.controller';
 import { createLoginController } from './controllers/login.controller';
@@ -23,6 +25,8 @@ import { createResetPasswordController } from './controllers/reset-password.cont
 import { createChangePasswordController } from './controllers/change-password.controller';
 import { createVerifyEmailController } from './controllers/verify-email.controller';
 import { createSessionController } from './controllers/session.controller';
+import { createProfileController } from './controllers/profile.controller';
+import { createGoogleAuthController } from './controllers/google-auth.controller';
 
 const router = Router();
 
@@ -36,6 +40,8 @@ const resetPasswordController = createResetPasswordController();
 const changePasswordController = createChangePasswordController();
 const verifyEmailController = createVerifyEmailController();
 const sessionController = createSessionController();
+const profileController = createProfileController();
+const googleAuthController = createGoogleAuthController();
 
 // ── Security middleware ─────────────────────────────────────────────────────
 // Origin check on every auth request (defense-in-depth behind SameSite=Lax).
@@ -72,13 +78,41 @@ router.post(
   resetPasswordController.resetPassword
 );
 
-/** GET /auth/verify-email?token=... — consume verification token. */
+/** POST /auth/verify-email?token=... — consume verification token. */
 router.get('/verify-email', verifyEmailController.verifyEmail);
+
+/** GET /auth/google — start Google OAuth (sign-up + sign-in). */
+router.get('/google', authRateLimiter, (req, res, next) =>
+  googleAuthController.start(req, res, next)
+);
+
+/** GET /auth/google/callback — Google redirects here after consent. */
+router.get('/google/callback', authRateLimiter, (req, res, next) => {
+  void googleAuthController.callback(req, res, next);
+});
 
 // ── Authenticated endpoints ─────────────────────────────────────────────────
 
 /** GET /auth/me — current user. */
 router.get('/me', authenticate, sessionController.me);
+
+/** PATCH /auth/me — update profile fields and optional avatar. */
+router.patch(
+  '/me',
+  authRateLimiter,
+  authenticate,
+  validate(UpdateProfileSchema),
+  profileController.updateProfile
+);
+
+/** PATCH /auth/me/settings — update preference toggles and device choices. */
+router.patch(
+  '/me/settings',
+  authRateLimiter,
+  authenticate,
+  validate(UpdateSettingsSchema),
+  profileController.updateSettings
+);
 
 /** POST /auth/logout — revoke the current session (cookie-based), clear cookie. */
 router.post('/logout', authRateLimiter, logoutController.logout);
@@ -95,12 +129,19 @@ router.post(
   changePasswordController.changePassword
 );
 
-/** POST /auth/resend-verification — re-issue the verification email. */
+/** POST /auth/resend-verification — re-issue the verification email (authenticated). */
 router.post(
   '/resend-verification',
   tokenRequestLimiter,
   authenticate,
   verifyEmailController.resendVerification
+);
+
+/** POST /auth/resend-verification-email — public resend by email (login / signup). */
+router.post(
+  '/resend-verification-email',
+  tokenRequestLimiter,
+  verifyEmailController.resendVerificationByEmail
 );
 
 /** GET /auth/sessions — list the user's active sessions. */
