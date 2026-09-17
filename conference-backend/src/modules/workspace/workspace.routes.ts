@@ -196,4 +196,15 @@ router.delete('/:id/members/:userId', requireWorkspace('admin'), async (req: Aut
   res.json(result);
 });
 
+router.get('/:id/audit-logs', requireWorkspace('member'), async (req: AuthRequest, res) => {
+  const q = req.query as Record<string, string>;
+  const page = Math.max(1, parseInt(q.page || '1', 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(q.limit || '50', 10) || 50));
+  const data = await workspaceService.listAuditLogs(req.workspaceId!, req.user!.id, req.workspaceRole!, {
+    page,
+    limit,
+  });
+  res.json(data);
+});
+
 export const workspaceRouter = router;

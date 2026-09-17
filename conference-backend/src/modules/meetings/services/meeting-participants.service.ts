@@ -193,21 +193,31 @@ export async function notifyMeetingParticipants(input: {
   body: string;
   href: string;
   excludeUserId?: string;
+  /** If set, only these users are notified (still excluding excludeUserId). */
+  onlyUserIds?: string[];
 }): Promise<void> {
   try {
-    const participants = await MeetingParticipant.find({
-      meetingId: new Types.ObjectId(input.meetingId),
-    })
-      .select('userId')
-      .lean();
-
-    const userIds = [
-      ...new Set(
-        participants
-          .map((p) => String(p.userId))
-          .filter((id) => id && id !== input.excludeUserId),
-      ),
-    ];
+    let userIds: string[];
+    if (input.onlyUserIds?.length) {
+      userIds = [
+        ...new Set(
+          input.onlyUserIds.filter((id) => id && id !== input.excludeUserId),
+        ),
+      ];
+    } else {
+      const participants = await MeetingParticipant.find({
+        meetingId: new Types.ObjectId(input.meetingId),
+      })
+        .select('userId')
+        .lean();
+      userIds = [
+        ...new Set(
+          participants
+            .map((p) => String(p.userId))
+            .filter((id) => id && id !== input.excludeUserId),
+        ),
+      ];
+    }
     if (userIds.length === 0) return;
 
     await AppNotification.insertMany(

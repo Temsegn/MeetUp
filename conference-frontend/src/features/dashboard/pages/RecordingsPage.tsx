@@ -27,19 +27,28 @@ export function RecordingsPage() {
   const { recordings: apiRecordings, stats: recordingStats, loading, remove, rename } = useRecordings();
 
   const liveRecordings = useMemo<RecordingRow[]>(() => {
-    if (loading || apiRecordings.length === 0) return [];
+    if (loading) return [];
     return apiRecordings.map((r) => ({
       id: r.id,
       title: r.title,
       meeting: r.title,
       at: r.createdAt,
-      date: new Date(r.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
-      time: new Date(r.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
-      duration: r.durationSeconds ? `${Math.floor(r.durationSeconds / 60)}m ${r.durationSeconds % 60}s` : '—',
+      date: new Date(r.createdAt).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+      time: new Date(r.createdAt).toLocaleTimeString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      duration: r.durationSeconds
+        ? `${Math.floor(r.durationSeconds / 60)}m ${r.durationSeconds % 60}s`
+        : '—',
       durationSec: r.durationSeconds,
       size: r.bytes ? `${(r.bytes / 1e6).toFixed(1)} MB` : '—',
       views: r.views,
-      thumb: '/dashboard/rec-1.jpg',
+      thumb: '',
       avatars: [],
       people: (r.participants ?? []).slice(0, 3).map((p) => ({
         name: p.name,
@@ -47,10 +56,19 @@ export function RecordingsPage() {
         avatarColor: p.avatarColor,
       })),
       moreCount: Math.max(0, (r.participants?.length ?? 0) - 3),
-      sharedBy: { name: 'You', avatar: '' },
+      sharedBy: {
+        name: r.sharedBy?.name || 'Unknown',
+        avatar: r.sharedBy?.avatarUrl || '',
+        avatarColor: r.sharedBy?.avatarColor ?? null,
+      },
       description: r.description,
     }));
   }, [apiRecordings, loading]);
+
+  const sharedByOptions = useMemo(
+    () => [...new Set(liveRecordings.map((r) => r.sharedBy.name).filter(Boolean))].sort(),
+    [liveRecordings],
+  );
 
   const statCards = useMemo(() => {
     const secs = recordingStats?.totalDurationSeconds ?? 0;
@@ -126,6 +144,7 @@ export function RecordingsPage() {
         onChange={setFilters}
         onClose={() => setFiltersOpen(false)}
         onClear={() => setFilters(DEFAULT_RECORDING_FILTERS)}
+        sharedByOptions={sharedByOptions}
       />
 
       <RecordingStatCards {...statCards} />

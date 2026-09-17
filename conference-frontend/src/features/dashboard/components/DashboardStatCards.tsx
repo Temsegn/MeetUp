@@ -7,6 +7,7 @@ import { DASHBOARD_STAT_RADIUS_CLASS } from './dashboardListStyles';
 interface Props {
   upcomingMeetings?: number;
   completedMeetings?: number;
+  liveMeetings?: number;
   totalParticipants?: number;
   totalRecordings?: number;
   loading?: boolean;
@@ -38,6 +39,7 @@ function Sparkline({ path, stroke, fill }: { path: string; stroke: string; fill:
 export function DashboardStatCards({
   upcomingMeetings = 0,
   completedMeetings = 0,
+  liveMeetings = 0,
   totalParticipants = 0,
   totalRecordings = 0,
   loading = false,
@@ -56,7 +58,7 @@ export function DashboardStatCards({
     {
       label: 'Upcoming Meetings',
       value: String(upcomingMeetings),
-      meta: 'Scheduled',
+      meta: liveMeetings > 0 ? `${liveMeetings} live now` : 'Scheduled',
       href: '/app/meetings',
       hrefLabel: 'View all',
       tone: 'blue' as const,

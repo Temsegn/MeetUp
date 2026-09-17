@@ -181,15 +181,15 @@ export function BillingPage() {
           <section className="rounded-xl border border-[#E8ECF1] bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
             <h2 className="mb-2 text-[13px] font-semibold text-[#151D2B]">Payment method</h2>
             <p className="text-[12px] text-[#6F7B8C]">
-              Add a card for overage billing and plan upgrades. Stripe checkout wiring comes next.
+              No payment methods on file. Card checkout can be connected when a payment provider is enabled.
             </p>
-            <button
-              type="button"
-              disabled
-              className="mt-3 h-9 rounded-xl border border-[#E1E7EE] px-3.5 text-[12px] font-semibold text-[#8A94A6]"
-            >
-              Add payment method (coming soon)
-            </button>
+          </section>
+
+          <section className="rounded-xl border border-[#E8ECF1] bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+            <h2 className="mb-2 text-[13px] font-semibold text-[#151D2B]">Invoices</h2>
+            <p className="text-[12px] text-[#6F7B8C]">
+              No invoices yet. History will appear here after billing is connected.
+            </p>
           </section>
         </div>
       </div>

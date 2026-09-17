@@ -34,6 +34,7 @@ export function DashboardPage() {
             loading={summaryLoading}
             upcomingMeetings={summary?.upcomingMeetings ?? 0}
             completedMeetings={summary?.completedMeetings ?? 0}
+            liveMeetings={summary?.liveMeetings ?? 0}
             totalParticipants={summary?.totalParticipants ?? 0}
             totalRecordings={summary?.totalRecordings ?? 0}
           />

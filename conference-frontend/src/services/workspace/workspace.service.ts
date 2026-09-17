@@ -323,4 +323,41 @@ export const workspaceService = {
       headers: workspaceHeaders(workspaceId),
     });
   },
+
+  async listInvoices(workspaceId: string) {
+    return apiFetch<{ invoices: Array<{ id: string; date: string; amount: string; status: string }> }>(
+      '/billing/invoices',
+      { headers: workspaceHeaders(workspaceId) },
+    );
+  },
+
+  async listPaymentMethods(workspaceId: string) {
+    return apiFetch<{
+      paymentMethods: Array<{ id: string; brand: string; last4: string; exp: string }>;
+    }>('/billing/payment-methods', { headers: workspaceHeaders(workspaceId) });
+  },
+
+  async listAuditLogs(workspaceId: string, params: { page?: number; limit?: number } = {}) {
+    const qs = new URLSearchParams();
+    if (params.page) qs.set('page', String(params.page));
+    if (params.limit) qs.set('limit', String(params.limit));
+    const query = qs.toString() ? `?${qs}` : '';
+    return apiFetch<{
+      logs: Array<{
+        id: string;
+        action: string;
+        userId: string | null;
+        email: string | null;
+        ip: string | null;
+        userAgent: string | null;
+        metadata: Record<string, unknown> | null;
+        createdAt: string;
+      }>;
+      total: number;
+      page: number;
+      limit: number;
+    }>(`/workspaces/${workspaceId}/audit-logs${query}`, {
+      headers: workspaceHeaders(workspaceId),
+    });
+  },
 };

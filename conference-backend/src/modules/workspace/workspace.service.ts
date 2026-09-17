@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { Types } from 'mongoose';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../shared/errors/AppError';
 import { hashToken } from '../auth/security/token-hasher';
 import { generateSecureToken } from '../auth/security/token-generator';
@@ -862,6 +863,51 @@ export function createWorkspaceService() {
       if (targetUserId === actor.id) throw new ValidationError('You cannot remove yourself.');
       await workspaceRepository.removeMember(workspaceId, targetUserId);
       return { success: true };
+    },
+
+    async listAuditLogs(
+      workspaceId: string,
+      actorUserId: string,
+      actorRole: WorkspaceRole,
+      opts: { page: number; limit: number },
+    ) {
+      const { AuditLog } = await import('../../database/models/AuditLog.model');
+      const page = opts.page;
+      const limit = opts.limit;
+      const skip = (page - 1) * limit;
+
+      let userFilter: Types.ObjectId[];
+      if (hasMinRole(actorRole, 'admin')) {
+        const members = await workspaceRepository.listMembers(workspaceId);
+        userFilter = members
+          .map((m) => m.userId)
+          .filter((id) => Types.ObjectId.isValid(id))
+          .map((id) => new Types.ObjectId(id));
+      } else {
+        userFilter = [new Types.ObjectId(actorUserId)];
+      }
+
+      const filter = { userId: { $in: userFilter } };
+      const [rows, total] = await Promise.all([
+        AuditLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+        AuditLog.countDocuments(filter),
+      ]);
+
+      return {
+        logs: rows.map((r) => ({
+          id: String(r._id),
+          action: r.action,
+          userId: r.userId ? String(r.userId) : null,
+          email: r.email ?? null,
+          ip: r.ip ?? null,
+          userAgent: r.userAgent ?? null,
+          metadata: r.metadata ?? null,
+          createdAt: r.createdAt.toISOString(),
+        })),
+        total,
+        page,
+        limit,
+      };
     },
   };
 }

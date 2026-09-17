@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ActiveControlSession, RemoteViewMode } from '../types';
+import { ViewSwitcher } from './ViewSwitcher';
 
 interface RemoteControlBannerProps {
   session: ActiveControlSession;
@@ -15,31 +16,29 @@ export const RemoteControlBanner: React.FC<RemoteControlBannerProps> = ({
   onSwitchView,
 }) => {
   const controlling = session.role === 'controlling';
-  const remote = controlling && viewMode === 'remote';
 
   return (
-    <div className="flex items-center gap-1.5">
-      {controlling && onSwitchView && (
-        <button
-          type="button"
-          onClick={() => onSwitchView(remote ? 'self' : 'remote')}
-          className="bg-slate-800/80 backdrop-blur rounded-full px-3 py-1.5 text-xs sm:text-sm font-medium border border-slate-700 shadow-lg hover:bg-slate-700 transition max-w-[160px] truncate"
-          title={remote ? 'Switch to your view' : `Control ${session.controlledName}`}
-        >
-          {remote ? `Controlling ${session.controlledName}` : 'My View'}
-        </button>
-      )}
-      {!controlling && (
-        <span className="hidden sm:inline text-[11px] text-amber-200/90 max-w-[140px] truncate">
+    <div className="flex flex-wrap items-center gap-2">
+      {controlling && onSwitchView ? (
+        <ViewSwitcher session={session} viewMode={viewMode} onChange={onSwitchView} />
+      ) : null}
+      {!controlling ? (
+        <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
           Controlled by {session.requesterName}
+        </span>
+      ) : (
+        <span className="rounded-full border border-[#BFDBFE] bg-[#E8F1FF] px-2.5 py-1 text-[11px] font-semibold text-[#016BE6]">
+          {viewMode === 'remote'
+            ? `Acting as ${session.controlledName}`
+            : 'Your view'}
         </span>
       )}
       <button
         type="button"
         onClick={onStop}
-        className="bg-slate-800/80 backdrop-blur rounded-full px-3 py-1.5 text-xs sm:text-sm font-medium border border-slate-700 shadow-lg hover:bg-slate-700 transition"
+        className="rounded-full border border-[#FECACA] bg-[#FEF2F2] px-3 py-1.5 text-[12px] font-semibold text-[#DC2626] hover:bg-[#FEE2E2]"
       >
-        {controlling ? 'Stop' : 'Revoke'}
+        {controlling ? 'Stop control' : 'Revoke'}
       </button>
     </div>
   );

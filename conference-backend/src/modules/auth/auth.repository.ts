@@ -149,6 +149,10 @@ const toUserRecord = (u: any): UserRecord => ({
   department: u.department ?? '',
   phone: u.phone ?? '',
   mustChangePassword: Boolean(u.mustChangePassword),
+  platformRole:
+    u.platformRole === 'admin' || u.platformRole === 'super_admin' ? u.platformRole : 'none',
+  accountStatus:
+    u.accountStatus === 'suspended' || u.accountStatus === 'banned' ? u.accountStatus : 'active',
   settings: mergeSettings(u.settings),
   emailVerifiedAt: u.emailVerifiedAt ?? null,
   passwordChangedAt: u.passwordChangedAt ?? null,

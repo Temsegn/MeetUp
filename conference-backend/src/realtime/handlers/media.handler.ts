@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { Types } from 'mongoose';
 import { Server, Socket } from 'socket.io';
 import {
   DtlsParameters,
@@ -14,9 +15,15 @@ import {
   resolveWorkspaceId,
   endLiveMeeting,
 } from '../../modules/meetings/meetings.metering';
+import {
+  endMeetingIfDurationExpired,
+  isMeetingDurationExpired,
+} from '../../modules/meetings/meeting-duration.job';
 import { isMeetingJoinable } from '../../modules/meetings/services/meetings-workspace.service';
 import { assertCanAccessMeeting } from '../../modules/meetings/services/meeting-join-authz.service';
 import { isAppError } from '../../shared/errors/AppError';
+import { workspaceRepository } from '../../modules/workspace/workspace.repository';
+import type { WorkspaceRole } from '../../modules/workspace/workspace.types';
 import { mediaEngine } from '../../media/media-engine';
 import { mediasoupConfig } from '../../config/mediasoup';
 import { logger } from '../../infrastructure/logging/logger';
@@ -109,6 +116,13 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
       if (workspaceMeeting?.status === 'ended') {
         return callback({ error: 'Meeting has ended.', code: 'MEETING_ENDED' });
       }
+      if (workspaceMeeting?.status === 'live' && isMeetingDurationExpired(workspaceMeeting)) {
+        await endMeetingIfDurationExpired(io, roomId);
+        return callback({
+          error: 'Meeting ended — scheduled duration reached.',
+          code: 'MEETING_DURATION_ENDED',
+        });
+      }
       if (workspaceMeeting && !isMeetingJoinable(workspaceMeeting)) {
         return callback({
           error: 'Meeting has not started yet. You can join at the scheduled time.',
@@ -130,11 +144,24 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
 
       if (workspaceMeeting) {
         try {
+          let workspaceRole: WorkspaceRole | null = null;
+          if (
+            !isGuest &&
+            workspaceMeeting.workspaceId &&
+            Types.ObjectId.isValid(String(workspaceMeeting.workspaceId))
+          ) {
+            const member = await workspaceRepository.findMember(
+              String(workspaceMeeting.workspaceId),
+              user.userId,
+            );
+            workspaceRole = (member?.role as WorkspaceRole | undefined) ?? null;
+          }
           await assertCanAccessMeeting({
             meeting: workspaceMeeting,
             joinerUserId: user.userId,
             isGuest,
             guestEmail: user.guestEmail || user.email || null,
+            workspaceRole,
           });
         } catch (err) {
           const message = isAppError(err)

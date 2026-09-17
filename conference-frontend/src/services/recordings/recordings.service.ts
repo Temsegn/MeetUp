@@ -17,6 +17,12 @@ export interface Recording {
     avatarUrl?: string | null;
     avatarColor?: string | null;
   }>;
+  sharedBy?: {
+    userId: string;
+    name: string;
+    avatarUrl?: string | null;
+    avatarColor?: string | null;
+  } | null;
   createdAt: string;
 }
 

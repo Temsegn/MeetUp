@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MonitorUp } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getAccessToken } from '../../../services/auth/auth.service';
@@ -23,6 +23,8 @@ import { VideoTile, type LiveParticipant } from '../components/VideoTile';
 import { ConferenceControlBar } from '../components/ConferenceControlBar';
 import { ParticipantsPanel } from '../components/ParticipantsPanel';
 import { MeetingChatPanel } from '../components/MeetingChatPanel';
+import { MeetingAgendaCard } from '../components/MeetingAgendaCard';
+import { MeetingSharedScreenCard } from '../components/MeetingSharedScreenCard';
 import { useMeetingModeration, emitHostModerate } from '../hooks/useMeetingModeration';
 import type { ParticipantModerationAction } from '../components/ParticipantRowMenu';
 
@@ -32,10 +34,15 @@ import type { ParticipantModerationAction } from '../components/ParticipantRowMe
  */
 export function LiveMeetingPage() {
   const { roomId = 'meeting' } = useParams<{ roomId: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, activeWorkspace } = useAuth();
   const [displayName, setDisplayName] = useState(user?.name ?? '');
-  const [guestEmail, setGuestEmail] = useState('');
+  const [guestEmail, setGuestEmail] = useState(() => {
+    const fromQuery = searchParams.get('email')?.trim().toLowerCase() ?? '';
+    return fromQuery;
+  });
+  const guestEmailLocked = Boolean(searchParams.get('email')?.trim());
   const [guestToken, setGuestToken] = useState<string | null>(null);
   const [guestUserId, setGuestUserId] = useState<string | null>(null);
   const [waitingList, setWaitingList] = useState<
@@ -47,13 +54,18 @@ export function LiveMeetingPage() {
   const [isJoining, setIsJoining] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
-  const [showParticipants, setShowParticipants] = useState(false);
-  const [showChat, setShowChat] = useState(false);
+  const [showParticipants, setShowParticipants] = useState(true);
+  const [showChat, setShowChat] = useState(true);
   const [whiteboardOpen, setWhiteboardOpen] = useState(false);
   const [chatDisabled, setChatDisabled] = useState(false);
   const [pendingRemoteShare, setPendingRemoteShare] = useState(false);
   const [toasts, setToasts] = useState<{ id: string; message: string }[]>([]);
   const [leavePromptOpen, setLeavePromptOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmailDraft, setInviteEmailDraft] = useState('');
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [recordingTick, setRecordingTick] = useState(Date.now());
   const stageRef = useRef<HTMLDivElement | null>(null);
   /** When true, navigation/leave is intentional (Leave / End / host ended). */
   const allowLeaveRef = useRef(false);
@@ -141,6 +153,7 @@ export function LiveMeetingPage() {
   const {
     isRecording,
     isBusy: isRecordingBusy,
+    recordingStartedAt,
     startRecording,
     stopRecording,
   } = useMeetingScreenRecorder({
@@ -182,8 +195,12 @@ export function LiveMeetingPage() {
 
   useEffect(() => {
     if (!socket) return;
-    const onEnded = () => {
-      addToast('Host ended the meeting');
+    const onEnded = (payload?: { reason?: string }) => {
+      addToast(
+        payload?.reason === 'duration'
+          ? 'Meeting ended — scheduled duration reached'
+          : 'Host ended the meeting',
+      );
       allowLeaveRef.current = true;
       void (async () => {
         localStream?.getTracks().forEach((t) => t.stop());
@@ -558,12 +575,84 @@ export function LiveMeetingPage() {
     [tiles, peers, isHost, creatorId],
   );
 
+  useEffect(() => {
+    if (!isRecording || !recordingStartedAt) return;
+    const id = window.setInterval(() => setRecordingTick(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [isRecording, recordingStartedAt]);
+
+  // Controlled peer publishes UI state so the controller mirrors mute/camera/hand/share.
+  useEffect(() => {
+    if (remoteControl.session?.role !== 'controlled') return;
+    remoteControl.publishUiState({
+      version: Date.now(),
+      sidebar: showChat ? 'chat' : showParticipants ? 'participants' : null,
+      layout: screenStream ? 'presentation' : 'gallery',
+      selectedParticipantId: null,
+      isMuted,
+      isCameraOff,
+      isSharingScreen: Boolean(screenStream),
+      isHandRaised: raisedHands.has(participantId),
+      chatDraft: '',
+      showAllParticipants: showParticipants,
+      scrollTop: 0,
+      whiteboardOpen,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    remoteControl.session?.role,
+    remoteControl.session?.sessionId,
+    isMuted,
+    isCameraOff,
+    screenStream,
+    raisedHands,
+    participantId,
+    showChat,
+    showParticipants,
+    whiteboardOpen,
+  ]);
+
+  const sendGuestInvite = async () => {
+    if (!isHost || !activeWorkspace?.workspaceId || !meetingMeta?.id) return;
+    const email = inviteEmailDraft.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setInviteError('Enter a valid email address.');
+      return;
+    }
+    setInviteBusy(true);
+    setInviteError(null);
+    try {
+      const updated = await meetingsService.addParticipants(
+        activeWorkspace.workspaceId,
+        meetingMeta.id,
+        { guestEmails: [email] },
+      );
+      setMeetingMeta(updated);
+      setInviteEmailDraft('');
+      setInviteOpen(false);
+      addToast(`Invitation sent to ${email}`);
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : 'Could not send invitation.');
+    } finally {
+      setInviteBusy(false);
+    }
+  };
+
   const peerNames = useMemo(() => {
     const m = new Map<string, string>();
     if (participantId) m.set(participantId, effectiveName);
     peers.forEach((p) => m.set(p.id, p.name));
+    if (remoteControl.session?.controlledUserId && remoteControl.session.controlledName) {
+      m.set(remoteControl.session.controlledUserId, remoteControl.session.controlledName);
+    }
     return m;
-  }, [participantId, effectiveName, peers]);
+  }, [
+    participantId,
+    effectiveName,
+    peers,
+    remoteControl.session?.controlledUserId,
+    remoteControl.session?.controlledName,
+  ]);
 
   const screenSharerId = useMemo(() => {
     if (screenStream && participantId) return participantId;
@@ -586,6 +675,44 @@ export function LiveMeetingPage() {
   const meetingTitle = meetingMeta?.title?.trim() || `Meeting ${roomId}`;
   const isGuestJoin = !user;
 
+  const controllingRemote =
+    remoteControl.session?.role === 'controlling' && remoteControl.viewMode === 'remote';
+  const controllingSelf =
+    remoteControl.session?.role === 'controlling' && remoteControl.viewMode === 'self';
+  const controlledPeerId = remoteControl.session?.controlledUserId ?? null;
+  const controlledPeerName = remoteControl.session?.controlledName ?? null;
+
+  /** Whose stage is in focus during remote control (or screen share otherwise). */
+  const focusTileId = controllingRemote
+    ? controlledPeerId
+    : controllingSelf
+      ? participantId
+      : screenSharerId;
+
+  const stageNameLabel = controllingRemote
+    ? controlledPeerName
+    : controllingSelf
+      ? 'Me'
+      : focusTileId
+        ? focusTileId === participantId
+          ? 'Me'
+          : tiles.find((t) => t.id === focusTileId)?.name ?? null
+        : null;
+
+  const labeledTiles = useMemo(
+    () =>
+      tiles.map((t) => ({
+        ...t,
+        labelOverride:
+          t.id === participantId
+            ? 'Me'
+            : controllingRemote && t.id === controlledPeerId
+              ? controlledPeerName
+              : null,
+      })),
+    [tiles, participantId, controllingRemote, controlledPeerId, controlledPeerName],
+  );
+
   if (!joined) {
     return (
       <MeetingPreJoinScreen
@@ -595,7 +722,8 @@ export function LiveMeetingPage() {
         nameEditable
         requireName={isGuestJoin || !displayName.trim()}
         guestEmail={guestEmail}
-        onGuestEmailChange={setGuestEmail}
+        onGuestEmailChange={guestEmailLocked ? undefined : setGuestEmail}
+        guestEmailLocked={guestEmailLocked}
         requireGuestEmail={isGuestJoin}
         avatarUrl={user?.avatarUrl}
         avatarColor={user?.avatarColor}
@@ -613,22 +741,43 @@ export function LiveMeetingPage() {
   }
 
   return (
-    <div ref={stageRef} data-room-id={roomId} className="relative flex h-full min-h-0 flex-col gap-3 p-3 sm:p-4">
+    <div ref={stageRef} data-room-id={roomId} className="relative flex h-full min-h-0 flex-col overflow-hidden">
       <div
         className={cn(
-          'grid min-h-0 flex-1 gap-3 overflow-hidden',
-          panelOpen ? 'xl:grid-cols-[minmax(0,1fr)_320px]' : 'grid-cols-1',
+          'grid min-h-0 flex-1 gap-4 overflow-hidden p-4 sm:p-5 lg:p-[26px]',
+          panelOpen ? 'xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]' : 'grid-cols-1',
         )}
       >
-        <div className="flex min-h-0 min-w-0 flex-col gap-2.5 overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-0.5">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <MeetingRoomHeader
                 title={meetingTitle}
                 participantCount={tiles.length}
                 roomId={roomId}
                 isHost={isHost}
+                scheduledAt={meetingMeta?.scheduledAt}
+                durationMinutes={meetingMeta?.duration}
+                startedAt={meetingMeta?.startedAt}
+                recording={isHost && isRecording}
+                recordingElapsedMs={
+                  isRecording && recordingStartedAt
+                    ? Math.max(0, recordingTick - recordingStartedAt)
+                    : 0
+                }
+                userName={effectiveName}
+                avatarUrl={user?.avatarUrl}
+                avatarColor={user?.avatarColor}
                 onLeave={() => void handleLeave()}
+                onOpenParticipants={() => setShowParticipants(true)}
+                onInviteByEmail={
+                  isHost
+                    ? () => {
+                        setInviteError(null);
+                        setInviteOpen(true);
+                      }
+                    : undefined
+                }
               />
             </div>
             {remoteControl.session ? (
@@ -645,7 +794,7 @@ export function LiveMeetingPage() {
             ) : null}
           </div>
 
-          <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-[#E8ECF1] bg-[#F8FAFC]">
+          <div className="relative min-h-[280px] flex-1 overflow-hidden sm:min-h-[320px]">
             {whiteboardOpen && socket ? (
               <WhiteboardStage
                 socket={socket}
@@ -660,29 +809,56 @@ export function LiveMeetingPage() {
               />
             ) : (
               <>
-            <div className="h-full overflow-hidden">
-              {screenSharerId ? (
-              <div className="flex h-full flex-col gap-2.5 p-2.5">
+            <div className="flex h-full flex-col overflow-hidden">
+              {stageNameLabel ? (
+                <div className="mb-2 flex items-center gap-2">
+                  <p className="truncate text-[13px] font-semibold text-[#121B29]">
+                    {stageNameLabel}
+                  </p>
+                  {controllingRemote ? (
+                    <span className="shrink-0 rounded-full bg-[#E8F1FF] px-2 py-0.5 text-[10px] font-semibold text-[#016BE6]">
+                      Controlling
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+              {focusTileId ? (
+              <div className="flex min-h-0 flex-1 flex-col gap-3">
                 {(() => {
-                  const screenTile = tiles.find((t) => t.id === screenSharerId);
-                  const others = tiles.filter((t) => t.id !== screenSharerId);
-                  if (!screenTile) return null;
+                  const focusTile = labeledTiles.find((t) => t.id === focusTileId);
+                  const others = labeledTiles.filter((t) => t.id !== focusTileId);
+                  if (!focusTile) return null;
                   return (
                     <>
                       <VideoTile
-                        participant={screenTile}
-                        isScreenShare
+                        participant={focusTile}
+                        isScreenShare={focusTile.isScreenShare || Boolean(screenSharerId === focusTileId)}
                         className="min-h-[200px] flex-1"
                       />
                       {others.length > 0 ? (
-                        <div className="flex shrink-0 gap-2 overflow-x-auto pb-1">
+                        <div className="flex shrink-0 gap-2.5 overflow-x-auto pb-1">
                           {others.map((p) => (
-                            <VideoTile
+                            <button
                               key={p.id}
-                              participant={p}
-                              isScreenShare={p.isScreenShare}
-                              className="h-24 w-36 shrink-0 sm:h-28 sm:w-44"
-                            />
+                              type="button"
+                              className="shrink-0"
+                              onClick={() => {
+                                if (!remoteControl.session || remoteControl.session.role !== 'controlling') {
+                                  return;
+                                }
+                                if (p.id === participantId) {
+                                  void remoteControl.switchView('self');
+                                } else if (p.id === controlledPeerId) {
+                                  void remoteControl.switchView('remote');
+                                }
+                              }}
+                            >
+                              <VideoTile
+                                participant={p}
+                                isScreenShare={p.isScreenShare}
+                                className="h-24 w-36 sm:h-28 sm:w-44"
+                              />
+                            </button>
                           ))}
                         </div>
                       ) : null}
@@ -693,14 +869,14 @@ export function LiveMeetingPage() {
             ) : (
               <div
                 className={cn(
-                  'grid h-full gap-2.5 p-2.5',
-                  tiles.length <= 1 && 'grid-cols-1',
-                  tiles.length === 2 && 'grid-cols-1 sm:grid-cols-2',
-                  tiles.length >= 3 && tiles.length <= 4 && 'grid-cols-2 grid-rows-2',
-                  tiles.length > 4 && 'grid-cols-2 md:grid-cols-3',
+                  'grid h-full gap-[18px]',
+                  labeledTiles.length <= 1 && 'grid-cols-1',
+                  labeledTiles.length === 2 && 'grid-cols-1 sm:grid-cols-2',
+                  labeledTiles.length >= 3 && labeledTiles.length <= 4 && 'grid-cols-2 grid-rows-2',
+                  labeledTiles.length > 4 && 'grid-cols-2 md:grid-cols-3',
                 )}
               >
-                {tiles.map((p) => (
+                {labeledTiles.map((p) => (
                   <VideoTile
                     key={p.id}
                     participant={p}
@@ -716,91 +892,173 @@ export function LiveMeetingPage() {
               reactions={activeReactions}
               peerNames={peerNames}
               ownParticipantId={participantId}
-              ownUserName={effectiveName}
+              ownUserName={
+                controllingRemote && controlledPeerName ? controlledPeerName : effectiveName
+              }
             />
               </>
             )}
           </div>
 
           <ConferenceControlBar
-            muted={isMuted}
-            cameraOff={isCameraOff}
-            handRaised={raisedHands.has(participantId)}
-            sharing={!!screenStream}
+            muted={
+              controllingRemote
+                ? Boolean(remoteControl.remoteUiState?.isMuted)
+                : isMuted
+            }
+            cameraOff={
+              controllingRemote
+                ? Boolean(remoteControl.remoteUiState?.isCameraOff)
+                : isCameraOff
+            }
+            handRaised={
+              controllingRemote
+                ? Boolean(remoteControl.remoteUiState?.isHandRaised)
+                : raisedHands.has(participantId)
+            }
+            sharing={
+              controllingRemote
+                ? Boolean(remoteControl.remoteUiState?.isSharingScreen)
+                : !!screenStream
+            }
             recording={isRecording}
             recordingBusy={isRecordingBusy}
             whiteboardOpen={whiteboardOpen}
             participantsOpen={showParticipants}
             chatOpen={showChat}
-            canEndMeeting={isHost}
-            canRecord={isHost}
-            shareDisabled={someoneElseSharing}
+            canEndMeeting={isHost && !controllingRemote}
+            canRecord={isHost && !controllingRemote}
+            shareDisabled={someoneElseSharing && !controllingRemote}
             shareDisabledReason="Someone else is sharing"
-            onToggleMute={() => void handleToggleMute()}
-            onToggleCamera={() => void handleToggleCamera()}
-            onToggleHand={() => toggleRaiseHand()}
-            onToggleShare={() => void handleShareScreen()}
+            onToggleMute={
+              controllingRemote
+                ? () => void remoteControl.sendAction('TOGGLE_MUTE')
+                : () => void handleToggleMute()
+            }
+            onToggleCamera={
+              controllingRemote
+                ? () => void remoteControl.sendAction('TOGGLE_CAMERA')
+                : () => void handleToggleCamera()
+            }
+            onToggleHand={
+              controllingRemote
+                ? () =>
+                    void remoteControl.sendAction(
+                      remoteControl.remoteUiState?.isHandRaised ? 'LOWER_HAND' : 'RAISE_HAND',
+                    )
+                : () => toggleRaiseHand()
+            }
+            onToggleShare={
+              controllingRemote
+                ? () =>
+                    void remoteControl.sendAction(
+                      remoteControl.remoteUiState?.isSharingScreen
+                        ? 'STOP_SCREEN_SHARE'
+                        : 'START_SCREEN_SHARE',
+                    )
+                : () => void handleShareScreen()
+            }
             onToggleRecording={
-              isHost
+              isHost && !controllingRemote
                 ? isRecording
                   ? () => void stopRecording()
                   : () => void startRecording()
                 : undefined
             }
-            onToggleWhiteboard={handleToggleWhiteboard}
-            onToggleParticipants={() => {
-              setShowParticipants((open) => {
-                const next = !open;
-                if (next) setShowChat(false);
-                return next;
-              });
-            }}
-            onToggleChat={() => {
-              setShowChat((open) => {
-                const next = !open;
-                if (next) setShowParticipants(false);
-                return next;
-              });
-            }}
-            onSendReaction={sendReaction}
+            onToggleWhiteboard={
+              controllingRemote ? () => undefined : handleToggleWhiteboard
+            }
+            onToggleParticipants={
+              controllingRemote
+                ? () => {
+                    const next = !showParticipants;
+                    setShowParticipants(next);
+                    setShowChat(false);
+                    void remoteControl.sendAction(
+                      next ? 'OPEN_PARTICIPANTS' : 'CLOSE_PARTICIPANTS',
+                    );
+                  }
+                : () => setShowParticipants((open) => !open)
+            }
+            onToggleChat={
+              controllingRemote
+                ? () => {
+                    const next = !showChat;
+                    setShowChat(next);
+                    setShowParticipants(false);
+                    void remoteControl.sendAction(next ? 'OPEN_CHAT' : 'CLOSE_CHAT');
+                  }
+                : () => setShowChat((open) => !open)
+            }
+            onSendReaction={
+              controllingRemote
+                ? (emoji) => void remoteControl.sendAction('SEND_REACTION', { reaction: emoji })
+                : sendReaction
+            }
             onLeave={() => void handleLeave()}
             onEndCall={() => void handleEndMeeting()}
-            userName={effectiveName}
+            userName={controllingRemote && controlledPeerName ? controlledPeerName : effectiveName}
           />
+
+          <div className="grid shrink-0 gap-[18px] pb-1 lg:grid-cols-[minmax(0,0.4fr)_minmax(0,0.6fr)]">
+            <MeetingAgendaCard items={meetingMeta?.agenda ?? []} />
+            <MeetingSharedScreenCard
+              sharing={Boolean(screenSharerId)}
+              sharerName={
+                screenSharerId
+                  ? screenSharerId === participantId
+                    ? 'Me'
+                    : tiles.find((t) => t.id === screenSharerId)?.name ?? null
+                  : null
+              }
+            />
+          </div>
         </div>
 
         {panelOpen ? (
-          <aside className="hidden min-h-0 flex-col overflow-hidden xl:flex">
+          <aside className="hidden min-h-0 flex-col gap-3 overflow-hidden xl:flex">
             {showParticipants ? (
-              <ParticipantsPanel
-                participants={panelPeople}
-                waiting={waitingList}
-                isHostViewer={isHostViewer}
-                remoteControlPendingId={
-                  remoteControl.outgoingStatus === 'sent' ? remoteControl.outgoingTargetId : null
-                }
-                onParticipantAction={(id, action) => void handleParticipantAction(id, action)}
-                onAdmitWaiting={handleAdmitWaiting}
-                onDenyWaiting={handleDenyWaiting}
-                onClose={() => setShowParticipants(false)}
-              />
+              <div className={cn('min-h-0', showChat ? 'flex-[0.55]' : 'flex-1')}>
+                <ParticipantsPanel
+                  participants={panelPeople}
+                  waiting={waitingList}
+                  isHostViewer={isHostViewer}
+                  remoteControlPendingId={
+                    remoteControl.outgoingStatus === 'sent' ? remoteControl.outgoingTargetId : null
+                  }
+                  onParticipantAction={(id, action) => void handleParticipantAction(id, action)}
+                  onAdmitWaiting={handleAdmitWaiting}
+                  onDenyWaiting={handleDenyWaiting}
+                  onClose={() => setShowParticipants(false)}
+                />
+              </div>
             ) : null}
             {showChat ? (
-              <MeetingChatPanel
-                roomId={roomId}
-                peerId={participantId}
-                userId={effectiveUserId ?? ''}
-                userName={effectiveName}
-                chatDisabled={chatDisabled}
-                onClose={() => setShowChat(false)}
-              />
+              <div className={cn('min-h-0', showParticipants ? 'flex-[0.45]' : 'flex-1')}>
+                <MeetingChatPanel
+                  roomId={roomId}
+                  peerId={participantId}
+                  userId={effectiveUserId ?? ''}
+                  userName={effectiveName}
+                  chatDisabled={chatDisabled && !controllingRemote}
+                  actingAsName={controllingRemote ? controlledPeerName : null}
+                  onSendOverride={
+                    controllingRemote
+                      ? (text) => {
+                          void remoteControl.sendAction('SEND_CHAT', { content: text });
+                        }
+                      : undefined
+                  }
+                  onClose={() => setShowChat(false)}
+                />
+              </div>
             ) : null}
           </aside>
         ) : null}
       </div>
 
       {panelOpen ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 flex max-h-[55vh] flex-col border-t border-[#E1E7EE] bg-white p-3 xl:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-40 flex max-h-[55vh] flex-col gap-2 border-t border-[#E1E7EE] bg-white p-3 xl:hidden">
           {showParticipants ? (
             <ParticipantsPanel
               participants={panelPeople}
@@ -821,10 +1079,68 @@ export function LiveMeetingPage() {
               peerId={participantId}
               userId={effectiveUserId ?? ''}
               userName={effectiveName}
-              chatDisabled={chatDisabled}
+              chatDisabled={chatDisabled && !controllingRemote}
+              actingAsName={controllingRemote ? controlledPeerName : null}
+              onSendOverride={
+                controllingRemote
+                  ? (text) => {
+                      void remoteControl.sendAction('SEND_CHAT', { content: text });
+                    }
+                  : undefined
+              }
               onClose={() => setShowChat(false)}
             />
           ) : null}
+        </div>
+      ) : null}
+
+      {inviteOpen && isHost ? (
+        <div className="fixed inset-0 z-[11000] flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-[#E8ECF1] bg-white p-5 shadow-2xl">
+            <h2 className="text-[16px] font-bold text-[#151D2B]">Invite guest by email</h2>
+            <p className="mt-2 text-[13px] text-[#6F7B8C]">
+              Guests receive a join link. Their email is stored as invited; they enter a name to join.
+            </p>
+            <label className="mt-4 block text-[12px] font-semibold text-[#475569]">
+              Email
+              <input
+                type="email"
+                value={inviteEmailDraft}
+                onChange={(e) => setInviteEmailDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void sendGuestInvite();
+                  }
+                }}
+                placeholder="guest@example.com"
+                className="mt-1 h-10 w-full rounded-xl border border-[#E1E7EE] px-3 text-[13px] outline-none focus:border-[#016BE6]"
+                autoFocus
+              />
+            </label>
+            {inviteError ? <p className="mt-2 text-[12px] text-[#DC2626]">{inviteError}</p> : null}
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                disabled={inviteBusy}
+                onClick={() => {
+                  setInviteOpen(false);
+                  setInviteError(null);
+                }}
+                className="h-10 rounded-xl border border-[#E1E7EE] px-4 text-[12px] font-semibold text-[#334155] hover:bg-[#F8FAFC]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={inviteBusy || !inviteEmailDraft.trim()}
+                onClick={() => void sendGuestInvite()}
+                className="h-10 rounded-xl bg-[#016BE6] px-4 text-[12px] font-semibold text-white hover:bg-[#0056EF] disabled:opacity-60"
+              >
+                {inviteBusy ? 'Sending…' : 'Send invitation'}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
 

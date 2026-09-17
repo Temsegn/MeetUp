@@ -1,29 +1,29 @@
 import { Router } from 'express';
-import { Types } from 'mongoose';
 import { requireWorkspace } from '../workspace/workspace.middleware';
 import { AuthRequest } from '../auth/auth.types';
 import { Meeting } from '../../database/models/Meeting.model';
 import { User } from '../../database/models/User.model';
+import { buildMeetingVisibilityFilter } from '../meetings/services/meeting-join-authz.service';
 
 const router = Router();
 
 router.get('/events', requireWorkspace('member'), async (req: AuthRequest, res) => {
   const q = req.query as Record<string, string>;
-  const workspaceId = new Types.ObjectId(req.workspaceId!);
-  const isAdminPlus = req.workspaceRole === 'admin' || req.workspaceRole === 'owner';
-
   const from = q.from ? new Date(q.from) : new Date();
   const to = q.to ? new Date(q.to) : new Date(from.getTime() + 30 * 24 * 60 * 60 * 1000);
 
+  const visibility = await buildMeetingVisibilityFilter({
+    workspaceId: req.workspaceId!,
+    userId: req.user!.id,
+    email: req.user!.email,
+    role: req.workspaceRole,
+  });
+
   const filter: Record<string, unknown> = {
-    workspaceId,
+    ...visibility,
     scheduledAt: { $gte: from, $lte: to },
     status: 'scheduled',
   };
-
-  if (!isAdminPlus) {
-    filter.createdBy = new Types.ObjectId(req.user!.id);
-  }
 
   const meetings = await Meeting.find(filter).sort({ scheduledAt: 1 }).limit(200).lean();
   const hostIds = [...new Set(meetings.map((m) => String(m.createdBy)))];

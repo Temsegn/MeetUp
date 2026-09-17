@@ -17,12 +17,18 @@ import {
   registerSelfForMeeting,
   removeMeetingParticipant,
 } from './meeting-participants.service';
-import { assertCanAccessMeeting } from './meeting-join-authz.service';
+import { assertCanAccessMeeting, buildMeetingVisibilityFilter, listTeammateUserIds } from './meeting-join-authz.service';
+import { emailService } from '../../auth/services/email.service';
+import { meetingInviteEmail } from '../../auth/templates/meeting-invite-email';
 
 export type MeetingStatusFilter = 'scheduled' | 'upcoming' | 'live' | 'ended' | 'cancelled' | 'all';
 
 export interface ListMeetingsOptions {
   workspaceId: string;
+  /** Viewer — lists are scoped to host / teammates / invited (members). */
+  userId: string;
+  email?: string | null;
+  role?: WorkspaceRole | null;
   page?: number;
   limit?: number;
   status?: MeetingStatusFilter;
@@ -269,9 +275,13 @@ async function attachParticipantLists(meetings: MeetingJson[]): Promise<MeetingJ
 
 export async function listWorkspaceMeetings(opts: ListMeetingsOptions) {
   await promoteDueMeetings(opts.workspaceId);
-  const filter: Record<string, unknown> = {
-    workspaceId: new Types.ObjectId(opts.workspaceId),
-  };
+  const visibility = await buildMeetingVisibilityFilter({
+    workspaceId: opts.workspaceId,
+    userId: opts.userId,
+    email: opts.email,
+    role: opts.role,
+  });
+  const filter: Record<string, unknown> = { ...visibility };
   const now = new Date();
   const status = opts.status;
   const isUpcomingOnly = status === 'scheduled' || status === 'upcoming';
@@ -345,17 +355,39 @@ export async function listWorkspaceMeetings(opts: ListMeetingsOptions) {
   };
 }
 
-export async function getMeeting(id: string) {
+export async function getMeeting(
+  id: string,
+  viewer?: { userId: string; email?: string | null; role?: WorkspaceRole | null },
+) {
   if (!Types.ObjectId.isValid(id)) throw new NotFoundError('Meeting');
   await promoteDueMeetings();
   const m = await Meeting.findById(id);
   if (!m) throw new NotFoundError('Meeting');
+  if (viewer) {
+    await assertCanAccessMeeting({
+      meeting: m,
+      joinerUserId: viewer.userId,
+      guestEmail: viewer.email,
+      workspaceRole: viewer.role,
+    });
+  }
   return withRoster(await attachHostAvatar(toJson(m as unknown as MeetingDoc)));
 }
 
-export async function getMeetingByRoomId(roomId: string) {
+export async function getMeetingByRoomId(
+  roomId: string,
+  viewer?: { userId: string; email?: string | null; role?: WorkspaceRole | null },
+) {
   const m = await Meeting.findOne({ roomId });
   if (!m) throw new NotFoundError('Meeting');
+  if (viewer) {
+    await assertCanAccessMeeting({
+      meeting: m,
+      joinerUserId: viewer.userId,
+      guestEmail: viewer.email,
+      workspaceRole: viewer.role,
+    });
+  }
   return attachHostAvatar(toJson(m as unknown as MeetingDoc));
 }
 
@@ -375,10 +407,21 @@ export async function endMeetingById(
   return attachHostAvatar(toJson(m as unknown as MeetingDoc));
 }
 
-export async function getMeetingStats(workspaceId: string) {
+export async function getMeetingStats(
+  workspaceId: string,
+  viewer?: { userId: string; email?: string | null; role?: WorkspaceRole | null },
+) {
   await promoteDueMeetings(workspaceId);
-  const oid = new Types.ObjectId(workspaceId);
+  const visibility = viewer
+    ? await buildMeetingVisibilityFilter({
+        workspaceId,
+        userId: viewer.userId,
+        email: viewer.email,
+        role: viewer.role,
+      })
+    : { workspaceId: new Types.ObjectId(workspaceId) };
   const { now, currentFrom, previousFrom, previousTo } = periodBounds(30);
+  const oid = new Types.ObjectId(workspaceId);
 
   const [
     total,
@@ -392,21 +435,21 @@ export async function getMeetingStats(workspaceId: string) {
     participantsCurrent,
     participantsPrevious,
   ] = await Promise.all([
-    Meeting.countDocuments({ workspaceId: oid, status: { $ne: 'cancelled' } }),
-    Meeting.countDocuments({ workspaceId: oid, status: 'live' }),
-    Meeting.countDocuments({ workspaceId: oid, status: 'ended' }),
+    Meeting.countDocuments({ ...visibility, status: { $ne: 'cancelled' } }),
+    Meeting.countDocuments({ ...visibility, status: 'live' }),
+    Meeting.countDocuments({ ...visibility, status: 'ended' }),
     Meeting.countDocuments({
-      workspaceId: oid,
+      ...visibility,
       status: 'scheduled',
       scheduledAt: { $gte: now },
     }),
     Meeting.countDocuments({
-      workspaceId: oid,
+      ...visibility,
       status: { $ne: 'cancelled' },
       createdAt: { $gte: currentFrom },
     }),
     Meeting.countDocuments({
-      workspaceId: oid,
+      ...visibility,
       status: { $ne: 'cancelled' },
       createdAt: { $gte: previousFrom, $lt: previousTo },
     }),
@@ -517,12 +560,41 @@ export async function createWorkspaceMeeting(opts: CreateMeetingOptions) {
     userId: opts.userId,
   });
 
-  const inviteIds = (opts.participantIds ?? []).filter((id) => id && id !== opts.userId);
-  if (inviteIds.length > 0) {
+  // Creator's teammates are listed as registered as soon as the meeting is created
+  // (no separate invite / register step for people on the host's teams).
+  const teammateIds = (await listTeammateUserIds(opts.workspaceId, opts.userId)).filter(
+    (id) => id !== opts.userId,
+  );
+  const explicitInviteIds = (opts.participantIds ?? []).filter(
+    (id) => id && id !== opts.userId && !teammateIds.includes(id),
+  );
+
+  if (teammateIds.length > 0) {
     await registerMeetingParticipants({
       meetingId,
       workspaceId: opts.workspaceId,
-      userIds: inviteIds,
+      userIds: teammateIds,
+      invitedBy: opts.userId,
+      status: 'registered',
+    });
+    await notifyMeetingParticipants({
+      meetingId,
+      workspaceId: opts.workspaceId,
+      title: isInstant ? 'Team meeting started' : 'Team meeting scheduled',
+      body: isInstant
+        ? `${opts.userName} started “${title}” with your team. Join now.`
+        : `${opts.userName} scheduled “${title}” with your team.`,
+      href: isInstant ? `/app/meeting/${opts.roomId}` : `/app/meetings/${meetingId}`,
+      excludeUserId: opts.userId,
+      onlyUserIds: teammateIds,
+    });
+  }
+
+  if (explicitInviteIds.length > 0) {
+    await registerMeetingParticipants({
+      meetingId,
+      workspaceId: opts.workspaceId,
+      userIds: explicitInviteIds,
       invitedBy: opts.userId,
       status: 'invited',
     });
@@ -535,6 +607,18 @@ export async function createWorkspaceMeeting(opts: CreateMeetingOptions) {
         : `${opts.userName} invited you to “${title}”.`,
       href: isInstant ? `/app/meeting/${opts.roomId}` : `/app/meetings/${meetingId}`,
       excludeUserId: opts.userId,
+      onlyUserIds: explicitInviteIds,
+    });
+  }
+
+  if (guestEmails.length > 0) {
+    void sendGuestInviteEmails({
+      emails: guestEmails,
+      meetingTitle: title,
+      hostName: opts.userName,
+      roomId: opts.roomId,
+      scheduledAt: opts.scheduledAt ?? (isInstant ? new Date() : null),
+      isLive: isInstant,
     });
   }
 
@@ -558,7 +642,9 @@ export async function cancelMeeting(
   if (m.status === 'cancelled') return attachHostAvatar(toJson(m as unknown as MeetingDoc));
   if (m.status === 'ended') throw new ForbiddenError('Meeting already ended.');
   if (String(m.createdBy) !== actor.id && !hasMinRole(actor.role, 'admin')) {
-    throw new ForbiddenError('Only the host or an admin can cancel this meeting.');
+    throw new ForbiddenError(
+      'Only the meeting creator, or a workspace owner/admin, can cancel this meeting.',
+    );
   }
   m.status = 'cancelled';
   if (!m.endedAt) m.endedAt = new Date();
@@ -602,7 +688,11 @@ export async function patchMeeting(
   return attachHostAvatar(toJson(m as unknown as MeetingDoc));
 }
 
-export async function joinMeeting(id: string, userId: string): Promise<{ roomId: string }> {
+export async function joinMeeting(
+  id: string,
+  userId: string,
+  workspaceRole?: WorkspaceRole | null,
+): Promise<{ roomId: string }> {
   if (!Types.ObjectId.isValid(id)) throw new NotFoundError('Meeting');
   await promoteDueMeetings();
   const m = await Meeting.findById(id);
@@ -616,6 +706,7 @@ export async function joinMeeting(id: string, userId: string): Promise<{ roomId:
   await assertCanAccessMeeting({
     meeting: m,
     joinerUserId: userId,
+    workspaceRole,
   });
   if (m.workspaceId) {
     await registerSelfForMeeting({
@@ -631,6 +722,7 @@ export async function registerForMeeting(
   id: string,
   userId: string,
   workspaceId: string,
+  workspaceRole?: WorkspaceRole | null,
 ) {
   if (!Types.ObjectId.isValid(id)) throw new NotFoundError('Meeting');
   const m = await Meeting.findById(id);
@@ -640,6 +732,7 @@ export async function registerForMeeting(
   await assertCanAccessMeeting({
     meeting: m,
     joinerUserId: userId,
+    workspaceRole,
   });
   const row = await registerSelfForMeeting({
     meetingId: String(m._id),
@@ -662,9 +755,41 @@ function assertCanManageInvites(
 ) {
   if (m.status === 'cancelled') throw new ForbiddenError('Meeting is cancelled.');
   if (m.status === 'ended') throw new ForbiddenError('Meeting has ended.');
-  if (String(m.createdBy) !== actor.id && !hasMinRole(actor.role, 'admin')) {
-    throw new ForbiddenError('Only the host or an admin can manage invitations.');
+  // Host only — workspace admins cannot invite on behalf of the host.
+  if (String(m.createdBy) !== actor.id) {
+    throw new ForbiddenError('Only the meeting host can manage invitations.');
   }
+}
+
+async function sendGuestInviteEmails(opts: {
+  emails: string[];
+  meetingTitle: string;
+  hostName: string;
+  roomId: string;
+  scheduledAt?: Date | string | null;
+  isLive?: boolean;
+}) {
+  await Promise.all(
+    opts.emails.map(async (email) => {
+      try {
+        const msg = meetingInviteEmail({
+          inviteeEmail: email,
+          meetingTitle: opts.meetingTitle,
+          hostName: opts.hostName,
+          roomId: opts.roomId,
+          scheduledAt: opts.scheduledAt,
+          isLive: opts.isLive,
+        });
+        await emailService.send({ to: email, ...msg });
+      } catch (err) {
+        logger.warn('Failed to send meeting invite email', {
+          email,
+          roomId: opts.roomId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }),
+  );
 }
 
 export async function addMeetingInvites(
@@ -708,9 +833,13 @@ export async function addMeetingInvites(
       .map((e) => e.trim().toLowerCase())
       .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)),
   )];
+  const freshlyAddedGuests: string[] = [];
   if (newGuestEmails.length > 0) {
     const existing = new Set((m.guestEmails ?? []).map((e) => e.toLowerCase()));
-    for (const email of newGuestEmails) existing.add(email);
+    for (const email of newGuestEmails) {
+      if (!existing.has(email)) freshlyAddedGuests.push(email);
+      existing.add(email);
+    }
     m.guestEmails = [...existing].slice(0, 50);
   }
 
@@ -718,6 +847,17 @@ export async function addMeetingInvites(
   m.participantCount = Math.max(1, registeredCount);
   m.peakParticipants = Math.max(m.peakParticipants ?? 1, registeredCount);
   await m.save();
+
+  if (freshlyAddedGuests.length > 0) {
+    void sendGuestInviteEmails({
+      emails: freshlyAddedGuests,
+      meetingTitle: m.title || m.roomId,
+      hostName: actor.name,
+      roomId: m.roomId,
+      scheduledAt: m.scheduledAt ?? m.startedAt ?? null,
+      isLive: m.status === 'live',
+    });
+  }
 
   return withRoster(await attachHostAvatar(toJson(m as unknown as MeetingDoc)));
 }

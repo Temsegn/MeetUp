@@ -16,10 +16,10 @@ import { LandingPage } from './features/landing';
 import { HomePage } from './pages/HomePage';
 import {
   AppShellLayout,
+  AdminOverviewPage,
   DashboardPage,
   RecordingsPage,
   RecordingDetailPage,
-  PlaceholderPage,
 } from './features/dashboard';
 import { SettingsPage } from './features/settings';
 import { CalendarPage } from './features/calendar';
@@ -29,11 +29,29 @@ import { MessagesPage } from './features/messages';
 import { NotificationsPage } from './features/notifications';
 import { MeetingsPage, MeetingDetailPage } from './features/meetings';
 import { LiveMeetingPage } from './features/meeting-room';
+import { TemplatesPage } from './features/templates';
 import {
   BillingPage,
   ContactsPage,
   InviteJoinPage,
 } from './features/workspace';
+import {
+  AdminGuard,
+  AdminLayout,
+  AdminOverviewPage as PlatformAdminOverviewPage,
+  AdminWorkspacesPage,
+  AdminCreateWorkspacePage,
+  AdminWorkspaceDetailPage,
+  AdminUsersPage,
+  AdminCreateUserPage,
+  AdminUserDetailPage,
+  AdminPlansPage,
+  AdminSubscriptionsPage,
+  AdminBillingPage,
+  AdminInvoicesPage,
+  AdminAuditLogsPage,
+  AdminSystemSettingsPage,
+} from './features/admin';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, initializing } = useAuth();
@@ -101,7 +119,7 @@ function App() {
               <Route path="notifications" element={<NotificationsPage />} />
               <Route path="recordings" element={<RecordingsPage />} />
               <Route path="recordings/:recordingId" element={<RecordingDetailPage />} />
-              <Route path="templates" element={<PlaceholderPage title="Templates" blurb="Reusable meeting templates." />} />
+              <Route path="templates" element={<TemplatesPage />} />
               <Route path="reports" element={<ReportsPage />} />
               <Route path="ai-insights" element={<AiInsightsPage />} />
               <Route path="settings/members/:userId/edit" element={<SettingsPage />} />
@@ -112,7 +130,7 @@ function App() {
               <Route path="workspace" element={<Navigate to="/app/settings/workspace" replace />} />
               <Route path="workspace/members" element={<Navigate to="/app/settings/members" replace />} />
               <Route path="workspace/rooms" element={<Navigate to="/app/settings/rooms" replace />} />
-              <Route path="admin" element={<PlaceholderPage title="Admin" blurb="Admin overview." />} />
+              <Route path="admin" element={<AdminOverviewPage />} />
               <Route path="billing/invoices" element={<BillingPage />} />
             </Route>
 
@@ -122,6 +140,30 @@ function App() {
               </div>
             } />
             <Route path="/home" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute>
+                  <AdminGuard />
+                </ProtectedRoute>
+              }
+            >
+              <Route element={<AdminLayout />}>
+                <Route index element={<PlatformAdminOverviewPage />} />
+                <Route path="workspaces" element={<AdminWorkspacesPage />} />
+                <Route path="workspaces/new" element={<AdminCreateWorkspacePage />} />
+                <Route path="workspaces/:id" element={<AdminWorkspaceDetailPage />} />
+                <Route path="users" element={<AdminUsersPage />} />
+                <Route path="users/new" element={<AdminCreateUserPage />} />
+                <Route path="users/:id" element={<AdminUserDetailPage />} />
+                <Route path="subscriptions" element={<AdminSubscriptionsPage />} />
+                <Route path="billing" element={<AdminBillingPage />} />
+                <Route path="invoices" element={<AdminInvoicesPage />} />
+                <Route path="plans" element={<AdminPlansPage />} />
+                <Route path="audit-logs" element={<AdminAuditLogsPage />} />
+                <Route path="system" element={<AdminSystemSettingsPage />} />
+              </Route>
+            </Route>
             <Route
               path="/room/:roomId"
               element={

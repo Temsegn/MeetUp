@@ -16,6 +16,8 @@ export type LiveParticipant = {
   avatarUrl?: string | null;
   avatarColor?: string | null;
   isScreenShare?: boolean;
+  /** Override bottom name chip (e.g. "Me" / controlled name). */
+  labelOverride?: string | null;
 };
 
 type Props = {
@@ -60,8 +62,8 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
       data-meeting-local={participant.isYou ? '1' : '0'}
       data-meeting-screen={isScreenShare ? '1' : '0'}
       className={cn(
-        'relative overflow-hidden rounded-xl border border-[#E8ECF1] bg-[#0F172A]',
-        participant.isSpeaking && 'ring-2 ring-[#016BE6]',
+        'relative overflow-hidden rounded-[22px] bg-[#F0F5FA]',
+        participant.isSpeaking && 'shadow-[0_0_0_2px_white,0_0_0_4px_#076BEE]',
         className,
       )}
     >
@@ -74,7 +76,7 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
           className={cn('h-full w-full', isScreenShare ? 'object-contain bg-black' : 'object-cover')}
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#1E293B] to-[#0F172A]">
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#E8EEF5] to-[#F0F5FA]">
           <UserAvatar
             name={participant.name}
             avatarUrl={participant.avatarUrl}
@@ -84,15 +86,21 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
         </div>
       )}
       {!participant.isYou ? <audio ref={audioRef} autoPlay playsInline /> : null}
-      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
-        <p className="truncate text-[12px] font-semibold text-white">
-          {participant.name}
-          {participant.isYou ? ' (You)' : ''}
-        </p>
-        <div className="flex items-center gap-1.5">
-          {participant.isHandRaised ? <Hand className="size-3.5 text-amber-300" /> : null}
-          {participant.isMuted ? <MicOff className="size-3.5 text-red-300" /> : null}
+      {participant.isSpeaking ? (
+        <div className="absolute right-3 top-3 inline-flex size-10 items-center justify-center rounded-full bg-[#076BEE] text-white">
+          <span className="flex items-end gap-0.5">
+            <span className="h-2 w-0.5 animate-pulse rounded-full bg-white" />
+            <span className="h-3.5 w-0.5 animate-pulse rounded-full bg-white [animation-delay:120ms]" />
+            <span className="h-2.5 w-0.5 animate-pulse rounded-full bg-white [animation-delay:240ms]" />
+          </span>
         </div>
+      ) : null}
+      <div className="absolute bottom-3 left-3 inline-flex max-w-[80%] items-center gap-1.5 rounded-[13px] bg-[rgba(18,27,41,0.7)] px-2.5 py-1.5">
+        {participant.isMuted ? <MicOff className="size-3.5 shrink-0 text-white/90" /> : null}
+        {participant.isHandRaised ? <Hand className="size-3.5 shrink-0 text-amber-300" /> : null}
+        <p className="truncate text-[12px] font-medium text-white sm:text-[13px]">
+          {participant.labelOverride ?? (participant.isYou ? 'Me' : participant.name)}
+        </p>
       </div>
     </div>
   );

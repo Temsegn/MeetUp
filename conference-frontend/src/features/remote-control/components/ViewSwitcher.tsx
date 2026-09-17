@@ -5,28 +5,48 @@ interface ViewSwitcherProps {
   session: ActiveControlSession;
   viewMode: RemoteViewMode;
   onChange: (view: RemoteViewMode) => void;
+  /** Local label — defaults to "Me". */
+  selfLabel?: string;
 }
 
-export const ViewSwitcher: React.FC<ViewSwitcherProps> = ({ session, viewMode, onChange }) => (
-  <div className="flex w-full max-w-md items-center gap-1 rounded-xl bg-slate-950/80 p-1 border border-slate-600" role="tablist" aria-label="Remote control view">
+/**
+ * Switch whose screen/UI you are driving while remote controlling.
+ * "Me" = your own view; other tab = controlled person's name.
+ */
+export const ViewSwitcher: React.FC<ViewSwitcherProps> = ({
+  session,
+  viewMode,
+  onChange,
+  selfLabel = 'Me',
+}) => (
+  <div
+    className="inline-flex items-center gap-1 rounded-xl border border-[#E0E7EE] bg-[#F0F5FA] p-1"
+    role="tablist"
+    aria-label="Whose screen to control"
+  >
     <button
       type="button"
       role="tab"
       aria-selected={viewMode === 'self'}
       onClick={() => onChange('self')}
-      className={`flex-1 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold ${
-        viewMode === 'self' ? 'bg-slate-600 text-white shadow' : 'text-slate-400 hover:text-white'
+      className={`min-w-[72px] rounded-lg px-3 py-1.5 text-[12px] font-semibold transition ${
+        viewMode === 'self'
+          ? 'bg-white text-[#121B29] shadow-sm'
+          : 'text-[#667383] hover:text-[#121B29]'
       }`}
     >
-      My View
+      {selfLabel}
     </button>
     <button
       type="button"
       role="tab"
       aria-selected={viewMode === 'remote'}
       onClick={() => onChange('remote')}
-      className={`flex-1 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold truncate ${
-        viewMode === 'remote' ? 'bg-amber-500 text-slate-900 shadow' : 'text-slate-400 hover:text-white'
+      title={session.controlledName}
+      className={`max-w-[140px] truncate rounded-lg px-3 py-1.5 text-[12px] font-semibold transition ${
+        viewMode === 'remote'
+          ? 'bg-[#076BEE] text-white shadow-sm'
+          : 'text-[#667383] hover:text-[#121B29]'
       }`}
     >
       {session.controlledName}

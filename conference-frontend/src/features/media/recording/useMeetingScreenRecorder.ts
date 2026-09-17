@@ -9,7 +9,6 @@ interface UseMeetingScreenRecorderOptions {
   workspaceId?: string | null;
   getStageEl: () => HTMLElement | null;
   getAudioStreams: () => MediaStream[];
-  /** Open chat so messages appear in the composite. */
   onCaptureReady?: () => void;
   addToast?: (message: string) => void;
 }
@@ -73,8 +72,8 @@ async function uploadRecording(
 }
 
 /**
- * Records meeting layout + chat in-page (no browser “Sharing this tab” bar)
- * and auto-saves MP4 on the server.
+ * Records the live meeting UI silently (no share picker / pause cover),
+ * then auto-saves to the server when stopped.
  */
 export function useMeetingScreenRecorder({
   roomId,
@@ -86,8 +85,10 @@ export function useMeetingScreenRecorder({
 }: UseMeetingScreenRecorderOptions) {
   const [isRecording, setIsRecording] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const [recordingStartedAt, setRecordingStartedAt] = useState<number | null>(null);
   const [lastSavedPath, setLastSavedPath] = useState<string | null>(null);
   const recorderRef = useRef<MeetingScreenRecorder | null>(null);
+  const stoppingRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -105,7 +106,6 @@ export function useMeetingScreenRecorder({
     }
 
     setIsBusy(true);
-    addToast?.('Starting meeting recording…');
     try {
       const recorder = new MeetingScreenRecorder();
       recorderRef.current = recorder;
@@ -116,9 +116,11 @@ export function useMeetingScreenRecorder({
         onCaptureReady,
       });
       setIsRecording(true);
-      addToast?.('Recording meeting (video, whiteboard, chat). Stop to save MP4.');
+      setRecordingStartedAt(Date.now());
+      addToast?.('Recording…');
     } catch (err) {
       recorderRef.current = null;
+      setRecordingStartedAt(null);
       const msg = err instanceof Error ? err.message : 'Failed to start recording';
       addToast?.(msg);
     } finally {
@@ -127,13 +129,15 @@ export function useMeetingScreenRecorder({
   }, [isRecording, isBusy, getStageEl, getAudioStreams, roomId, addToast, onCaptureReady]);
 
   const stopRecording = useCallback(async () => {
-    if (!isRecording || isBusy) return;
+    if (!isRecording || isBusy || stoppingRef.current) return;
+    stoppingRef.current = true;
     setIsBusy(true);
-    addToast?.('Saving MP4 to server…');
+    addToast?.('Saving recording…');
     try {
       const result = await recorderRef.current?.stop({ downloadLocal: false });
       recorderRef.current = null;
       setIsRecording(false);
+      setRecordingStartedAt(null);
 
       if (!result) {
         addToast?.('Recording was empty — try again and record a bit longer.');
@@ -151,16 +155,19 @@ export function useMeetingScreenRecorder({
     } catch (err) {
       recorderRef.current = null;
       setIsRecording(false);
+      setRecordingStartedAt(null);
       const msg = err instanceof Error ? err.message : 'Failed to save recording';
       addToast?.(msg);
     } finally {
       setIsBusy(false);
+      stoppingRef.current = false;
     }
   }, [isRecording, isBusy, addToast, roomId, workspaceId]);
 
   return {
     isRecording,
     isBusy,
+    recordingStartedAt,
     lastSavedPath,
     startRecording,
     stopRecording,

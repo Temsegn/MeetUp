@@ -61,6 +61,7 @@ export interface CreateMeetingInput {
   duration?: number;
   settings?: { waitingRoom?: boolean; autoRecord?: boolean };
   participantIds?: string[];
+  guestEmails?: string[];
 }
 
 function workspaceHeader(workspaceId?: string | null): Record<string, string> {

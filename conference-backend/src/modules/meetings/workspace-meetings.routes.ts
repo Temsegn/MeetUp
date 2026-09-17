@@ -30,6 +30,9 @@ router.get('/', requireWorkspace('member'), async (req: AuthRequest, res) => {
   const q = req.query as Record<string, string>;
   const data = await listWorkspaceMeetings({
     workspaceId: req.workspaceId!,
+    userId: req.user!.id,
+    email: req.user!.email,
+    role: req.workspaceRole,
     page: q.page ? parseInt(q.page) : 1,
     limit: q.limit ? parseInt(q.limit) : 20,
     status: q.status as 'scheduled' | 'upcoming' | 'live' | 'ended' | 'cancelled' | 'all' | undefined,
@@ -40,7 +43,11 @@ router.get('/', requireWorkspace('member'), async (req: AuthRequest, res) => {
 });
 
 router.get('/stats', requireWorkspace('member'), async (req: AuthRequest, res) => {
-  const stats = await getMeetingStats(req.workspaceId!);
+  const stats = await getMeetingStats(req.workspaceId!, {
+    userId: req.user!.id,
+    email: req.user!.email,
+    role: req.workspaceRole,
+  });
   res.json(stats);
 });
 
@@ -56,7 +63,11 @@ router.post('/notifications/read', requireWorkspace('member'), async (req: AuthR
 });
 
 router.get('/by-room/:roomId', requireWorkspace('member'), async (req: AuthRequest, res) => {
-  const m = await getMeetingByRoomId(String(req.params['roomId'] ?? ''));
+  const m = await getMeetingByRoomId(String(req.params['roomId'] ?? ''), {
+    userId: req.user!.id,
+    email: req.user!.email,
+    role: req.workspaceRole,
+  });
   res.json(m);
 });
 
@@ -99,6 +110,7 @@ router.post('/:id/register', requireWorkspace('member'), async (req: AuthRequest
     String(req.params['id'] ?? ''),
     req.user!.id,
     req.workspaceId!,
+    req.workspaceRole,
   );
   res.json(m);
 });
@@ -133,7 +145,11 @@ router.delete('/:id/guest-emails', requireWorkspace('member'), async (req: AuthR
 });
 
 router.get('/:id', requireWorkspace('member'), async (req: AuthRequest, res) => {
-  const m = await getMeeting(String(req.params['id'] ?? ''));
+  const m = await getMeeting(String(req.params['id'] ?? ''), {
+    userId: req.user!.id,
+    email: req.user!.email,
+    role: req.workspaceRole,
+  });
   res.json(m);
 });
 
@@ -147,7 +163,11 @@ router.patch('/:id', requireWorkspace('member'), async (req: AuthRequest, res) =
 });
 
 router.post('/:id/join', requireWorkspace('member'), async (req: AuthRequest, res) => {
-  const result = await joinMeeting(String(req.params['id'] ?? ''), req.user!.id);
+  const result = await joinMeeting(
+    String(req.params['id'] ?? ''),
+    req.user!.id,
+    req.workspaceRole,
+  );
   res.json(result);
 });
 

@@ -149,6 +149,15 @@ export function createBillingService() {
         { $inc: { participantMinutesUsed: minutes } },
       );
     },
+
+    /** Placeholder until a payment provider (e.g. Stripe) is connected. */
+    async listInvoices(_workspaceId: string) {
+      return { invoices: [] as Array<{ id: string; date: string; amount: string; status: string }> };
+    },
+
+    async listPaymentMethods(_workspaceId: string) {
+      return { paymentMethods: [] as Array<{ id: string; brand: string; last4: string; exp: string }> };
+    },
   };
 }
 

@@ -84,6 +84,8 @@ export interface User {
   department: string;
   phone?: string;
   mustChangePassword?: boolean;
+  platformRole?: 'none' | 'admin' | 'super_admin';
+  accountStatus?: 'active' | 'suspended' | 'banned';
   settings: UserSettings;
   authProvider: 'local' | 'google';
   emailVerified: boolean;
@@ -229,6 +231,12 @@ function normalizeUser(raw: User): User {
     avatarUrl: raw.avatarUrl ?? null,
     jobTitle: raw.jobTitle ?? '',
     department: raw.department ?? '',
+    platformRole:
+      raw.platformRole === 'admin' || raw.platformRole === 'super_admin' ? raw.platformRole : 'none',
+    accountStatus:
+      raw.accountStatus === 'suspended' || raw.accountStatus === 'banned'
+        ? raw.accountStatus
+        : 'active',
     authProvider: raw.authProvider === 'google' ? 'google' : 'local',
     settings: {
       ...DEFAULT_USER_SETTINGS,

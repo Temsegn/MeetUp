@@ -35,6 +35,8 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().default('http://localhost:5173'),
   // Optional cookie domain (e.g. '.example.com') for cross-subdomain auth.
   COOKIE_DOMAIN: z.string().optional(),
+  // Comma-separated emails auto-promoted to platform super_admin on login/me.
+  PLATFORM_ADMIN_EMAILS: z.string().default(''),
 
   // Google OAuth (optional — /auth/google returns 503 when unset).
   GOOGLE_CLIENT_ID: z.string().optional(),

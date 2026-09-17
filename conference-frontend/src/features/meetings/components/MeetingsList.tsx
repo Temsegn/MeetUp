@@ -23,13 +23,21 @@ type Props = {
 
 export function MeetingsList({ meetings, filterKey = '', onChanged }: Props) {
   const navigate = useNavigate();
-  const { activeWorkspace } = useAuth();
+  const { activeWorkspace, user } = useAuth();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZES)[number]>(5);
   const [pageSizeOpen, setPageSizeOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<ListedMeeting | null>(null);
   const pageSizeRef = useRef<HTMLDivElement>(null);
+
+  const canCancelMeeting = (m: ListedMeeting) => {
+    if (m.status === 'ended' || m.status === 'cancelled') return false;
+    if (!user?.id) return false;
+    if (m.hostUserId && m.hostUserId === user.id) return true;
+    const role = activeWorkspace?.role;
+    return role === 'owner' || role === 'admin';
+  };
 
   useEffect(() => {
     setPage(1);
@@ -262,7 +270,7 @@ export function MeetingsList({ meetings, filterKey = '', onChanged }: Props) {
                                 ]
                               : []),
                             { label: 'Copy invite link' },
-                            ...(m.status !== 'ended' && m.status !== 'cancelled'
+                            ...(canCancelMeeting(m)
                               ? [
                                   {
                                     label: busyId === m.id ? 'Cancelling…' : 'Cancel meeting',

@@ -32,4 +32,16 @@ router.patch('/plan', requireWorkspace('owner'), async (req: AuthRequest, res) =
   res.json(data);
 });
 
+/** Invoice list — empty until a payment provider is connected. */
+router.get('/invoices', requireWorkspace('member'), async (req: AuthRequest, res) => {
+  const data = await billingService.listInvoices(req.workspaceId!);
+  res.json(data);
+});
+
+/** Payment methods — empty until a payment provider is connected. */
+router.get('/payment-methods', requireWorkspace('member'), async (req: AuthRequest, res) => {
+  const data = await billingService.listPaymentMethods(req.workspaceId!);
+  res.json(data);
+});
+
 export const billingRouter = router;

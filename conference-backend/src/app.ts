@@ -7,9 +7,11 @@ import { authRouter } from './modules/auth/auth.routes';
 import { createGuestAuthRouter } from './modules/auth/guest-auth.routes';
 import { meetingsRouter } from './modules/meetings/meetings.routes';
 import { recordingsRouter } from './modules/recordings/recordings.routes';
+import { adminRouter } from './modules/admin/admin.routes';
 import { workspaceMeetingsRouter } from './modules/meetings/workspace-meetings.routes';
 import { workspaceRoomsRouter } from './modules/rooms/workspace-rooms.routes';
 import { workspaceTeamsRouter } from './modules/teams/workspace-teams.routes';
+import { workspaceTemplatesRouter } from './modules/templates/workspace-templates.routes';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes';
 import { calendarRouter } from './modules/calendar/calendar.routes';
 import { messagesRouter } from './modules/messages/messages.routes';
@@ -169,11 +171,13 @@ export const createApp = (): Express => {
   app.use('/workspace-meetings', workspaceMeetingsRouter);
   app.use('/workspace-rooms', workspaceRoomsRouter);
   app.use('/workspace-teams', workspaceTeamsRouter);
+  app.use('/workspace-templates', workspaceTemplatesRouter);
   app.use('/dashboard', dashboardRouter);
   app.use('/calendar', calendarRouter);
   app.use('/messages', messagesRouter);
   app.use('/reports', reportsRouter);
   app.use('/recordings', recordingsRouter);
+  app.use('/admin', adminRouter);
 
   // ── 404 ────────────────────────────────────────────────────────────────────
   app.use((_req: Request, res: Response) => {

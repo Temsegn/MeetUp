@@ -12,14 +12,9 @@ import { cn } from '../../../lib/cn';
 import { RowActionsMenu } from './RowActionsMenu';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
-import {
-  ALL_RECORDINGS,
-  RECORDING_SHARED_BY_OPTIONS,
-  type RecordingRow,
-} from '../data/recordings.data';
+import { type RecordingRow } from '../data/recordings.data';
 
 export type { RecordingRow };
-export { RECORDING_SHARED_BY_OPTIONS };
 
 export type RecordingFilters = {
   sharedBy: string;
@@ -35,8 +30,7 @@ type Props = {
   query?: string;
   filters: RecordingFilters;
   onToast?: (message: string) => void;
-  /** Optional live recordings from the API — falls back to mock data when not provided. */
-  liveRecordings?: RecordingRow[];
+  liveRecordings: RecordingRow[];
   /** Persist delete to the API; required for real data. */
   onDelete?: (id: string) => Promise<void>;
   /** Persist rename to the API; required for real data. */
@@ -55,11 +49,12 @@ export function RecordingsTable({
   workspaceId,
 }: Props) {
   const navigate = useNavigate();
-  const [items, setItems] = useState(() => liveRecordings ?? [...ALL_RECORDINGS]);
+  const [items, setItems] = useState<RecordingRow[]>(() => liveRecordings);
 
   useEffect(() => {
-    if (liveRecordings) setItems(liveRecordings);
+    setItems(liveRecordings);
   }, [liveRecordings]);
+
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZES)[number]>(10);
@@ -108,8 +103,7 @@ export function RecordingsTable({
       if (filters.minViews > 0 && r.views < filters.minViews) return false;
       if (rangeMs != null) {
         const t = new Date(r.at).getTime();
-        // Anchor relative to newest recording for demo data
-        const newest = Math.max(...items.map((x) => new Date(x.at).getTime()));
+        const newest = Math.max(Date.now(), ...items.map((x) => new Date(x.at).getTime()));
         if (newest - t > rangeMs) return false;
       }
       return true;
@@ -400,7 +394,11 @@ export function RecordingsTable({
                         className="relative h-12 w-[72px] shrink-0 overflow-hidden rounded-lg bg-[#E8F1FE]"
                         aria-hidden
                       >
-                        <img src={r.thumb} alt="" className="h-full w-full object-cover" />
+                        {r.thumb ? (
+                          <img src={r.thumb} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="h-full w-full bg-gradient-to-br from-[#C7DBF8] to-[#E8F1FE]" />
+                        )}
                         <span className="absolute inset-0 flex items-center justify-center bg-black/15">
                           <span className="flex size-7 items-center justify-center rounded-full bg-[#016BE6] shadow-sm">
                             <Play className="size-3 text-white" fill="currentColor" />
@@ -417,7 +415,11 @@ export function RecordingsTable({
                         <div className="mt-1.5 flex items-center">
                           {(r.people?.length
                             ? r.people
-                            : r.avatars.map((src) => ({ name: '', avatarUrl: src, avatarColor: null }))
+                            : r.avatars.map((src) => ({
+                                name: '',
+                                avatarUrl: src,
+                                avatarColor: null,
+                              }))
                           ).map((person, i) => (
                             <UserAvatar
                               key={`${r.id}-a-${i}`}
@@ -454,10 +456,11 @@ export function RecordingsTable({
 
                   <td className="px-3 py-3 align-middle">
                     <div className="flex items-center gap-2">
-                      <img
-                        src={r.sharedBy.avatar}
-                        alt=""
-                        className="size-6 rounded-full object-cover"
+                      <UserAvatar
+                        name={r.sharedBy.name}
+                        avatarUrl={r.sharedBy.avatar || null}
+                        avatarColor={r.sharedBy.avatarColor}
+                        size="sm"
                       />
                       <span className="truncate text-[12px] font-medium text-[#151D2B]">
                         {r.sharedBy.name}
@@ -564,6 +567,7 @@ type FilterPanelProps = {
   onChange: (next: RecordingFilters) => void;
   onClose: () => void;
   onClear: () => void;
+  sharedByOptions?: string[];
 };
 
 export function RecordingsFilterPanel({
@@ -572,6 +576,7 @@ export function RecordingsFilterPanel({
   onChange,
   onClose,
   onClear,
+  sharedByOptions = [],
 }: FilterPanelProps) {
   if (!open) return null;
 
@@ -598,7 +603,7 @@ export function RecordingsFilterPanel({
             className="mt-1.5 h-9 w-full rounded-lg border border-[#E1E7EE] bg-white px-2.5 text-[12px] font-medium text-[#151D2B] outline-none"
           >
             <option value="">Anyone</option>
-            {RECORDING_SHARED_BY_OPTIONS.map((name) => (
+            {sharedByOptions.map((name) => (
               <option key={name} value={name}>
                 {name}
               </option>

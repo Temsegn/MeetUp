@@ -14,13 +14,20 @@ import { formatPlayerTime } from '../data/recordings.data';
 
 type Props = {
   title: string;
-  poster: string;
   durationSec: number;
   src?: string;
   className?: string;
+  /** Start playback as soon as the stream is ready. */
+  autoPlay?: boolean;
 };
 
-export function RecordingPlayer({ title, poster, durationSec, src, className }: Props) {
+export function RecordingPlayer({
+  title,
+  durationSec,
+  src,
+  className,
+  autoPlay = true,
+}: Props) {
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(durationSec);
@@ -30,11 +37,13 @@ export function RecordingPlayer({ title, poster, durationSec, src, className }: 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [ready, setReady] = useState(false);
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const barRef = useRef<HTMLButtonElement>(null);
   const hideTimer = useRef<number | null>(null);
+  const didAutoPlay = useRef(false);
 
   const totalDuration = Math.max(duration, durationSec, 1);
   const progress = totalDuration > 0 ? Math.min(100, (current / totalDuration) * 100) : 0;
@@ -89,6 +98,11 @@ export function RecordingPlayer({ title, poster, durationSec, src, className }: 
     if (playing) {
       void video.play().catch(() => {
         setPlaying(false);
+        // Autoplay is often blocked until a user gesture — keep the real frame, no stock cover.
+        if (didAutoPlay.current && video.paused) {
+          setLoadError(null);
+          return;
+        }
         setLoadError('Could not start playback. Tap play to try again.');
       });
     } else {
@@ -97,33 +111,57 @@ export function RecordingPlayer({ title, poster, durationSec, src, className }: 
   }, [src, playing, muted, speed]);
 
   useEffect(() => {
+    setReady(false);
+    setPlaying(false);
+    setCurrent(0);
+    setLoadError(null);
+    didAutoPlay.current = false;
+  }, [src]);
+
+  useEffect(() => {
     if (!src || !videoRef.current) return;
     const video = videoRef.current;
 
     const onTimeUpdate = () => setCurrent(video.currentTime);
-    const onLoaded = () => {
+    const onMeta = () => {
       if (Number.isFinite(video.duration) && video.duration > 0) {
         setDuration(video.duration);
       }
       setLoadError(null);
     };
+    const onReady = () => {
+      setReady(true);
+      setLoadError(null);
+      // Nudge so the real first frame paints (no stock poster).
+      try {
+        if (video.currentTime < 0.05) video.currentTime = 0.05;
+      } catch {
+        /* ignore */
+      }
+      if (autoPlay && !didAutoPlay.current) {
+        didAutoPlay.current = true;
+        setPlaying(true);
+      }
+    };
     const onEnded = () => setPlaying(false);
     const onError = () => setLoadError('Recording video failed to load.');
 
     video.addEventListener('timeupdate', onTimeUpdate);
-    video.addEventListener('loadedmetadata', onLoaded);
-    video.addEventListener('durationchange', onLoaded);
+    video.addEventListener('loadeddata', onReady);
+    video.addEventListener('loadedmetadata', onMeta);
+    video.addEventListener('durationchange', onMeta);
     video.addEventListener('ended', onEnded);
     video.addEventListener('error', onError);
 
     return () => {
       video.removeEventListener('timeupdate', onTimeUpdate);
-      video.removeEventListener('loadedmetadata', onLoaded);
-      video.removeEventListener('durationchange', onLoaded);
+      video.removeEventListener('loadeddata', onReady);
+      video.removeEventListener('loadedmetadata', onMeta);
+      video.removeEventListener('durationchange', onMeta);
       video.removeEventListener('ended', onEnded);
       video.removeEventListener('error', onError);
     };
-  }, [src]);
+  }, [src, autoPlay]);
 
   useEffect(() => {
     if (!dragging) return;
@@ -191,20 +229,17 @@ export function RecordingPlayer({ title, poster, durationSec, src, className }: 
           <video
             ref={videoRef}
             src={src}
-            poster={poster}
             playsInline
-            preload="metadata"
+            preload="auto"
             className="absolute inset-0 h-full w-full bg-black object-contain"
           />
         ) : (
-          <img
-            src={poster}
-            alt=""
-            className="absolute inset-0 h-full w-full bg-black object-contain"
-          />
+          <div className="absolute inset-0 flex items-center justify-center bg-[#0B1220]">
+            <p className="text-[13px] text-white/50">Loading recording…</p>
+          </div>
         )}
 
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
 
         {loadError ? (
           <div className="absolute inset-x-4 top-4 rounded-lg bg-black/70 px-3 py-2 text-center text-[12px] text-white">
@@ -212,7 +247,7 @@ export function RecordingPlayer({ title, poster, durationSec, src, className }: 
           </div>
         ) : null}
 
-        {!playing ? (
+        {!playing && ready ? (
           <button
             type="button"
             onClick={() => {

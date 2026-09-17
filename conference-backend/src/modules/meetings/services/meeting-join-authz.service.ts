@@ -3,6 +3,8 @@ import { WorkspaceTeam } from '../../../database/models/WorkspaceTeam.model';
 import { MeetingParticipant } from '../../../database/models/MeetingParticipant.model';
 import { Meeting } from '../../../database/models/Meeting.model';
 import { ForbiddenError, ValidationError } from '../../../shared/errors/AppError';
+import type { WorkspaceRole } from '../../workspace/workspace.types';
+import { hasMinRole } from '../../workspace/workspace.types';
 
 export type MeetingAccessDoc = {
   _id: Types.ObjectId | string;
@@ -10,6 +12,10 @@ export type MeetingAccessDoc = {
   createdBy: Types.ObjectId | string;
   guestEmails?: string[] | null;
 };
+
+export function isWorkspaceStaffRole(role?: WorkspaceRole | null): boolean {
+  return Boolean(role && hasMinRole(role, 'admin'));
+}
 
 /** Teams where the user is lead or listed in memberIds. */
 export async function listActiveTeamsForUser(
@@ -28,6 +34,91 @@ export async function listActiveTeamsForUser(
     .select('_id')
     .lean();
   return rows.map((r) => ({ id: String(r._id) }));
+}
+
+/** User ids that share at least one active team with the viewer (includes viewer). */
+export async function listTeammateUserIds(
+  workspaceId: string,
+  userId: string,
+): Promise<string[]> {
+  if (!Types.ObjectId.isValid(workspaceId) || !Types.ObjectId.isValid(userId)) {
+    return [userId];
+  }
+  const teams = await WorkspaceTeam.find({
+    workspaceId: new Types.ObjectId(workspaceId),
+    status: 'active',
+    $or: [
+      { leadUserId: new Types.ObjectId(userId) },
+      { memberIds: new Types.ObjectId(userId) },
+    ],
+  })
+    .select('leadUserId memberIds')
+    .lean();
+
+  const ids = new Set<string>([userId]);
+  for (const t of teams) {
+    if (t.leadUserId) ids.add(String(t.leadUserId));
+    for (const mid of t.memberIds ?? []) ids.add(String(mid));
+  }
+  return [...ids];
+}
+
+/**
+ * Mongo filter: meetings the user may see.
+ * - Owner / admin: all workspace meetings
+ * - Member: host · invited · teammates of the host (0-team hosts stay invite-only)
+ */
+export async function buildMeetingVisibilityFilter(opts: {
+  workspaceId: string;
+  userId: string;
+  email?: string | null;
+  role?: WorkspaceRole | null;
+}): Promise<Record<string, unknown>> {
+  const wsOid = new Types.ObjectId(opts.workspaceId);
+
+  if (isWorkspaceStaffRole(opts.role)) {
+    return { workspaceId: wsOid };
+  }
+
+  const { workspaceId, userId } = opts;
+  const email = opts.email?.trim().toLowerCase() || null;
+  const userOid = new Types.ObjectId(userId);
+
+  const [teammateIds, invitedByUser, invitedByEmail] = await Promise.all([
+    listTeammateUserIds(workspaceId, userId),
+    MeetingParticipant.find({ userId: userOid }).select('meetingId').lean(),
+    email
+      ? MeetingParticipant.find({ email }).select('meetingId').lean()
+      : Promise.resolve([] as { meetingId: Types.ObjectId }[]),
+  ]);
+
+  const invitedMeetingIds = [
+    ...new Set(
+      [...invitedByUser, ...invitedByEmail].map((r) => String(r.meetingId)),
+    ),
+  ]
+    .filter((id) => Types.ObjectId.isValid(id))
+    .map((id) => new Types.ObjectId(id));
+
+  const teammateOids = teammateIds
+    .filter((id) => Types.ObjectId.isValid(id))
+    .map((id) => new Types.ObjectId(id));
+
+  const or: Record<string, unknown>[] = [
+    { createdBy: userOid },
+    { createdBy: { $in: teammateOids } },
+  ];
+  if (invitedMeetingIds.length > 0) {
+    or.push({ _id: { $in: invitedMeetingIds } });
+  }
+  if (email) {
+    or.push({ guestEmails: email });
+  }
+
+  return {
+    workspaceId: wsOid,
+    $or: or,
+  };
 }
 
 export async function usersShareCreatorTeam(
@@ -97,15 +188,18 @@ export async function isEmailInvitedToMeeting(
 }
 
 /**
- * Case A — creator is on ≥1 team: allow if joiner shares any of those teams OR is invited.
- * Case B — creator is on 0 teams: invite-only (creator + invited).
- * Guests: invite-only via matching invited email / guestEmails.
+ * Access to join / view a meeting:
+ * - Owner / admin: all workspace meetings
+ * - Member: host, invite, or shared team with host (invite-only if host has 0 teams)
+ * - Guests: invite-only via matching email
  */
 export async function assertCanAccessMeeting(input: {
   meeting: MeetingAccessDoc;
   joinerUserId: string;
   isGuest?: boolean;
   guestEmail?: string | null;
+  /** Workspace role of the joiner (owner/admin bypass member rules). */
+  workspaceRole?: WorkspaceRole | null;
 }): Promise<void> {
   const meetingId = String(input.meeting._id);
   const creatorId = String(input.meeting.createdBy);
@@ -134,6 +228,8 @@ export async function assertCanAccessMeeting(input: {
   }
 
   if (input.joinerUserId === creatorId) return;
+
+  if (isWorkspaceStaffRole(input.workspaceRole)) return;
 
   const invited = await isUserInvitedToMeeting(meetingId, input.joinerUserId);
   if (invited) return;

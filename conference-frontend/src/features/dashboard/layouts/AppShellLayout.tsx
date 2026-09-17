@@ -17,19 +17,8 @@ export function AppShellLayout() {
     pathname.startsWith('/app/settings') || pathname.startsWith('/app/workspace');
   const isMessages = pathname.startsWith('/app/messages');
   const lockViewport = isLiveMeetingRoom || isRecordingWatch || isSettingsWorkspace || isMessages;
-
-  // Live meeting: full-bleed only — no app sidebar, mobile nav, or page chrome
-  if (isLiveMeetingRoom) {
-    return (
-      <div className="samtal-light flex h-full min-h-0 w-full overflow-hidden bg-white">
-        <main className="min-h-0 flex-1 overflow-hidden bg-white">
-          <div className="h-full min-h-0">
-            <Outlet />
-          </div>
-        </main>
-      </div>
-    );
-  }
+  // Live / waiting stay inside the app shell with a collapsed sidebar (Figma meeting shell).
+  const sidebarCollapsed = isLiveMeetingRoom ? true : collapsed;
 
   return (
     <div className="samtal-light flex h-full min-h-0 w-full overflow-hidden bg-white">
@@ -48,8 +37,11 @@ export function AppShellLayout() {
         }`}
       >
         <AppSidebar
-          collapsed={collapsed}
-          onToggle={() => setCollapsed((c) => !c)}
+          collapsed={sidebarCollapsed}
+          onToggle={() => {
+            if (isLiveMeetingRoom) return;
+            setCollapsed((c) => !c);
+          }}
           onNavigate={() => setMobileOpen(false)}
         />
       </div>
@@ -80,12 +72,16 @@ export function AppShellLayout() {
         <main
           className={cn(
             'min-h-0 flex-1 bg-white',
-            'px-3.5 sm:px-5 md:pl-6',
-            'pr-3 sm:pr-4 md:pr-5 lg:pr-6',
-            lockViewport
-              ? 'overflow-hidden py-3 sm:py-3'
-              : 'overflow-y-auto py-3.5 sm:py-4',
-            isSettingsWorkspace && 'py-0 sm:py-0',
+            isLiveMeetingRoom
+              ? 'overflow-hidden p-0'
+              : cn(
+                  'px-3.5 sm:px-5 md:pl-6',
+                  'pr-3 sm:pr-4 md:pr-5 lg:pr-6',
+                  lockViewport
+                    ? 'overflow-hidden py-3 sm:py-3'
+                    : 'overflow-y-auto py-3.5 sm:py-4',
+                  isSettingsWorkspace && 'py-0 sm:py-0',
+                ),
           )}
         >
           <div className={cn(lockViewport && 'h-full min-h-0')}>

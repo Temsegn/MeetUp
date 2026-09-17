@@ -56,6 +56,8 @@ export function makeStubDeps(overrides: Partial<AuthDeps> = {}) {
         department: data.department ?? '',
         phone: data.phone ?? '',
         mustChangePassword: data.mustChangePassword ?? false,
+        platformRole: 'none',
+        accountStatus: 'active',
         settings: data.settings ?? {
           notifications: { meetings: true, email: true, push: false, messages: true },
           audioVideo: {

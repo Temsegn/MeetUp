@@ -9,6 +9,7 @@ import { MeetingParticipant } from '../../database/models/MeetingParticipant.mod
 import { Subscription } from '../../database/models/Subscription.model';
 import { User } from '../../database/models/User.model';
 import { promoteDueMeetings } from '../meetings/services/meetings-workspace.service';
+import { buildMeetingVisibilityFilter, isWorkspaceStaffRole } from '../meetings/services/meeting-join-authz.service';
 
 const router = Router();
 
@@ -63,7 +64,19 @@ function parsePeriod(raw: unknown): PeriodKey {
   return 'week';
 }
 
-async function topParticipantsForWorkspace(workspaceId: Types.ObjectId, from: Date, limit = 5) {
+async function topParticipantsForWorkspace(
+  workspaceId: Types.ObjectId,
+  from: Date,
+  limit = 5,
+  meetingIds?: Types.ObjectId[] | null,
+) {
+  const meetingScope =
+    meetingIds && meetingIds.length > 0
+      ? { meetingId: { $in: meetingIds } }
+      : meetingIds && meetingIds.length === 0
+        ? { meetingId: { $in: [] } }
+        : {};
+
   // Prefer live join minutes (unique user, distinct meetings, total hours)
   const fromLogs = await ParticipantMinuteLog.aggregate<{
     _id: Types.ObjectId;
@@ -75,6 +88,7 @@ async function topParticipantsForWorkspace(workspaceId: Types.ObjectId, from: Da
         workspaceId,
         createdAt: { $gte: from },
         userId: { $ne: null },
+        ...meetingScope,
       },
     },
     {
@@ -116,6 +130,7 @@ async function topParticipantsForWorkspace(workspaceId: Types.ObjectId, from: Da
           workspaceId,
           status: { $in: ['joined', 'registered'] },
           registeredAt: { $gte: from },
+          ...meetingScope,
         },
       },
       {
@@ -165,14 +180,50 @@ async function topParticipantsForWorkspace(workspaceId: Types.ObjectId, from: Da
   });
 }
 
-/** Same workspace-wide dashboard for every member, admin, and owner. */
+/**
+ * Dashboard KPIs:
+ * - Owner / admin → all workspace meetings
+ * - Member → only host / team / invited meetings
+ */
 router.get('/summary', requireWorkspace('member'), async (req: AuthRequest, res) => {
   await promoteDueMeetings(req.workspaceId!);
   const workspaceId = new Types.ObjectId(req.workspaceId!);
   const period = parsePeriod((req.query as Record<string, string>).period);
   const { from, prevFrom, prevTo } = periodBounds(period);
   const now = new Date();
-  const meetingFilter = { workspaceId };
+  const role = req.workspaceRole;
+  const staff = isWorkspaceStaffRole(role);
+  const visibility = await buildMeetingVisibilityFilter({
+    workspaceId: req.workspaceId!,
+    userId: req.user!.id,
+    email: req.user!.email,
+    role,
+  });
+  const meetingFilter = visibility;
+
+  // Members: constrain metering / top participants to visible meeting ids.
+  // Staff: null means no meetingId restriction (whole workspace).
+  let visibleMeetingIds: Types.ObjectId[] | null = null;
+  if (!staff) {
+    const rows = await Meeting.find(meetingFilter).select('_id').lean();
+    visibleMeetingIds = rows.map((r) => r._id as Types.ObjectId);
+  }
+
+  const logScope =
+    visibleMeetingIds === null
+      ? {}
+      : { meetingId: { $in: visibleMeetingIds } };
+
+  const recordingFilter =
+    visibleMeetingIds === null
+      ? { workspaceId }
+      : {
+          workspaceId,
+          $or: [
+            { meetingId: { $in: visibleMeetingIds } },
+            { meetingId: null },
+          ],
+        };
 
   const [
     upcomingMeetings,
@@ -204,15 +255,16 @@ router.get('/summary', requireWorkspace('member'), async (req: AuthRequest, res)
       endedAt: { $gte: prevFrom, $lt: prevTo },
     }),
     Meeting.countDocuments({ ...meetingFilter, status: 'live' }),
-    Recording.countDocuments({ workspaceId }),
-    Recording.countDocuments({ workspaceId, createdAt: { $gte: from } }),
-    Recording.countDocuments({ workspaceId, createdAt: { $gte: prevFrom, $lt: prevTo } }),
+    Recording.countDocuments(recordingFilter),
+    Recording.countDocuments({ ...recordingFilter, createdAt: { $gte: from } }),
+    Recording.countDocuments({ ...recordingFilter, createdAt: { $gte: prevFrom, $lt: prevTo } }),
     Subscription.findOne({ workspaceId }).lean(),
     ParticipantMinuteLog.aggregate([
       {
         $match: {
           workspaceId,
           createdAt: { $gte: from },
+          ...logScope,
         },
       },
       {
@@ -231,12 +283,14 @@ router.get('/summary', requireWorkspace('member'), async (req: AuthRequest, res)
     ParticipantMinuteLog.distinct('userId', {
       workspaceId,
       createdAt: { $gte: from },
+      ...logScope,
     }),
     ParticipantMinuteLog.distinct('userId', {
       workspaceId,
       createdAt: { $gte: prevFrom, $lt: prevTo },
+      ...logScope,
     }),
-    topParticipantsForWorkspace(workspaceId, from, 5),
+    topParticipantsForWorkspace(workspaceId, from, 5, visibleMeetingIds),
   ]);
 
   const totalParticipants = participantsCurrent.length;
@@ -248,7 +302,7 @@ router.get('/summary', requireWorkspace('member'), async (req: AuthRequest, res)
     liveMeetings,
     totalRecordings,
     totalParticipants,
-    totalMeetings: upcomingMeetings,
+    totalMeetings: upcomingMeetings + liveMeetings,
     billing: sub
       ? {
           planKey: sub.planKey,

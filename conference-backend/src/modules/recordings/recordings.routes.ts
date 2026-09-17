@@ -68,6 +68,25 @@ async function resolveRecordingParticipants(r: {
   return participants;
 }
 
+async function resolveSharedBy(sharedBy?: Types.ObjectId | null) {
+  if (!sharedBy) return null;
+  const u = await authRepository.findUserById(String(sharedBy));
+  if (!u) {
+    return {
+      userId: String(sharedBy),
+      name: 'Unknown',
+      avatarUrl: null as string | null,
+      avatarColor: null as string | null,
+    };
+  }
+  return {
+    userId: String(u.id),
+    name: u.name,
+    avatarUrl: u.avatarUrl ?? null,
+    avatarColor: u.avatarColor ?? null,
+  };
+}
+
 const router = Router();
 const legacyController = createRecordingsController();
 
@@ -99,6 +118,7 @@ router.get('/', requireWorkspace('member'), async (req: AuthRequest, res) => {
       status: r.status,
       createdAt: r.createdAt.toISOString(),
       participants: await resolveRecordingParticipants(r),
+      sharedBy: await resolveSharedBy(r.sharedBy),
     })),
   );
 
@@ -201,6 +221,7 @@ router.get('/:id', requireWorkspace('member'), async (req: AuthRequest, res) => 
     bytes: rec.bytes,
     views: rec.views,
     participants: await resolveRecordingParticipants(rec),
+    sharedBy: await resolveSharedBy(rec.sharedBy),
     status: rec.status,
     createdAt: rec.createdAt.toISOString(),
   });

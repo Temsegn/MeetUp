@@ -1,5 +1,10 @@
 import { Request } from 'express';
-import { DEFAULT_USER_SETTINGS, type IUserSettings } from '../../database/models/User.model';
+import {
+  DEFAULT_USER_SETTINGS,
+  type IUserSettings,
+  type PlatformRole,
+  type UserAccountStatus,
+} from '../../database/models/User.model';
 import type { WorkspaceRole } from '../workspace/workspace.types';
 
 /**
@@ -22,6 +27,8 @@ export interface UserRecord {
   department: string;
   phone: string;
   mustChangePassword: boolean;
+  platformRole: PlatformRole;
+  accountStatus: UserAccountStatus;
   settings: UserSettings;
   emailVerifiedAt: Date | null;
   passwordChangedAt: Date | null;
@@ -73,6 +80,8 @@ export interface SafeUser {
   department: string;
   phone: string;
   mustChangePassword: boolean;
+  platformRole: PlatformRole;
+  accountStatus: UserAccountStatus;
   settings: UserSettings;
   authProvider: 'local' | 'google';
   emailVerified: boolean;
@@ -144,6 +153,8 @@ export function toSafeUser(u: UserRecord): SafeUser {
     department: u.department ?? '',
     phone: u.phone ?? '',
     mustChangePassword: Boolean(u.mustChangePassword),
+    platformRole: u.platformRole === 'admin' || u.platformRole === 'super_admin' ? u.platformRole : 'none',
+    accountStatus: u.accountStatus === 'suspended' || u.accountStatus === 'banned' ? u.accountStatus : 'active',
     settings: mergeSettings(u.settings),
     authProvider: u.authProvider ?? 'local',
     emailVerified: Boolean(u.emailVerifiedAt),

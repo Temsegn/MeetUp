@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { CalendarClock, ChevronDown, Plus, Video } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CalendarClock, ChevronDown, Plus, Video, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotificationCenter } from '../../../contexts/NotificationCenterContext';
@@ -8,7 +8,10 @@ import {
   workspaceService,
   type WorkspaceDirectoryMember,
 } from '../../../services/workspace/workspace.service';
+import { teamsService } from '../../../services/teams/teams.service';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function CreateMeetingMenu() {
   const navigate = useNavigate();
@@ -22,7 +25,10 @@ export function CreateMeetingMenu() {
   const [duration, setDuration] = useState(30);
   const [error, setError] = useState<string | null>(null);
   const [members, setMembers] = useState<WorkspaceDirectoryMember[]>([]);
+  const [teammateIds, setTeammateIds] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [guestEmails, setGuestEmails] = useState<string[]>([]);
+  const [guestEmailDraft, setGuestEmailDraft] = useState('');
   const [agendaItems, setAgendaItems] = useState<string[]>(['']);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -44,11 +50,36 @@ export function CreateMeetingMenu() {
         if (typeof mins === 'number' && mins > 0) setDuration(mins);
       })
       .catch(() => undefined);
-    workspaceService
-      .listDirectory(activeWorkspace.workspaceId)
-      .then((rows) => setMembers(rows.filter((m) => m.userId !== user?.id)))
-      .catch(() => setMembers([]));
+
+    Promise.all([
+      workspaceService.listDirectory(activeWorkspace.workspaceId),
+      teamsService.list(activeWorkspace.workspaceId, { status: 'active' }).catch(() => []),
+    ])
+      .then(([rows, teams]) => {
+        const myId = user?.id;
+        const teammates = new Set<string>();
+        for (const t of teams) {
+          if (!myId) continue;
+          if (t.leadUserId === myId || t.memberIds.includes(myId)) {
+            for (const id of t.memberIds) {
+              if (id !== myId) teammates.add(id);
+            }
+            if (t.leadUserId && t.leadUserId !== myId) teammates.add(t.leadUserId);
+          }
+        }
+        setTeammateIds(teammates);
+        setMembers(rows.filter((m) => m.userId !== myId && !teammates.has(m.userId)));
+      })
+      .catch(() => {
+        setMembers([]);
+        setTeammateIds(new Set());
+      });
   }, [createOpen, activeWorkspace?.workspaceId, user?.id]);
+
+  const nonTeamMembers = useMemo(
+    () => members.filter((m) => !teammateIds.has(m.userId)),
+    [members, teammateIds],
+  );
 
   const reset = () => {
     setTitle('');
@@ -56,6 +87,8 @@ export function CreateMeetingMenu() {
     setDuration(30);
     setError(null);
     setSelectedIds([]);
+    setGuestEmails([]);
+    setGuestEmailDraft('');
     setAgendaItems(['']);
     setCreateOpen(null);
     setMenuOpen(false);
@@ -65,6 +98,21 @@ export function CreateMeetingMenu() {
     setSelectedIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
     );
+  };
+
+  const addGuestEmail = () => {
+    const email = guestEmailDraft.trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) {
+      setError('Enter a valid guest email.');
+      return;
+    }
+    if (guestEmails.includes(email)) {
+      setGuestEmailDraft('');
+      return;
+    }
+    setGuestEmails((prev) => [...prev, email]);
+    setGuestEmailDraft('');
+    setError(null);
   };
 
   const create = async () => {
@@ -77,6 +125,15 @@ export function CreateMeetingMenu() {
       setError('Date and time are required.');
       return;
     }
+    const draft = guestEmailDraft.trim().toLowerCase();
+    const emails = [...guestEmails];
+    if (draft) {
+      if (!EMAIL_RE.test(draft)) {
+        setError('Enter a valid guest email.');
+        return;
+      }
+      if (!emails.includes(draft)) emails.push(draft);
+    }
     setSaving(true);
     setError(null);
     try {
@@ -87,12 +144,17 @@ export function CreateMeetingMenu() {
         scheduledAt: createOpen === 'scheduled' ? new Date(scheduledAt).toISOString() : undefined,
         duration,
         participantIds: selectedIds,
+        guestEmails: emails,
         agenda: agenda.length > 0 ? agenda : undefined,
       });
+      const inviteBits = [
+        selectedIds.length > 0 ? `${selectedIds.length} member` : null,
+        emails.length > 0 ? `${emails.length} guest email` : null,
+      ].filter(Boolean);
       pushLocalNotification(
         createOpen === 'scheduled' ? 'Meeting scheduled' : 'Meeting created',
-        selectedIds.length > 0
-          ? `${meeting.title} is ready · ${selectedIds.length} invited.`
+        inviteBits.length > 0
+          ? `${meeting.title} is ready · invited ${inviteBits.join(' · ')}.`
           : `${meeting.title} is ready.`,
         {
           kind: 'meeting',
@@ -125,10 +187,7 @@ export function CreateMeetingMenu() {
           <Plus className="size-3.5 shrink-0" strokeWidth={2.5} />
           <span className="truncate">New Meeting</span>
         </span>
-        <span
-          aria-hidden
-          className="my-1.5 w-px shrink-0 bg-white/50"
-        />
+        <span aria-hidden className="my-1.5 w-px shrink-0 bg-white/50" />
         <span className="flex w-8 shrink-0 items-center justify-center">
           <ChevronDown
             className={`size-3.5 transition-transform ${menuOpen ? 'rotate-180' : ''}`}
@@ -253,16 +312,73 @@ export function CreateMeetingMenu() {
 
               <div>
                 <p className="text-[12px] font-semibold text-[#475569]">
-                  Participants {selectedIds.length > 0 ? `(${selectedIds.length})` : ''}
+                  Invite by email (guests)
+                  {guestEmails.length > 0 ? ` (${guestEmails.length})` : ''}
                 </p>
                 <p className="mt-0.5 text-[11px] text-[#8A94A6]">
-                  Invite workspace members now. Others can still register by joining later.
+                  Guests get an email with a join link. They enter their name; the invited email is
+                  already recognized.
+                </p>
+                {guestEmails.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {guestEmails.map((email) => (
+                      <span
+                        key={email}
+                        className="inline-flex items-center gap-1 rounded-full bg-[#E8F1FF] px-2 py-0.5 text-[11px] font-medium text-[#016BE6]"
+                      >
+                        {email}
+                        <button
+                          type="button"
+                          aria-label={`Remove ${email}`}
+                          onClick={() => setGuestEmails((prev) => prev.filter((e) => e !== email))}
+                          className="rounded-full p-0.5 hover:bg-[#BFDBFE]"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="email"
+                    value={guestEmailDraft}
+                    onChange={(e) => setGuestEmailDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addGuestEmail();
+                      }
+                    }}
+                    placeholder="guest@example.com"
+                    className="h-9 min-w-0 flex-1 rounded-lg border border-[#E1E7EE] px-3 text-[12px] outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={addGuestEmail}
+                    className="h-9 shrink-0 rounded-lg border border-[#E1E7EE] px-3 text-[12px] font-semibold text-[#016BE6] hover:bg-[#F8FAFC]"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[12px] font-semibold text-[#475569]">
+                  Other workspace members
+                  {selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}
+                </p>
+                <p className="mt-0.5 text-[11px] text-[#8A94A6]">
+                  Your teammates are added automatically and are not listed here. Invite only
+                  members outside your teams if needed.
                 </p>
                 <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-[#EEF2F6] p-2">
-                  {members.length === 0 ? (
-                    <p className="px-1 py-2 text-[11px] text-[#94A3B8]">No other members yet.</p>
+                  {nonTeamMembers.length === 0 ? (
+                    <p className="px-1 py-2 text-[11px] text-[#94A3B8]">
+                      No non-team members to invite.
+                    </p>
                   ) : (
-                    members.map((m) => {
+                    nonTeamMembers.map((m) => {
                       const checked = selectedIds.includes(m.userId);
                       return (
                         <label

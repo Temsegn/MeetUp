@@ -13,7 +13,6 @@ import {
   PhoneOff,
   Smile,
   MoreHorizontal,
-  X,
 } from 'lucide-react';
 import { cn } from '../../../lib/cn';
 
@@ -58,38 +57,35 @@ type Props = {
   userName?: string;
 };
 
-function ControlIconButton({
-  item,
-  large,
-}: {
-  item: ControlItem;
-  large?: boolean;
-}) {
+function LabeledControl({ item }: { item: ControlItem }) {
   const Icon = item.icon;
   return (
     <button
       type="button"
       onClick={item.onClick}
       disabled={item.disabled}
-      className={cn(
-        'inline-flex items-center justify-center rounded-xl transition-colors disabled:opacity-40',
-        large ? 'size-12' : 'size-10 sm:size-11 lg:size-12',
-        item.active
-          ? item.danger || item.recording
-            ? 'bg-[#FEE2E2] text-[#DC2626]'
-            : 'bg-[#E8F1FF] text-[#016BE6]'
-          : 'bg-[#F8FAFC] text-[#334155] hover:bg-[#F1F5F9]',
-      )}
+      className="flex w-[72px] shrink-0 flex-col items-center gap-1.5 py-1 disabled:opacity-40 sm:w-[84px]"
       aria-label={item.label}
       title={item.label}
     >
-      <Icon
+      <span
         className={cn(
-          large ? 'size-5' : 'size-4 sm:size-[18px] lg:size-5',
-          item.recording && 'fill-current',
+          'inline-flex size-11 items-center justify-center rounded-full transition-colors sm:size-[49px]',
+          item.active
+            ? item.danger || item.recording
+              ? 'bg-[#FEE2E2] text-[#DC2626]'
+              : 'bg-[#E5F1FF] text-[#076BEE]'
+            : 'bg-[#F0F5FA] text-[#334155] hover:bg-[#E8EEF5]',
         )}
-        strokeWidth={2}
-      />
+      >
+        <Icon
+          className={cn('size-5 sm:size-[22px]', item.recording && 'fill-current')}
+          strokeWidth={2}
+        />
+      </span>
+      <span className="max-w-full truncate text-[11px] tracking-[0.02em] text-[#667383] sm:text-[12px]">
+        {item.label}
+      </span>
     </button>
   );
 }
@@ -112,7 +108,7 @@ export function ConferenceControlBar(props: Props) {
   const primary: ControlItem[] = [
     {
       id: 'mute',
-      label: props.muted ? 'Unmute' : 'Mute',
+      label: 'Mic',
       icon: props.muted ? MicOff : Mic,
       active: props.muted,
       danger: props.muted,
@@ -120,7 +116,7 @@ export function ConferenceControlBar(props: Props) {
     },
     {
       id: 'camera',
-      label: props.cameraOff ? 'Turn on camera' : 'Turn off camera',
+      label: 'Camera',
       icon: props.cameraOff ? VideoOff : Video,
       active: props.cameraOff,
       danger: props.cameraOff,
@@ -128,22 +124,25 @@ export function ConferenceControlBar(props: Props) {
     },
     {
       id: 'hand',
-      label: 'Raise hand',
+      label: 'Raise Hand',
       icon: Hand,
       active: props.handRaised,
       onClick: props.onToggleHand,
     },
     {
       id: 'share',
-      label: props.sharing
-        ? 'Stop sharing'
-        : props.shareDisabled
-          ? (props.shareDisabledReason ?? 'Someone else is sharing')
-          : 'Share screen',
+      label: 'Screen',
       icon: MonitorUp,
       active: props.sharing,
       disabled: !props.sharing && props.shareDisabled,
       onClick: props.onToggleShare,
+    },
+    {
+      id: 'people',
+      label: 'Participants',
+      icon: Users,
+      active: props.participantsOpen,
+      onClick: props.onToggleParticipants,
     },
     {
       id: 'chat',
@@ -154,14 +153,7 @@ export function ConferenceControlBar(props: Props) {
     },
   ];
 
-  const secondary: ControlItem[] = [
-    {
-      id: 'people',
-      label: 'Participants',
-      icon: Users,
-      active: props.participantsOpen,
-      onClick: props.onToggleParticipants,
-    },
+  const moreItems: ControlItem[] = [
     {
       id: 'whiteboard',
       label: 'Whiteboard',
@@ -169,12 +161,19 @@ export function ConferenceControlBar(props: Props) {
       active: props.whiteboardOpen,
       onClick: props.onToggleWhiteboard,
     },
+    {
+      id: 'reactions',
+      label: 'Reactions',
+      icon: Smile,
+      active: reactionsOpen,
+      onClick: () => setReactionsOpen((v) => !v),
+    },
   ];
 
   if (props.canRecord) {
-    secondary.push({
+    moreItems.unshift({
       id: 'record',
-      label: props.recording ? 'Stop recording' : 'Record',
+      label: props.recording ? 'Stop Rec' : 'Record',
       icon: Circle,
       active: props.recording,
       recording: props.recording,
@@ -183,115 +182,90 @@ export function ConferenceControlBar(props: Props) {
     });
   }
 
+  const endLabel = props.canEndMeeting ? 'End Call' : 'Leave';
+  const endAction = props.canEndMeeting ? props.onEndCall : props.onLeave;
+
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-[#E8ECF1] bg-white px-3 py-2.5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] sm:gap-2.5 sm:px-4 sm:py-3 lg:gap-3">
-      {primary.map((item) => (
-        <ControlIconButton key={item.id} item={item} />
-      ))}
-
-      <div className="relative" ref={reactionsRef}>
-        <ControlIconButton
-          item={{
-            id: 'reactions',
-            label: 'Reactions',
-            icon: Smile,
-            active: reactionsOpen,
-            onClick: () => setReactionsOpen((v) => !v),
-          }}
-        />
-        {reactionsOpen ? (
-          <div className="absolute bottom-[calc(100%+8px)] left-1/2 z-50 -translate-x-1/2 rounded-xl border border-[#E8ECF1] bg-white p-2 shadow-lg">
-            <p className="mb-1.5 px-1 text-center text-[10px] font-medium text-[#6F7B8C]">
-              Send as {props.userName ?? 'You'}
-            </p>
-            <div className="flex gap-1">
-            {REACTIONS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => {
-                  props.onSendReaction(emoji);
-                  setReactionsOpen(false);
-                }}
-                className="flex size-9 items-center justify-center rounded-lg text-lg hover:bg-[#F8FAFC] lg:size-10"
-              >
-                {emoji}
-              </button>
-            ))}
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      {/* Wide screens: show all controls in one horizontal row */}
-      <div className="hidden items-center gap-2 lg:flex lg:gap-3">
-        {secondary.map((item) => (
-          <ControlIconButton key={item.id} item={item} large />
+    <div className="mx-auto flex w-full max-w-[830px] flex-wrap items-center justify-center gap-2 rounded-[22px] border border-[#E0E7EE] bg-white p-3 shadow-[0_1px_2px_rgba(55,72,99,0.04)] sm:gap-3 sm:p-3.5">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center justify-center gap-0.5 sm:justify-start">
+        {primary.map((item) => (
+          <LabeledControl key={item.id} item={item} />
         ))}
+
+        <div className="relative" ref={moreRef}>
+          <LabeledControl
+            item={{
+              id: 'more',
+              label: 'More',
+              icon: MoreHorizontal,
+              active: moreOpen,
+              onClick: () => setMoreOpen((v) => !v),
+            }}
+          />
+          {moreOpen ? (
+            <div className="absolute bottom-[calc(100%+8px)] right-0 z-50 min-w-[190px] overflow-hidden rounded-xl border border-[#E8ECF1] bg-white py-1 shadow-lg">
+              {moreItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    disabled={item.disabled}
+                    onClick={() => {
+                      item.onClick?.();
+                      if (item.id !== 'reactions') setMoreOpen(false);
+                    }}
+                    className={cn(
+                      'flex w-full items-center gap-2 px-3 py-2.5 text-left text-[12px] font-medium text-[#151D2B] hover:bg-[#F8FAFC] disabled:opacity-40',
+                      item.active && 'text-[#016BE6]',
+                    )}
+                  >
+                    <Icon className={cn('size-4', item.recording && 'fill-current text-[#DC2626]')} />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          {reactionsOpen ? (
+            <div
+              ref={reactionsRef}
+              className="absolute bottom-[calc(100%+8px)] left-1/2 z-50 -translate-x-1/2 rounded-xl border border-[#E8ECF1] bg-white p-2 shadow-lg"
+            >
+              <p className="mb-1.5 px-1 text-center text-[10px] font-medium text-[#6F7B8C]">
+                Send as {props.userName ?? 'You'}
+              </p>
+              <div className="flex gap-1">
+                {REACTIONS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => {
+                      props.onSendReaction(emoji);
+                      setReactionsOpen(false);
+                      setMoreOpen(false);
+                    }}
+                    className="flex size-9 items-center justify-center rounded-lg text-lg hover:bg-[#F8FAFC]"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
 
-      {/* Leave — outline / reverse (X), End — solid red */}
       <button
         type="button"
-        onClick={props.onLeave}
-        className="inline-flex h-10 items-center gap-1.5 rounded-xl border-2 border-[#DC2626] bg-white px-3 text-[11px] font-semibold text-[#DC2626] hover:bg-[#FEF2F2] sm:h-11 sm:px-3.5 sm:text-[12px] lg:h-12 lg:px-4"
-        aria-label="Leave meeting"
-        title="Leave meeting"
+        onClick={endAction}
+        className="inline-flex h-12 items-center gap-2 rounded-[18px] bg-[#DF1E39] px-6 text-[14px] font-semibold text-white hover:bg-[#C91830] sm:h-[52px] sm:px-7"
+        aria-label={endLabel}
+        title={props.canEndMeeting ? 'End meeting for everyone' : 'Leave meeting'}
       >
-        <X className="size-4 lg:size-5" strokeWidth={2.5} />
-        Leave
+        <PhoneOff className="size-[18px]" strokeWidth={2} />
+        {endLabel}
       </button>
-
-      {props.canEndMeeting ? (
-        <button
-          type="button"
-          onClick={props.onEndCall}
-          className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-[#DC2626] px-3 text-[11px] font-semibold text-white hover:bg-[#B91C1C] sm:h-11 sm:px-3.5 sm:text-[12px] lg:h-12 lg:px-4"
-          aria-label="End meeting for everyone"
-          title="End meeting for everyone"
-        >
-          <PhoneOff className="size-4 lg:size-5" strokeWidth={2} />
-          End
-        </button>
-      ) : null}
-
-      {/* Narrow screens: overflow menu for secondary controls only */}
-      <div className="relative lg:hidden" ref={moreRef}>
-        <ControlIconButton
-          item={{
-            id: 'more',
-            label: 'More controls',
-            icon: MoreHorizontal,
-            active: moreOpen,
-            onClick: () => setMoreOpen((v) => !v),
-          }}
-        />
-        {moreOpen ? (
-          <div className="absolute bottom-[calc(100%+8px)] right-0 z-50 min-w-[190px] overflow-hidden rounded-xl border border-[#E8ECF1] bg-white py-1 shadow-lg">
-            {secondary.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  disabled={item.disabled}
-                  onClick={() => {
-                    item.onClick?.();
-                    setMoreOpen(false);
-                  }}
-                  className={cn(
-                    'flex w-full items-center gap-2 px-3 py-2.5 text-left text-[12px] font-medium text-[#151D2B] hover:bg-[#F8FAFC] disabled:opacity-40',
-                    item.active && 'text-[#016BE6]',
-                  )}
-                >
-                  <Icon className={cn('size-4', item.recording && 'fill-current text-[#DC2626]')} />
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
-      </div>
     </div>
   );
 }

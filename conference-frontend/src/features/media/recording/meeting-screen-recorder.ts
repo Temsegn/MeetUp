@@ -1,13 +1,15 @@
 /**
- * In-page meeting recorder (no getDisplayMedia → no Chrome “Sharing this tab” bar).
+ * Silent in-page meeting recorder (no share picker, no pause dialog, no tab cover).
  *
- * Composites onto a canvas:
- *  - participant / screen-share <video> tiles
- *  - chat messages from the sidebar DOM
- *  - mixed WebRTC audio
+ * Starts the moment the host clicks Record. Captures the live meeting UI like a
+ * screen recording by:
+ *  1. Snapshotting the full meeting DOM (controls, chat, text, panels, whiteboard chrome)
+ *  2. Overlaying live <video> frames and whiteboard canvases every animation frame
  *
  * Browser uploads WebM; server converts to MP4.
  */
+
+import { domToCanvas } from 'modern-screenshot';
 
 export type MeetingRecorderStatus = 'idle' | 'recording' | 'stopping';
 
@@ -47,27 +49,6 @@ function downloadBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
-function wrapText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number,
-): string[] {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let line = '';
-  for (const word of words) {
-    const test = line ? `${line} ${word}` : word;
-    if (ctx.measureText(test).width > maxWidth && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = test;
-    }
-  }
-  if (line) lines.push(line);
-  return lines.length ? lines : [''];
-}
-
 export class MeetingScreenRecorder {
   private status: MeetingRecorderStatus = 'idle';
   private mediaRecorder: MediaRecorder | null = null;
@@ -79,8 +60,18 @@ export class MeetingScreenRecorder {
   private filePrefix = 'meeting';
   private startedAt = 0;
 
+  private uiLayer: HTMLCanvasElement | null = null;
+  private uiCaptureBusy = false;
+  private lastUiCaptureAt = 0;
+  private uiCaptureIntervalMs = 120;
+  private stageEl: HTMLElement | null = null;
+
   public get isRecording(): boolean {
     return this.status === 'recording';
+  }
+
+  public get captureMode(): 'display' | 'canvas' {
+    return 'canvas';
   }
 
   public async start(opts: StartMeetingRecordingOptions): Promise<void> {
@@ -92,24 +83,43 @@ export class MeetingScreenRecorder {
     this.filePrefix = opts.filePrefix || 'meeting';
     this.chunks = [];
     this.startedAt = Date.now();
+    this.stageEl = opts.stageEl;
+    this.uiLayer = null;
+    this.lastUiCaptureAt = 0;
 
     opts.onCaptureReady?.();
-    // Let React open chat before first paint
-    await new Promise<void>((r) => requestAnimationFrame(() => setTimeout(r, 80)));
+    // One frame for React layout (panels already open) — no picker, no pause.
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+    const rect = opts.stageEl.getBoundingClientRect();
+    const w = Math.max(2, Math.floor(rect.width));
+    const h = Math.max(2, Math.floor(rect.height));
+    const scale = Math.min(1, 1920 / w, 1080 / h);
+    let cw = Math.max(2, Math.floor(w * scale));
+    let ch = Math.max(2, Math.floor(h * scale));
+    if (cw % 2) cw += 1;
+    if (ch % 2) ch += 1;
 
     this.canvas = document.createElement('canvas');
-    this.canvas.width = 1280;
-    this.canvas.height = 720;
+    this.canvas.width = cw;
+    this.canvas.height = ch;
+    // Keep off-DOM so it is never visible as a cover on the meeting.
+    this.canvas.style.cssText = 'position:fixed;left:-99999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;';
+    document.body.appendChild(this.canvas);
+
     const ctx = this.canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Could not create canvas context');
 
+    // First UI snapshot before MediaRecorder starts so the first second isn't blank.
+    await this._captureUiLayer(opts.stageEl);
+    this._paintFrame(ctx, this.canvas, opts.stageEl);
+
     const draw = () => {
-      if (!this.canvas) return;
-      this._paintMeeting(ctx, this.canvas, opts.stageEl);
+      if (!this.canvas || this.status !== 'recording') return;
+      const c = this.canvas.getContext('2d', { alpha: false });
+      if (c) this._paintFrame(c, this.canvas, opts.stageEl);
       this.rafId = requestAnimationFrame(draw);
     };
-    draw();
-    await new Promise<void>((r) => requestAnimationFrame(() => r()));
 
     this.canvasStream = this.canvas.captureStream(30);
 
@@ -125,7 +135,7 @@ export class MeetingScreenRecorder {
     const mimeType = pickMimeType();
     const recorder = new MediaRecorder(combined, {
       mimeType,
-      videoBitsPerSecond: 3_500_000,
+      videoBitsPerSecond: 5_000_000,
       audioBitsPerSecond: 128_000,
     });
     recorder.ondataavailable = (ev) => {
@@ -135,6 +145,7 @@ export class MeetingScreenRecorder {
     this.mediaRecorder = recorder;
     this.status = 'recording';
     recorder.start(1000);
+    draw();
   }
 
   public async stop(options?: { downloadLocal?: boolean }): Promise<{ blob: Blob; filename: string } | null> {
@@ -165,26 +176,26 @@ export class MeetingScreenRecorder {
 
   public async cancel(): Promise<void> {
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-      try { this.mediaRecorder.stop(); } catch { /* ignore */ }
+      try {
+        this.mediaRecorder.stop();
+      } catch {
+        /* ignore */
+      }
     }
     this._cleanupCapture();
     this.chunks = [];
     this.status = 'idle';
   }
 
-  // ── Paint ──────────────────────────────────────────────────────────────────
-
-  private _paintMeeting(
+  private _paintFrame(
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
     stageEl: HTMLElement,
   ): void {
-    const root = stageEl;
-    const rect = root.getBoundingClientRect();
+    const rect = stageEl.getBoundingClientRect();
     const w = Math.max(2, Math.floor(rect.width));
     const h = Math.max(2, Math.floor(rect.height));
     const scale = Math.min(1, 1920 / w, 1080 / h);
-    // libx264 requires even width/height — odd sizes make MP4 conversion fail
     let cw = Math.max(2, Math.floor(w * scale));
     let ch = Math.max(2, Math.floor(h * scale));
     if (cw % 2) cw += 1;
@@ -194,24 +205,28 @@ export class MeetingScreenRecorder {
       canvas.height = ch;
     }
 
+    const now = Date.now();
+    if (now - this.lastUiCaptureAt >= this.uiCaptureIntervalMs && !this.uiCaptureBusy) {
+      this.lastUiCaptureAt = now;
+      void this._captureUiLayer(stageEl);
+    }
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (this.uiLayer && this.uiLayer.width > 0) {
+      ctx.drawImage(this.uiLayer, 0, 0, canvas.width, canvas.height);
+    }
+
     const sx = canvas.width / w;
     const sy = canvas.height / h;
 
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Live video tiles (DOM snapshot often misses <video> frames).
+    stageEl.querySelectorAll<HTMLElement>('[data-meeting-tile]').forEach((tile) => {
+      const video = tile.querySelector('video');
+      if (!video || video.readyState < 2 || !video.videoWidth || !video.srcObject) return;
+      if (video.paused) void video.play().catch(() => {});
 
-    // Header strip
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, 0, canvas.width, Math.max(36, 52 * sy));
-    ctx.fillStyle = '#e2e8f0';
-    ctx.font = `600 ${Math.max(12, 14 * sy)}px system-ui,sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    const roomLabel = root.getAttribute('data-room-id') || 'Meeting';
-    ctx.fillText(roomLabel, 16 * sx, 26 * sy);
-
-    // Video tiles
-    root.querySelectorAll<HTMLElement>('[data-meeting-tile]').forEach((tile) => {
       const tr = tile.getBoundingClientRect();
       const x = (tr.left - rect.left) * sx;
       const y = (tr.top - rect.top) * sy;
@@ -223,246 +238,54 @@ export class MeetingScreenRecorder {
       ctx.save();
       this._roundRect(ctx, x, y, tw, th, radius);
       ctx.clip();
-
-      const video = tile.querySelector('video');
-      const hasVideo =
-        video && video.readyState >= 2 && video.videoWidth > 0 && video.srcObject;
-
-      if (hasVideo && video) {
-        this._drawVideoCover(ctx, video, x, y, tw, th, tile.dataset.meetingScreen === '1');
-      } else {
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(x, y, tw, th);
-        const name = tile.dataset.participantName || '?';
-        const size = Math.min(tw, th) * 0.32;
-        ctx.beginPath();
-        ctx.arc(x + tw / 2, y + th / 2, size / 2, 0, Math.PI * 2);
-        ctx.fillStyle = '#475569';
-        ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.font = `600 ${Math.max(12, size * 0.45)}px system-ui,sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(name.charAt(0).toUpperCase(), x + tw / 2, y + th / 2);
-      }
-
-      const name = tile.dataset.participantName;
-      if (name) {
-        const barH = Math.max(20, th * 0.11);
-        const grad = ctx.createLinearGradient(x, y + th - barH, x, y + th);
-        grad.addColorStop(0, 'rgba(0,0,0,0)');
-        grad.addColorStop(1, 'rgba(0,0,0,0.75)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(x, y + th - barH, tw, barH);
-        ctx.fillStyle = '#fff';
-        ctx.font = `500 ${Math.max(10, barH * 0.45)}px system-ui,sans-serif`;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        const label = tile.dataset.meetingLocal === '1' ? `${name} (You)` : name;
-        ctx.fillText(label, x + 8, y + th - barH / 2, tw - 16);
-      }
+      this._drawVideoCover(ctx, video, x, y, tw, th, tile.dataset.meetingScreen === '1');
       ctx.restore();
-
-      ctx.strokeStyle = 'rgba(51,65,85,0.95)';
-      ctx.lineWidth = Math.max(1, 2 * sx);
-      this._roundRect(ctx, x, y, tw, th, radius);
-      ctx.stroke();
     });
 
-    // Whiteboard (when open) — capture Excalidraw canvases so recording includes drawings
-    this._paintWhiteboard(ctx, root, rect, sx, sy);
-
-    // Chat panel (drawn from DOM messages — no browser share UI)
-    this._paintChat(ctx, root, rect, sx, sy);
-
-    // Horizontal elapsed timeline (minutes:seconds) — burned into the video
-    this._paintTimeline(ctx, canvas);
-  }
-
-  private _paintWhiteboard(
-    ctx: CanvasRenderingContext2D,
-    root: HTMLElement,
-    rootRect: DOMRect,
-    sx: number,
-    sy: number,
-  ): void {
-    const board = root.querySelector<HTMLElement>('[data-meeting-whiteboard]');
-    if (!board) return;
-
-    const br = board.getBoundingClientRect();
-    const x = (br.left - rootRect.left) * sx;
-    const y = (br.top - rootRect.top) * sy;
-    const tw = br.width * sx;
-    const th = br.height * sy;
-    if (tw < 8 || th < 8) return;
-
-    ctx.save();
-    this._roundRect(ctx, x, y, tw, th, Math.min(12 * sx, 12));
-    ctx.clip();
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x, y, tw, th);
-
-    const canvases = board.querySelectorAll('canvas');
-    let painted = false;
-    canvases.forEach((c) => {
-      if (c.width < 2 || c.height < 2) return;
-      const cr = c.getBoundingClientRect();
-      if (cr.width < 2 || cr.height < 2) return;
-      const cx = (cr.left - rootRect.left) * sx;
-      const cy = (cr.top - rootRect.top) * sy;
-      const cw = cr.width * sx;
-      const ch = cr.height * sy;
-      try {
-        ctx.drawImage(c, cx, cy, cw, ch);
-        painted = true;
-      } catch {
-        /* tainted canvas — skip */
-      }
-    });
-
-    if (!painted) {
-      ctx.fillStyle = '#64748b';
-      ctx.font = `600 ${Math.max(14, 16 * sy)}px system-ui,sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('Whiteboard', x + tw / 2, y + th / 2);
-    }
-
-    ctx.restore();
-    ctx.strokeStyle = '#e2e8f0';
-    ctx.lineWidth = Math.max(1, 2 * sx);
-    this._roundRect(ctx, x, y, tw, th, Math.min(12 * sx, 12));
-    ctx.stroke();
-  }
-
-  private _paintTimeline(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void {
-    const elapsedMs = Math.max(0, Date.now() - this.startedAt);
-    const totalSec = Math.floor(elapsedMs / 1000);
-    const mm = Math.floor(totalSec / 60);
-    const ss = totalSec % 60;
-    const label = `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
-
-    const barH = Math.max(28, Math.round(canvas.height * 0.045));
-    const y = canvas.height - barH;
-    const pad = Math.max(12, canvas.width * 0.02);
-
-    // Bottom bar
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
-    ctx.fillRect(0, y, canvas.width, barH);
-
-    // Red REC pill + time
-    const pillW = Math.max(90, canvas.width * 0.11);
-    ctx.fillStyle = '#dc2626';
-    this._roundRect(ctx, pad, y + barH * 0.22, pillW, barH * 0.56, barH * 0.2);
-    ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.font = `700 ${Math.max(11, barH * 0.38)}px ui-monospace,Consolas,monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`● ${label}`, pad + pillW / 2, y + barH / 2);
-
-    // Horizontal timeline track (fills over each rolling 10-minute window)
-    const trackX = pad + pillW + pad;
-    const trackW = canvas.width - trackX - pad;
-    const trackY = y + barH * 0.42;
-    const trackH = Math.max(4, barH * 0.18);
-    ctx.fillStyle = '#334155';
-    this._roundRect(ctx, trackX, trackY, trackW, trackH, trackH / 2);
-    ctx.fill();
-
-    const windowSec = 10 * 60; // 10 minutes per full bar cycle
-    const progress = Math.min(1, (totalSec % windowSec) / windowSec);
-    if (progress > 0) {
-      ctx.fillStyle = '#38bdf8';
-      this._roundRect(ctx, trackX, trackY, Math.max(trackH, trackW * progress), trackH, trackH / 2);
-      ctx.fill();
-    }
-
-    // Minute tick marks
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = `500 ${Math.max(9, barH * 0.28)}px system-ui,sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    for (let m = 0; m <= 10; m += 2) {
-      const tx = trackX + (trackW * m) / 10;
-      ctx.fillStyle = '#64748b';
-      ctx.fillRect(tx, trackY - 3, 1, trackH + 6);
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillText(`${m}m`, tx, trackY + trackH + 2);
-    }
-  }
-
-  private _paintChat(
-    ctx: CanvasRenderingContext2D,
-    root: HTMLElement,
-    rootRect: DOMRect,
-    sx: number,
-    sy: number,
-  ): void {
-    const chatEl = root.querySelector<HTMLElement>('[data-meeting-chat]');
-    if (!chatEl) return;
-
-    const cr = chatEl.getBoundingClientRect();
-    const x = (cr.left - rootRect.left) * sx;
-    const y = (cr.top - rootRect.top) * sy;
-    const tw = cr.width * sx;
-    const th = cr.height * sy;
-    if (tw < 40 || th < 40) return;
-
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(x, y, tw, th);
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x, y, tw, th);
-
-    ctx.fillStyle = '#60a5fa';
-    ctx.font = `600 ${Math.max(11, 13 * sy)}px system-ui,sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText('Chat', x + 12 * sx, y + 10 * sy);
-
-    const messages = Array.from(
-      chatEl.querySelectorAll<HTMLElement>('[data-meeting-chat-message]'),
-    );
-    const pad = 12 * sx;
-    const maxBubble = tw - pad * 2;
-    let cursorY = y + 32 * sy;
-
-    for (const msg of messages.slice(-40)) {
-      const sender = msg.dataset.sender || 'User';
-      const own = msg.dataset.own === '1';
-      const text = (msg.dataset.content || msg.textContent || '').trim();
-      if (!text) continue;
-
-      ctx.font = `500 ${Math.max(9, 10 * sy)}px system-ui,sans-serif`;
-      ctx.fillStyle = '#94a3b8';
-      ctx.textAlign = own ? 'right' : 'left';
-      const senderX = own ? x + tw - pad : x + pad;
-      ctx.fillText(sender, senderX, cursorY, maxBubble);
-      cursorY += 14 * sy;
-
-      ctx.font = `400 ${Math.max(10, 12 * sy)}px system-ui,sans-serif`;
-      const lines = wrapText(ctx, text, maxBubble - 16 * sx);
-      const lineH = Math.max(14, 16 * sy);
-      const bubbleH = lines.length * lineH + 12 * sy;
-      const bubbleW = Math.min(
-        maxBubble,
-        Math.max(...lines.map((l) => ctx.measureText(l).width)) + 20 * sx,
-      );
-      const bx = own ? x + tw - pad - bubbleW : x + pad;
-
-      ctx.fillStyle = own ? '#2563eb' : '#334155';
-      this._roundRect(ctx, bx, cursorY, bubbleW, bubbleH, 8 * sx);
-      ctx.fill();
-
-      ctx.fillStyle = '#fff';
-      ctx.textAlign = 'left';
-      lines.forEach((line, i) => {
-        ctx.fillText(line, bx + 10 * sx, cursorY + 6 * sy + i * lineH);
+    // Live whiteboard ink (Excalidraw canvases) — every frame so drawings stay current.
+    const board = stageEl.querySelector<HTMLElement>('[data-meeting-whiteboard]');
+    if (board) {
+      board.querySelectorAll('canvas').forEach((c) => {
+        if (c.width < 2 || c.height < 2) return;
+        const cr = c.getBoundingClientRect();
+        if (cr.width < 2 || cr.height < 2) return;
+        const x = (cr.left - rect.left) * sx;
+        const y = (cr.top - rect.top) * sy;
+        const tw = cr.width * sx;
+        const th = cr.height * sy;
+        try {
+          ctx.drawImage(c, x, y, tw, th);
+        } catch {
+          /* tainted */
+        }
       });
+    }
+  }
 
-      cursorY += bubbleH + 10 * sy;
-      if (cursorY > y + th - 24 * sy) break;
+  private async _captureUiLayer(stageEl: HTMLElement): Promise<void> {
+    if (this.uiCaptureBusy) return;
+    this.uiCaptureBusy = true;
+    try {
+      const rect = stageEl.getBoundingClientRect();
+      const w = Math.max(2, Math.floor(rect.width));
+      const scale = Math.min(1, 1920 / w, 1);
+
+      const snap = await domToCanvas(stageEl, {
+        scale,
+        backgroundColor: '#ffffff',
+        // Skip live media — we overlay those every frame.
+        filter: (el) => {
+          if (el instanceof HTMLVideoElement) return false;
+          if (el instanceof HTMLAudioElement) return false;
+          if (el instanceof HTMLCanvasElement && el === this.canvas) return false;
+          return true;
+        },
+      });
+      this.uiLayer = snap;
+    } catch (err) {
+      console.warn('[recorder] UI snapshot failed', err);
+    } finally {
+      this.uiCaptureBusy = false;
     }
   }
 
@@ -553,7 +376,10 @@ export class MeetingScreenRecorder {
     }
     this.canvasStream?.getTracks().forEach((t) => t.stop());
     this.canvasStream = null;
+    if (this.canvas?.parentNode) this.canvas.parentNode.removeChild(this.canvas);
     this.canvas = null;
+    this.uiLayer = null;
+    this.stageEl = null;
     this.mediaRecorder = null;
     if (this.audioCtx) {
       const interval = (this.audioCtx as AudioContext & { __mixInterval?: number }).__mixInterval;

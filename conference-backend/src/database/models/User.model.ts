@@ -50,6 +50,9 @@ export const DEFAULT_USER_SETTINGS: IUserSettings = {
   account: { plan: 'Team Plan', meetingCapacity: 100, role: 'Admin' },
 };
 
+export type PlatformRole = 'none' | 'admin' | 'super_admin';
+export type UserAccountStatus = 'active' | 'suspended' | 'banned';
+
 export interface IUser extends Document {
   name: string;
   email: string;
@@ -65,6 +68,10 @@ export interface IUser extends Document {
   phone: string;
   /** When true, user must set a new password after invite/temp login. */
   mustChangePassword: boolean;
+  /** Platform SaaS console role (not workspace role). */
+  platformRole: PlatformRole;
+  /** Account status for platform admin suspend/ban. */
+  accountStatus: UserAccountStatus;
   settings: IUserSettings;
   /** Set when the user's email address is verified (null = unverified). */
   emailVerifiedAt: Date | null;
@@ -125,6 +132,18 @@ const userSchema = new Schema<IUser>(
     department: { type: String, default: '', trim: true, maxlength: 120 },
     phone: { type: String, default: '', trim: true, maxlength: 40 },
     mustChangePassword: { type: Boolean, default: false },
+    platformRole: {
+      type: String,
+      enum: ['none', 'admin', 'super_admin'],
+      default: 'none',
+      index: true,
+    },
+    accountStatus: {
+      type: String,
+      enum: ['active', 'suspended', 'banned'],
+      default: 'active',
+      index: true,
+    },
     settings: { type: userSettingsSchema, default: () => ({ ...DEFAULT_USER_SETTINGS }) },
     emailVerifiedAt: { type: Date, default: null },
     passwordChangedAt: { type: Date, default: null },

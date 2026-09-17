@@ -1,4 +1,5 @@
 import type { ComponentType, SVGProps } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -13,10 +14,14 @@ import {
   Sparkles,
   Settings,
   ChevronLeft,
+  ChevronDown,
   ArrowUpRight,
+  Shield,
 } from 'lucide-react';
 import { cn } from '../../../lib/cn';
 import { APP_NAV } from '../nav';
+import { useAuth } from '../../../contexts/AuthContext';
+import { ADMIN_NAV } from '../../admin/nav';
 
 type NavIcon = ComponentType<SVGProps<SVGSVGElement> & { strokeWidth?: number | string }>;
 
@@ -39,9 +44,12 @@ function navItemActive(
   item: (typeof APP_NAV)[number],
   isActive: boolean,
 ): boolean {
+  if (item.label === 'Meetings' && /^\/app\/meeting(\/|$)/.test(pathname)) {
+    return true;
+  }
   if ('matchSections' in item && item.matchSections) {
     const parts = pathname.split('/');
-    const section = parts[3]; // /app/settings/:section
+    const section = parts[3];
     if (pathname.startsWith('/app/settings') && section) {
       return (item.matchSections as readonly string[]).includes(section);
     }
@@ -60,17 +68,34 @@ type Props = {
 export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { user } = useAuth();
+  const isPlatformAdmin =
+    user?.platformRole === 'admin' || user?.platformRole === 'super_admin';
+  const [adminOpen, setAdminOpen] = useState(pathname.startsWith('/admin'));
+  const adminRef = useRef<HTMLDivElement>(null);
   const w = collapsed ? 'w-[100px]' : 'w-[228px]';
+
+  useEffect(() => {
+    if (pathname.startsWith('/admin')) setAdminOpen(true);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!adminOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!adminRef.current?.contains(e.target as Node)) setAdminOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [adminOpen]);
 
   return (
     <aside
       className={cn(
-        "relative flex h-full shrink-0 flex-col bg-[#016BE6] text-white transition-[width] duration-200",
+        'relative flex h-full shrink-0 flex-col bg-[#016BE6] text-white transition-[width] duration-200',
         w,
         collapsed ? 'items-center px-1.5 pb-2 pt-1.5' : 'px-3 pb-2 pt-1.5',
       )}
     >
-      {/* Logo + collapse — keep same top height collapsed/expanded so nav doesn't jump */}
       <div
         className={cn(
           'mb-3 flex h-[100px] w-full shrink-0 items-center pt-0.5',
@@ -90,11 +115,7 @@ export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
           aria-label="Samtal home"
         >
           {collapsed ? (
-            <img
-              src="/samtal-mark.png"
-              alt="Samtal"
-              className="h-11 w-11 object-contain"
-            />
+            <img src="/samtal-mark.png" alt="Samtal" className="h-11 w-11 object-contain" />
           ) : (
             <img
               src="/samtal-logo-sidebar.png?v=5"
@@ -155,9 +176,102 @@ export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
             </NavLink>
           );
         })}
+
+        {isPlatformAdmin ? (
+          <div ref={adminRef} className="relative mt-1 w-full">
+            <button
+              type="button"
+              title="Platform Admin"
+              aria-expanded={adminOpen}
+              onClick={() => setAdminOpen((o) => !o)}
+              className={cn(
+                'flex w-full items-center rounded-[10px] transition-colors',
+                collapsed ? 'mx-auto size-9 justify-center' : 'min-h-9 gap-2 px-2.5 py-2',
+                pathname.startsWith('/admin') || adminOpen
+                  ? 'bg-black/20 text-white'
+                  : 'text-white/80 hover:bg-white/10 hover:text-white',
+              )}
+            >
+              <Shield className="size-[18px] shrink-0" strokeWidth={2} />
+              {!collapsed ? (
+                <>
+                  <span className="min-w-0 flex-1 truncate text-left text-[14px] font-medium leading-none">
+                    Platform Admin
+                  </span>
+                  <ChevronDown
+                    className={cn('size-3.5 shrink-0 transition', adminOpen && 'rotate-180')}
+                    strokeWidth={2.25}
+                  />
+                </>
+              ) : null}
+            </button>
+
+            {adminOpen && !collapsed ? (
+              <div className="mt-1 overflow-hidden rounded-[12px] bg-[#0047A8]/55 p-1.5 shadow-lg ring-1 ring-white/10">
+                <p className="px-2 pb-1 pt-0.5 text-[10px] font-bold tracking-[0.08em] text-white/70">
+                  ADMIN
+                </p>
+                <div className="flex flex-col gap-0.5">
+                  {ADMIN_NAV.map((item) => {
+                    const Icon = item.icon;
+                    const active =
+                      'end' in item && item.end
+                        ? pathname === item.to
+                        : pathname === item.to || pathname.startsWith(`${item.to}/`);
+                    return (
+                      <button
+                        key={item.to}
+                        type="button"
+                        onClick={() => {
+                          navigate(item.to);
+                          setAdminOpen(false);
+                          onNavigate?.();
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-[8px] px-2.5 py-2 text-left text-[12px] font-medium transition',
+                          active
+                            ? 'bg-white text-[#016BE6]'
+                            : 'text-white/90 hover:bg-white/10',
+                        )}
+                      >
+                        <Icon className="size-3.5 shrink-0" strokeWidth={2} />
+                        <span className="truncate">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {adminOpen && collapsed ? (
+              <div className="absolute top-0 left-[calc(100%+8px)] z-50 w-[200px] overflow-hidden rounded-[12px] bg-[#016BE6] p-1.5 shadow-xl ring-1 ring-white/15">
+                <p className="px-2 pb-1 pt-0.5 text-[10px] font-bold tracking-[0.08em] text-white/70">
+                  ADMIN
+                </p>
+                {ADMIN_NAV.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.to}
+                      type="button"
+                      onClick={() => {
+                        navigate(item.to);
+                        setAdminOpen(false);
+                        onNavigate?.();
+                      }}
+                      className="flex w-full items-center gap-2 rounded-[8px] px-2.5 py-2 text-left text-[12px] font-medium text-white/90 hover:bg-white/10"
+                    >
+                      <Icon className="size-3.5 shrink-0" strokeWidth={2} />
+                      <span className="truncate">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </nav>
 
-      {/* Upgrade — compact, centered */}
       <div className="mt-auto flex w-full justify-center pb-1 pt-3">
         {collapsed ? (
           <div className="mx-auto flex min-h-[88px] w-[92%] flex-col overflow-hidden rounded-lg bg-white/15 px-1.5 py-2 text-center">

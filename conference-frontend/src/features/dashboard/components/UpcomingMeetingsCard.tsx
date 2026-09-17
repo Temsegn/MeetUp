@@ -38,6 +38,14 @@ export function UpcomingMeetingsCard() {
   const { meetings, loading, reload } = useMeetings({ page: 1, limit: 30 });
   const [now, setNow] = useState(() => Date.now());
 
+  const canCancelMeeting = (m: Meeting) => {
+    if (!user?.id) return false;
+    if (m.status === 'ended' || m.status === 'cancelled') return false;
+    if (m.createdBy === user.id) return true;
+    const role = activeWorkspace?.role;
+    return role === 'owner' || role === 'admin';
+  };
+
   useEffect(() => {
     const id = window.setInterval(() => {
       setNow(Date.now());
@@ -86,7 +94,7 @@ export function UpcomingMeetingsCard() {
           ))}
         </ul>
       ) : rows.length === 0 ? (
-        <p className={DASHBOARD_LIST_EMPTY_CLASS}>0</p>
+        <p className={DASHBOARD_LIST_EMPTY_CLASS}>No meetings for you yet</p>
       ) : (
         <ul className={DASHBOARD_LIST_CLASS}>
           {rows.map((m) => {
@@ -167,24 +175,28 @@ export function UpcomingMeetingsCard() {
                         label: 'Join conference',
                         onClick: () => navigate(`/app/meeting/${m.roomId ?? m.id}`),
                       },
-                      {
-                        label: 'Cancel meeting',
-                        danger: true,
-                        onClick: () => {
-                          void (async () => {
-                            if (!activeWorkspace?.workspaceId) return;
-                            if (!window.confirm(`Cancel “${m.title || m.roomId}”?`)) return;
-                            try {
-                              await meetingsService.cancel(activeWorkspace.workspaceId, m.id);
-                              void reload();
-                            } catch (err) {
-                              window.alert(
-                                err instanceof Error ? err.message : 'Could not cancel meeting.',
-                              );
-                            }
-                          })();
-                        },
-                      },
+                      ...(canCancelMeeting(m)
+                        ? [
+                            {
+                              label: 'Cancel meeting',
+                              danger: true as const,
+                              onClick: () => {
+                                void (async () => {
+                                  if (!activeWorkspace?.workspaceId) return;
+                                  if (!window.confirm(`Cancel “${m.title || m.roomId}”?`)) return;
+                                  try {
+                                    await meetingsService.cancel(activeWorkspace.workspaceId, m.id);
+                                    void reload();
+                                  } catch (err) {
+                                    window.alert(
+                                      err instanceof Error ? err.message : 'Could not cancel meeting.',
+                                    );
+                                  }
+                                })();
+                              },
+                            },
+                          ]
+                        : []),
                     ]}
                   />
                 </div>

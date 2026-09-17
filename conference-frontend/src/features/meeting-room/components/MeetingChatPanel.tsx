@@ -9,6 +9,10 @@ type Props = {
   userName: string;
   chatDisabled?: boolean;
   onClose: () => void;
+  /** When set, messages are sent via this callback instead of local chat (e.g. remote control). */
+  onSendOverride?: (text: string) => void;
+  /** Banner when chatting as another participant. */
+  actingAsName?: string | null;
 };
 
 export function MeetingChatPanel({
@@ -18,6 +22,8 @@ export function MeetingChatPanel({
   userName,
   chatDisabled = false,
   onClose,
+  onSendOverride,
+  actingAsName,
 }: Props) {
   const { messages, sendMessage } = useChat(roomId, peerId, { userId, userName });
   const [draft, setDraft] = useState('');
@@ -32,14 +38,22 @@ export function MeetingChatPanel({
     if (chatDisabled) return;
     const text = draft.trim();
     if (!text) return;
-    sendMessage(text);
+    if (onSendOverride) onSendOverride(text);
+    else sendMessage(text);
     setDraft('');
   };
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-[#E8ECF1] bg-white" data-meeting-chat>
       <div className="flex items-center justify-between border-b border-[#F1F4F8] px-3 py-2.5">
-        <h3 className="text-[13px] font-semibold text-[#151D2B]">Meeting chat</h3>
+        <div className="min-w-0">
+          <h3 className="text-[13px] font-semibold text-[#151D2B]">Meeting chat</h3>
+          {actingAsName ? (
+            <p className="truncate text-[10px] font-medium text-[#016BE6]">
+              Sending as {actingAsName}
+            </p>
+          ) : null}
+        </div>
         <button type="button" onClick={onClose} className="rounded-lg p-1 text-[#64748B] hover:bg-[#F8FAFC]" aria-label="Close">
           <X className="size-4" />
         </button>
@@ -79,7 +93,7 @@ export function MeetingChatPanel({
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Type a message…"
+            placeholder={actingAsName ? `Message as ${actingAsName}…` : 'Type a message…'}
             className="min-w-0 flex-1 rounded-xl border border-[#E1E7EE] bg-white px-3 py-2 text-[12px] text-[#151D2B] outline-none placeholder:text-[#94A3B8] focus:border-[#016BE6]"
           />
           <button

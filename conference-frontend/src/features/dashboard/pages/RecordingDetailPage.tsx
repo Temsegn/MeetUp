@@ -260,7 +260,6 @@ export function RecordingDetailPage() {
             <RecordingPlayer
               key={recording.id}
               title={recording.title}
-              poster="/dashboard/rec-1.jpg"
               durationSec={recording.durationSeconds}
               src={streamUrl ?? undefined}
               className="h-full min-h-[200px]"
@@ -359,12 +358,11 @@ export function RecordingDetailPage() {
                         : 'hover:bg-[#F8FAFC]',
                     )}
                   >
-                    <div className="relative h-12 w-[68px] shrink-0 overflow-hidden rounded-lg bg-[#E8F1FE]">
-                      <img src="/dashboard/rec-1.jpg" alt="" className="h-full w-full object-cover" />
+                    <div className="relative h-12 w-[68px] shrink-0 overflow-hidden rounded-lg bg-[#0B1220]">
                       <span
                         className={cn(
                           'absolute inset-0 flex items-center justify-center',
-                          active ? 'bg-[#016BE6]/35' : 'bg-black/10',
+                          active ? 'bg-[#016BE6]/35' : 'bg-black/20',
                         )}
                       >
                         <span

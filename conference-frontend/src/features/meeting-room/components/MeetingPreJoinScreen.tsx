@@ -11,6 +11,7 @@ type Props = {
   requireName?: boolean;
   guestEmail?: string;
   onGuestEmailChange?: (email: string) => void;
+  guestEmailLocked?: boolean;
   requireGuestEmail?: boolean;
   avatarUrl?: string | null;
   avatarColor?: string | null;
@@ -33,6 +34,7 @@ export function MeetingPreJoinScreen({
   requireName = false,
   guestEmail = '',
   onGuestEmailChange,
+  guestEmailLocked = false,
   requireGuestEmail = false,
   avatarUrl,
   avatarColor,
@@ -73,18 +75,19 @@ export function MeetingPreJoinScreen({
 
   if (isWaiting) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-center justify-center bg-[#F8FAFC] p-6">
-        <div className="w-full max-w-md rounded-2xl border border-[#E8ECF1] bg-white p-6 text-center shadow-sm">
+      <div className="flex h-full min-h-0 flex-col items-center justify-center bg-white p-6">
+        <div className="w-full max-w-md rounded-[22px] border border-[#E0E7EE] bg-white p-6 text-center shadow-[0_1px_2px_rgba(55,72,99,0.06)]">
           <div className="mx-auto mb-4 size-10 animate-pulse rounded-full bg-[#E8F1FF]" />
-          <h1 className="text-[18px] font-bold text-[#151D2B]">Waiting for host</h1>
-          <p className="mt-2 text-[13px] text-[#6F7B8C]">
-            You’re in the lobby as <span className="font-semibold text-[#151D2B]">{userName}</span>.
+          <h1 className="text-[18px] font-bold text-[#121B29]">Waiting for host</h1>
+          <p className="mt-2 text-[13px] text-[#667383]">
+            You’re in the lobby as <span className="font-semibold text-[#121B29]">{userName}</span>.
             The host must let you in before you can join.
           </p>
+          {title ? <p className="mt-3 text-[14px] font-semibold text-[#121B29]">{title}</p> : null}
           <button
             type="button"
             onClick={onCancelWaiting}
-            className="mt-5 h-10 rounded-xl border border-[#E1E7EE] px-4 text-[12px] font-semibold text-[#334155] hover:bg-[#F8FAFC]"
+            className="mt-5 h-11 rounded-[18px] border border-[#E0E7EE] px-4 text-[12px] font-semibold text-[#334155] hover:bg-[#F8FAFC]"
           >
             Cancel
           </button>
@@ -178,10 +181,16 @@ export function MeetingPreJoinScreen({
               <input
                 type="email"
                 value={guestEmail}
+                readOnly={guestEmailLocked}
                 onChange={(e) => onGuestEmailChange?.(e.target.value)}
                 placeholder="Email you were invited with"
-                className="mt-1 h-10 w-full rounded-xl border border-[#E1E7EE] px-3 text-[13px] outline-none focus:border-[#016BE6]"
+                className="mt-1 h-10 w-full rounded-xl border border-[#E1E7EE] px-3 text-[13px] outline-none focus:border-[#016BE6] read-only:bg-[#F8FAFC] read-only:text-[#475569]"
               />
+              {guestEmailLocked ? (
+                <span className="mt-1 block text-[11px] font-normal text-[#8A94A6]">
+                  This email was invited by the host. Enter your name above to join.
+                </span>
+              ) : null}
             </label>
           ) : null}
 

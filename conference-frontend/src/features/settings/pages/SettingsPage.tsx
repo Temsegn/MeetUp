@@ -8,10 +8,12 @@ import { SettingsSubNav } from '../components/SettingsSubNav';
 import {
   AccountSection,
   IntegrationsSection,
-  PlaceholderSettingsCard,
   ProfileSection,
   SecuritySection,
 } from '../components/SettingsSections';
+import { AuditLogsPanel } from '../components/AuditLogsPanel';
+import { BillingSettingsPanel } from '../components/BillingSettingsPanel';
+import { BrandingSettingsPanel } from '../components/BrandingSettingsPanel';
 import { CreateRoomPanel } from '../components/CreateRoomPanel';
 import { CreateTeamPanel } from '../components/CreateTeamPanel';
 import { InviteMemberPanel } from '../components/InviteMemberPanel';
@@ -28,7 +30,6 @@ import {
   WORKSPACE_SIDEBAR_SECTIONS,
   type SettingsSectionId,
 } from '../constants';
-import { DASHBOARD_CARD_RADIUS_CLASS } from '../../dashboard/components/dashboardListStyles';
 
 const SECTION_SKELETON_MS = 320;
 
@@ -439,13 +440,7 @@ export function SettingsPage() {
               />
             ) : null}
 
-            {!showSkeleton && active === 'branding' ? (
-              <PlaceholderSettingsCard
-                title="Branding"
-                description="Customize logo, colors, and workspace appearance."
-                className={DASHBOARD_CARD_RADIUS_CLASS}
-              />
-            ) : null}
+            {!showSkeleton && active === 'branding' ? <BrandingSettingsPanel /> : null}
 
             {!showSkeleton && active === 'security' ? (
               <SecuritySection
@@ -455,13 +450,7 @@ export function SettingsPage() {
               />
             ) : null}
 
-            {!showSkeleton && active === 'billing' ? (
-              <PlaceholderSettingsCard
-                title="Billing & Plan"
-                description="View participant-minute usage, change plans, and manage payment method. You can also open the full billing page from the sidebar billing route."
-                className={DASHBOARD_CARD_RADIUS_CLASS}
-              />
-            ) : null}
+            {!showSkeleton && active === 'billing' ? <BillingSettingsPanel /> : null}
 
             {!showSkeleton && active === 'integrations' ? (
               <IntegrationsSection
@@ -471,13 +460,7 @@ export function SettingsPage() {
               />
             ) : null}
 
-            {!showSkeleton && active === 'audit' ? (
-              <PlaceholderSettingsCard
-                title="Audit Logs"
-                description="Review activity across your workspace."
-                className={DASHBOARD_CARD_RADIUS_CLASS}
-              />
-            ) : null}
+            {!showSkeleton && active === 'audit' ? <AuditLogsPanel /> : null}
           </div>
         </div>
       </div>

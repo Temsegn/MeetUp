@@ -10,6 +10,7 @@ import {
   UserMinus,
   Users,
   Video,
+  X,
   XCircle,
 } from 'lucide-react';
 import { cn } from '../../../lib/cn';
@@ -19,9 +20,12 @@ import {
   workspaceService,
   type WorkspaceDirectoryMember,
 } from '../../../services/workspace/workspace.service';
+import { teamsService } from '../../../services/teams/teams.service';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { MeetingDetailSkeleton } from '../components/MeetingsSkeletons';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Preview detail for upcoming / ended / cancelled meetings.
@@ -39,9 +43,12 @@ export function MeetingDetailPage() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [directory, setDirectory] = useState<WorkspaceDirectoryMember[]>([]);
+  const [teammateIds, setTeammateIds] = useState<Set<string>>(new Set());
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteQuery, setInviteQuery] = useState('');
   const [pendingInviteIds, setPendingInviteIds] = useState<string[]>([]);
+  const [guestEmailDraft, setGuestEmailDraft] = useState('');
+  const [pendingGuestEmails, setPendingGuestEmails] = useState<string[]>([]);
 
   useEffect(() => {
     if (!activeWorkspace?.workspaceId || !meetingId) {
@@ -61,26 +68,44 @@ export function MeetingDetailPage() {
     return () => window.clearInterval(id);
   }, []);
 
-  const isHostOrAdmin =
-    Boolean(meeting && user?.id && meeting.createdBy === user.id) ||
-    activeWorkspace?.role === 'owner' ||
-    activeWorkspace?.role === 'admin';
+  const isHost = Boolean(meeting && user?.id && meeting.createdBy === user.id);
+  const isOwnerOrAdmin =
+    activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
+  const isHostOrAdmin = isHost || isOwnerOrAdmin;
 
   useEffect(() => {
-    if (!inviteOpen || !activeWorkspace?.workspaceId || !isHostOrAdmin) return;
+    if (!inviteOpen || !activeWorkspace?.workspaceId || !isHost) return;
     let cancelled = false;
-    workspaceService
-      .listDirectory(activeWorkspace.workspaceId)
-      .then((rows) => {
-        if (!cancelled) setDirectory(rows.filter((m) => m.userId !== user?.id));
+    Promise.all([
+      workspaceService.listDirectory(activeWorkspace.workspaceId),
+      teamsService.list(activeWorkspace.workspaceId, { status: 'active' }).catch(() => []),
+    ])
+      .then(([rows, teams]) => {
+        if (cancelled) return;
+        const myId = user?.id;
+        const teammates = new Set<string>();
+        for (const t of teams) {
+          if (!myId) continue;
+          if (t.leadUserId === myId || t.memberIds.includes(myId)) {
+            for (const id of t.memberIds) {
+              if (id !== myId) teammates.add(id);
+            }
+            if (t.leadUserId && t.leadUserId !== myId) teammates.add(t.leadUserId);
+          }
+        }
+        setTeammateIds(teammates);
+        setDirectory(rows.filter((m) => m.userId !== myId && !teammates.has(m.userId)));
       })
       .catch(() => {
-        if (!cancelled) setDirectory([]);
+        if (!cancelled) {
+          setDirectory([]);
+          setTeammateIds(new Set());
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [inviteOpen, activeWorkspace?.workspaceId, isHostOrAdmin, user?.id]);
+  }, [inviteOpen, activeWorkspace?.workspaceId, isHost, user?.id]);
 
   const isRegistered = Boolean(
     meeting?.participantList?.some((p) => p.userId === user?.id),
@@ -123,8 +148,11 @@ export function MeetingDetailPage() {
 
   const inviteCandidates = useMemo(() => {
     const q = inviteQuery.trim().toLowerCase();
+    const existingGuests = new Set((meeting?.guestEmails ?? []).map((e) => e.toLowerCase()));
     return directory
       .filter((m) => !invitedUserIds.has(m.userId))
+      .filter((m) => !teammateIds.has(m.userId))
+      .filter((m) => !existingGuests.has(m.email.toLowerCase()))
       .filter(
         (m) =>
           !q ||
@@ -132,7 +160,7 @@ export function MeetingDetailPage() {
           m.email.toLowerCase().includes(q),
       )
       .slice(0, 8);
-  }, [directory, invitedUserIds, inviteQuery]);
+  }, [directory, invitedUserIds, inviteQuery, teammateIds, meeting?.guestEmails]);
 
   if (loading) {
     return <MeetingDetailSkeleton />;
@@ -182,9 +210,11 @@ export function MeetingDetailPage() {
   const agenda = derived.agenda;
   const isEnded = derived.status === 'ended';
   const isCancelled = derived.status === 'cancelled';
-  const canCancel = derived.status === 'upcoming';
+  const canCancel =
+    (derived.status === 'upcoming' || derived.status === 'live') &&
+    (isHost || isOwnerOrAdmin);
   const canRegister = derived.status === 'upcoming' && !isRegistered && !isCancelled && !isEnded;
-  const canManageInvites = isHostOrAdmin && derived.status === 'upcoming';
+  const canManageInvites = isHost && derived.status === 'upcoming';
 
   const cancel = async () => {
     if (!activeWorkspace?.workspaceId || !meeting) return;
@@ -220,16 +250,31 @@ export function MeetingDetailPage() {
   };
 
   const sendInvites = async () => {
-    if (!activeWorkspace?.workspaceId || pendingInviteIds.length === 0) return;
+    if (!activeWorkspace?.workspaceId) return;
+    const draft = guestEmailDraft.trim().toLowerCase();
+    const emails = [...pendingGuestEmails];
+    if (draft) {
+      if (!EMAIL_RE.test(draft)) {
+        window.alert('Enter a valid guest email.');
+        return;
+      }
+      if (!emails.includes(draft)) emails.push(draft);
+    }
+    if (pendingInviteIds.length === 0 && emails.length === 0) return;
     setInviteBusy(true);
     try {
       const updated = await meetingsService.addParticipants(
         activeWorkspace.workspaceId,
         meeting.id,
-        { userIds: pendingInviteIds },
+        {
+          userIds: pendingInviteIds,
+          guestEmails: emails,
+        },
       );
       setMeeting(updated);
       setPendingInviteIds([]);
+      setPendingGuestEmails([]);
+      setGuestEmailDraft('');
       setInviteQuery('');
       setInviteOpen(false);
     } catch (err) {
@@ -394,16 +439,74 @@ export function MeetingDetailPage() {
 
           {canManageInvites && inviteOpen ? (
             <div className="mb-3 rounded-lg border border-[#E8ECF1] bg-[#F8FAFC] p-2.5">
+              <p className="mb-1.5 text-[11px] font-semibold text-[#475569]">Invite guest by email</p>
+              <p className="mb-2 text-[10px] text-[#8A94A6]">
+                Guests get an email join link. Teammates are already on the meeting.
+              </p>
+              {pendingGuestEmails.length > 0 ? (
+                <div className="mb-2 flex flex-wrap gap-1">
+                  {pendingGuestEmails.map((email) => (
+                    <span
+                      key={email}
+                      className="inline-flex items-center gap-1 rounded-full bg-[#E8F1FF] px-2 py-0.5 text-[10px] font-medium text-[#016BE6]"
+                    >
+                      {email}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPendingGuestEmails((prev) => prev.filter((e) => e !== email))
+                        }
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              <div className="mb-2 flex gap-1.5">
+                <input
+                  type="email"
+                  value={guestEmailDraft}
+                  onChange={(e) => setGuestEmailDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const email = guestEmailDraft.trim().toLowerCase();
+                      if (!EMAIL_RE.test(email)) return;
+                      setPendingGuestEmails((prev) =>
+                        prev.includes(email) ? prev : [...prev, email],
+                      );
+                      setGuestEmailDraft('');
+                    }
+                  }}
+                  placeholder="guest@example.com"
+                  className="h-8 min-w-0 flex-1 rounded-lg border border-[#E1E7EE] bg-white px-2.5 text-[12px] outline-none focus:border-[#016BE6]"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const email = guestEmailDraft.trim().toLowerCase();
+                    if (!EMAIL_RE.test(email)) return;
+                    setPendingGuestEmails((prev) =>
+                      prev.includes(email) ? prev : [...prev, email],
+                    );
+                    setGuestEmailDraft('');
+                  }}
+                  className="h-8 rounded-lg border border-[#E1E7EE] px-2 text-[11px] font-semibold text-[#016BE6]"
+                >
+                  Add
+                </button>
+              </div>
               <input
                 type="search"
                 value={inviteQuery}
                 onChange={(e) => setInviteQuery(e.target.value)}
-                placeholder="Search members to invite…"
+                placeholder="Search non-team members…"
                 className="mb-2 h-8 w-full rounded-lg border border-[#E1E7EE] bg-white px-2.5 text-[12px] text-[#151D2B] outline-none focus:border-[#016BE6]"
               />
               <ul className="max-h-40 space-y-1 overflow-y-auto">
                 {inviteCandidates.length === 0 ? (
-                  <li className="px-1 py-2 text-[11px] text-[#8A94A6]">No members to invite.</li>
+                  <li className="px-1 py-2 text-[11px] text-[#8A94A6]">No non-team members to invite.</li>
                 ) : (
                   inviteCandidates.map((m) => {
                     const checked = pendingInviteIds.includes(m.userId);
@@ -443,15 +546,16 @@ export function MeetingDetailPage() {
               </ul>
               <button
                 type="button"
-                disabled={inviteBusy || pendingInviteIds.length === 0}
+                disabled={
+                  inviteBusy ||
+                  (pendingInviteIds.length === 0 &&
+                    pendingGuestEmails.length === 0 &&
+                    !guestEmailDraft.trim())
+                }
                 onClick={() => void sendInvites()}
                 className="mt-2 w-full rounded-lg bg-[#016BE6] py-1.5 text-[12px] font-semibold text-white hover:bg-[#0056EF] disabled:opacity-60"
               >
-                {inviteBusy
-                  ? 'Sending…'
-                  : pendingInviteIds.length > 0
-                    ? `Invite ${pendingInviteIds.length}`
-                    : 'Invite'}
+                {inviteBusy ? 'Sending…' : 'Send invitations'}
               </button>
             </div>
           ) : null}
@@ -478,6 +582,45 @@ export function MeetingDetailPage() {
                     disabled={inviteBusy}
                     title="Remove invitation"
                     onClick={() => void removeInvite(p.id)}
+                    className="inline-flex size-7 items-center justify-center rounded-lg text-[#94A3B8] hover:bg-[#FEF2F2] hover:text-[#DC2626] disabled:opacity-60"
+                  >
+                    <UserMinus className="size-3.5" />
+                  </button>
+                ) : null}
+              </li>
+            ))}
+            {(meeting.guestEmails ?? []).map((email) => (
+              <li key={`guest-${email}`} className="flex items-center gap-2.5">
+                <UserAvatar name={email} size="md" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12px] font-semibold text-[#151D2B]">{email}</p>
+                  <p className="truncate text-[10px] text-[#8A94A6]">Guest · invited by email</p>
+                </div>
+                {canManageInvites ? (
+                  <button
+                    type="button"
+                    disabled={inviteBusy}
+                    title="Remove guest invitation"
+                    onClick={() => {
+                      void (async () => {
+                        if (!activeWorkspace?.workspaceId) return;
+                        setInviteBusy(true);
+                        try {
+                          const updated = await meetingsService.removeGuestEmail(
+                            activeWorkspace.workspaceId,
+                            meeting.id,
+                            email,
+                          );
+                          setMeeting(updated);
+                        } catch (err) {
+                          window.alert(
+                            err instanceof Error ? err.message : 'Could not remove guest.',
+                          );
+                        } finally {
+                          setInviteBusy(false);
+                        }
+                      })();
+                    }}
                     className="inline-flex size-7 items-center justify-center rounded-lg text-[#94A3B8] hover:bg-[#FEF2F2] hover:text-[#DC2626] disabled:opacity-60"
                   >
                     <UserMinus className="size-3.5" />

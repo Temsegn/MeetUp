@@ -4,12 +4,15 @@ import {
   type WorkspaceSettings,
 } from '../../modules/workspace/workspace.types';
 
+export type WorkspaceStatus = 'active' | 'suspended';
+
 export interface IWorkspace extends Document {
   name: string;
   slug: string;
   email: string;
   logoUrl: string | null;
   ownerId: mongoose.Types.ObjectId;
+  status: WorkspaceStatus;
   settings: WorkspaceSettings;
   createdAt: Date;
   updatedAt: Date;
@@ -22,6 +25,7 @@ const workspaceSchema = new Schema<IWorkspace>(
     email: { type: String, default: '', trim: true, maxlength: 254 },
     logoUrl: { type: String, default: null },
     ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    status: { type: String, enum: ['active', 'suspended'], default: 'active', index: true },
     settings: {
       waitingRoom: { type: Boolean, default: DEFAULT_WORKSPACE_SETTINGS.waitingRoom },
       autoRecord: { type: Boolean, default: DEFAULT_WORKSPACE_SETTINGS.autoRecord },
