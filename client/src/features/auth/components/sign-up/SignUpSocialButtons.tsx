@@ -1,12 +1,10 @@
 import React from 'react';
 import { AUTH_ASSETS } from '../../constants/auth.assets';
 import { AUTH_COPY } from '../../constants/auth.constants';
-import { API_URL } from '../../../../lib/apiUrl';
-import { FRONTEND_URL } from '../../../../lib/frontendUrl';
-
+import { googleAuthStartUrl } from '../../../../lib/frontendUrl';
 
 function startGoogleAuth() {
-  window.location.assign(`${API_URL || FRONTEND_URL}/auth/google`);
+  window.location.assign(googleAuthStartUrl());
 }
 
 /** Google OAuth starts on the API; Microsoft remains unavailable. */

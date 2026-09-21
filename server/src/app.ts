@@ -28,6 +28,9 @@ import { isMongoConnected } from './database/db';
 export const createApp = (): Express => {
   const app = express();
 
+  // Nginx (client container / host reverse proxy) sets X-Forwarded-*.
+  app.set('trust proxy', 1);
+
   // ── Security headers ───────────────────────────────────────────────────────
   app.use(helmet());
 

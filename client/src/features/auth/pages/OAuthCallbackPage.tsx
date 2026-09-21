@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   setAccessToken,
   refreshSession,
 } from '../../../services/auth/auth.service';
 import { useAuth } from '../../../contexts/AuthContext';
-import { enterApp } from '../../../lib/frontendUrl';
+import { assignFrontend, enterApp } from '../../../lib/frontendUrl';
 
 const OAUTH_HANDOFF_KEY = 'samtal_oauth_access_token';
 
@@ -27,7 +26,7 @@ function consumeOAuthAccessToken(): string | null {
 
   // Strip token from the address bar once captured.
   if (fromHash || fromQuery) {
-    window.history.replaceState(null, '', '/auth/oauth/callback');
+    window.history.replaceState(null, '', window.location.pathname);
   }
 
   return token;
@@ -38,7 +37,6 @@ function consumeOAuthAccessToken(): string | null {
  * `#access_token=...` (refresh cookie already set HttpOnly).
  */
 export const OAuthCallbackPage: React.FC = () => {
-  const navigate = useNavigate();
   const { refreshUser } = useAuth();
   const [error, setError] = useState('');
 
@@ -77,7 +75,7 @@ export const OAuthCallbackPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [navigate, refreshUser]);
+  }, [refreshUser]);
 
   if (error) {
     return (
@@ -86,7 +84,7 @@ export const OAuthCallbackPage: React.FC = () => {
         <button
           type="button"
           className="rounded-full bg-[#016BE6] px-5 py-2 text-sm font-semibold text-white"
-          onClick={() => navigate('/auth', { replace: true })}
+          onClick={() => assignFrontend('/auth')}
         >
           Back to sign in
         </button>

@@ -43,9 +43,25 @@ const startServer = async () => {
 
   server.listen(env.PORT, () => {
     logger.info(`Server running on port ${env.PORT}`, {
-      env:     env.NODE_ENV,
-      port:    env.PORT,
+      env: env.NODE_ENV,
+      port: env.PORT,
+      frontendUrl: env.FRONTEND_URL,
+      googleRedirectUri: env.GOOGLE_REDIRECT_URI,
+      cookieSecure: env.cookieSecure,
     });
+    try {
+      const callbackHost = new URL(env.GOOGLE_REDIRECT_URI).hostname;
+      if (
+        env.NODE_ENV === 'production' &&
+        (callbackHost === 'localhost' || callbackHost === '127.0.0.1')
+      ) {
+        logger.error(
+          'GOOGLE_REDIRECT_URI points at localhost while FRONTEND_URL is public. Google will return the browser to a different origin than the one that stored OAuth state.'
+        );
+      }
+    } catch {
+      logger.error('GOOGLE_REDIRECT_URI is not a valid URL');
+    }
   });
 
   // ── Graceful shutdown ──────────────────────────────────────────────────────

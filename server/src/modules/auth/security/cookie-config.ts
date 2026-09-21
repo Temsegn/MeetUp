@@ -1,8 +1,12 @@
 import { Request } from 'express';
 import { env } from '../../../config/env';
 import { REFRESH_COOKIE_NAME } from '../auth.constants';
+import { OAUTH_STATE_TTL_MS } from './oauth-state';
 
 export { REFRESH_COOKIE_NAME };
+
+/** HttpOnly cookie that binds Google `state` to the browser that started OAuth. */
+export const OAUTH_STATE_COOKIE_NAME = 'ms_oauth_state';
 
 /**
  * Read a cookie value from the raw Cookie header. Used by controllers so
@@ -29,45 +33,51 @@ export function readCookie(req: Request, name: string): string | undefined {
 }
 
 /**
- * Cookie policy for the refresh token.
+ * Shared cookie policy.
  *
  *  - HttpOnly  — JavaScript can never read it (XSS cannot exfiltrate it).
- *  - SameSite=Lax — blocks cross-site POST CSRF while keeping the cookie
- *    on same-site (cross-origin) fetches between frontend and API.
- *  - Secure in production — only sent over HTTPS.
+ *  - SameSite=Lax — sent on top-level GET navigations (Google OAuth return)
+ *    but not on cross-site POST CSRF.
+ *  - Secure only when the public frontend is HTTPS. NODE_ENV=production on
+ *    plain HTTP would otherwise drop cookies (browsers never store Secure
+ *    cookies on http://46.246.120.148:8980).
+ *  - Optional COOKIE_DOMAIN for frontend/API on sibling subdomains. Leave
+ *    unset for this IP:port deployment.
+ */
+function authCookieOptions(path: string, extra: Record<string, unknown> = {}) {
+  const opts: Record<string, unknown> = {
+    httpOnly: true,
+    secure: env.cookieSecure,
+    sameSite: 'lax',
+    path,
+    ...extra,
+  };
+  if (env.COOKIE_DOMAIN) opts['domain'] = env.COOKIE_DOMAIN;
+  return opts;
+}
+
+/**
+ * Cookie policy for the refresh token.
+ *
  *  - Path=/ — sent to every API route (the API is the only server).
- *  - Optional COOKIE_DOMAIN for frontend/API on sibling subdomains.
  */
 export interface RefreshCookieOptions {
   maxAgeMs: number;
 }
 
 export function refreshCookieOptions({ maxAgeMs }: RefreshCookieOptions) {
-  const isProd = env.NODE_ENV === 'production';
-  const opts: Record<string, unknown> = {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: maxAgeMs,
-  };
-  if (env.COOKIE_DOMAIN) opts['domain'] = env.COOKIE_DOMAIN;
-  return opts;
+  return authCookieOptions('/', { maxAge: maxAgeMs });
 }
 
 export const REFRESH_COOKIE_NAME_HEADER = REFRESH_COOKIE_NAME;
 
 /** Express `res.clearCookie` options must match how the cookie was set. */
 export function refreshCookieClearOptions() {
-  const isProd = env.NODE_ENV === 'production';
-  const opts: Record<string, unknown> = {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: 'lax',
-    path: '/',
-  };
-  if (env.COOKIE_DOMAIN) opts['domain'] = env.COOKIE_DOMAIN;
-  return opts;
+  return authCookieOptions('/');
+}
+
+function oauthStateCookieOptions(extra: Record<string, unknown> = {}) {
+  return authCookieOptions('/auth', extra);
 }
 
 /**
@@ -88,4 +98,21 @@ export function clearRefreshCookie(res: {
   clearCookie: (name: string, opts: Record<string, unknown>) => void;
 }): void {
   res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieClearOptions());
+}
+
+export function setOAuthStateCookie(
+  res: { cookie: (name: string, value: string, opts: Record<string, unknown>) => void },
+  state: string
+): void {
+  res.cookie(
+    OAUTH_STATE_COOKIE_NAME,
+    state,
+    oauthStateCookieOptions({ maxAge: OAUTH_STATE_TTL_MS })
+  );
+}
+
+export function clearOAuthStateCookie(res: {
+  clearCookie: (name: string, opts: Record<string, unknown>) => void;
+}): void {
+  res.clearCookie(OAUTH_STATE_COOKIE_NAME, oauthStateCookieOptions());
 }

@@ -1,4 +1,3 @@
-import { createHash, randomBytes } from 'crypto';
 import { AppError, ConflictError } from '../../../shared/errors/AppError';
 import { env } from '../../../config/env';
 import { AuthDeps, authRepository } from '../auth.repository';
@@ -6,16 +5,7 @@ import { createSessionService } from './session.service';
 import { normalizeEmail } from '../auth.constants';
 import { RequestContext, UserRecord } from '../auth.types';
 import { ensureWorkspaceForUser } from '../../workspace/org.bootstrap';
-
-const STATE_TTL_MS = 10 * 60 * 1000;
-const pendingStates = new Map<string, { exp: number }>();
-
-function pruneStates() {
-  const now = Date.now();
-  for (const [k, v] of pendingStates) {
-    if (v.exp < now) pendingStates.delete(k);
-  }
-}
+import { oauthStatesMatch, verifyOAuthState } from '../security/oauth-state';
 
 export function isGoogleOAuthConfigured(): boolean {
   return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
@@ -25,17 +15,14 @@ export function createGoogleAuthService(deps: AuthDeps = authRepository) {
   const sessions = createSessionService(deps);
 
   return {
-    getAuthorizationUrl(): string {
+    getAuthorizationUrl(state: string): string {
       if (!isGoogleOAuthConfigured()) {
         throw new AppError('Google sign-in is not configured.', 'GOOGLE_NOT_CONFIGURED', 503);
       }
-      pruneStates();
-      const state = randomBytes(24).toString('hex');
-      pendingStates.set(state, { exp: Date.now() + STATE_TTL_MS });
 
       const params = new URLSearchParams({
         client_id: env.GOOGLE_CLIENT_ID!,
-        redirect_uri: env.GOOGLE_REDIRECT_URI!,
+        redirect_uri: env.GOOGLE_REDIRECT_URI,
         response_type: 'code',
         scope: 'openid email profile',
         access_type: 'online',
@@ -48,6 +35,7 @@ export function createGoogleAuthService(deps: AuthDeps = authRepository) {
     async handleCallback(
       code: string,
       state: string,
+      cookieState: string | undefined,
       ctx?: RequestContext
     ): Promise<{
       user: UserRecord;
@@ -57,9 +45,7 @@ export function createGoogleAuthService(deps: AuthDeps = authRepository) {
         throw new AppError('Google sign-in is not configured.', 'GOOGLE_NOT_CONFIGURED', 503);
       }
 
-      const pending = pendingStates.get(state);
-      pendingStates.delete(state);
-      if (!pending || pending.exp < Date.now()) {
+      if (!oauthStatesMatch(state, cookieState) || !verifyOAuthState(state)) {
         throw new AppError('Invalid or expired Google sign-in state.', 'GOOGLE_STATE_INVALID', 400);
       }
 
@@ -70,7 +56,7 @@ export function createGoogleAuthService(deps: AuthDeps = authRepository) {
           code,
           client_id: env.GOOGLE_CLIENT_ID!,
           client_secret: env.GOOGLE_CLIENT_SECRET!,
-          redirect_uri: env.GOOGLE_REDIRECT_URI!,
+          redirect_uri: env.GOOGLE_REDIRECT_URI,
           grant_type: 'authorization_code',
         }),
       });
@@ -170,9 +156,4 @@ export function createGoogleAuthService(deps: AuthDeps = authRepository) {
       };
     },
   };
-}
-
-/** Deterministic unused helper export for tests that need stable state keys. */
-export function hashOAuthState(raw: string): string {
-  return createHash('sha256').update(raw).digest('hex');
 }

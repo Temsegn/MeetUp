@@ -9,7 +9,7 @@ const envSchema = z.object({
 
   // CORS — comma-separated list of allowed origins.
   // In production, must be explicit (no wildcard).
-  CORS_ORIGINS: z.string().default('http://localhost:5173'),
+  CORS_ORIGINS: z.string().default('http://46.246.120.148:8980,http://localhost:5173'),
 
   MONGODB_URI: z.string().default('mongodb://127.0.0.1:27017/meetspace'),
 
@@ -31,20 +31,21 @@ const envSchema = z.object({
   LOGIN_MAX_FAILED_ATTEMPTS: z.string().default('5').transform(Number),
   LOGIN_LOCKOUT_WINDOW_MS: z.string().default('900000').transform(Number), // 15 min
 
-  // Frontend base URL used to build verification / reset links.
+  // Frontend base URL used to build verification / reset / OAuth return links.
   FRONTEND_URL: z.string().default('http://46.246.120.148:8980').transform((val) => val.replace(/\/+$/, '')),
   // Optional cookie domain (e.g. '.example.com') for cross-subdomain auth.
   COOKIE_DOMAIN: z.string().optional(),
+  // Override Secure cookie flag. Unset = derive from FRONTEND_URL (https → true).
+  COOKIE_SECURE: z.enum(['true', 'false']).optional(),
   // Comma-separated emails auto-promoted to platform super_admin on login/me.
   PLATFORM_ADMIN_EMAILS: z.string().default(''),
 
   // Google OAuth (optional — /auth/google returns 503 when unset).
+  // When GOOGLE_REDIRECT_URI is unset, it is derived as `${FRONTEND_URL}/auth/google/callback`
+  // (the public nginx origin proxies /auth/google* to this API).
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
-  GOOGLE_REDIRECT_URI: z
-    .string()
-    .optional()
-    .default('http://localhost:4001/auth/google/callback'),
+  GOOGLE_REDIRECT_URI: z.string().optional(),
 
   // ── Email (SMTP) — optional. When unset, emails are logged to the console
   //    (development mode) so flows remain testable without a mail server.
@@ -101,6 +102,18 @@ if (!parseResult.success) {
 
 const data = parseResult.data;
 
+const frontendUrl = data.FRONTEND_URL;
+const googleRedirectUri = (data.GOOGLE_REDIRECT_URI || `${frontendUrl}/auth/google/callback`).replace(
+  /\/+$/,
+  ''
+);
+const cookieSecure =
+  data.COOKIE_SECURE === 'true'
+    ? true
+    : data.COOKIE_SECURE === 'false'
+      ? false
+      : frontendUrl.startsWith('https://');
+
 // In production, reject wildcard CORS explicitly
 if (data.NODE_ENV === 'production') {
   const origins = data.CORS_ORIGINS.split(',').map(o => o.trim());
@@ -110,7 +123,18 @@ if (data.NODE_ENV === 'production') {
   }
 }
 
-export const env = data;
+export const env = {
+  ...data,
+  FRONTEND_URL: frontendUrl,
+  GOOGLE_REDIRECT_URI: googleRedirectUri,
+  cookieSecure,
+};
+
+/** Public SPA origin + path. Never emits a double slash after the origin. */
+export function publicFrontendUrl(path = ''): string {
+  const suffix = !path ? '' : path.startsWith('/') ? path : `/${path}`;
+  return `${env.FRONTEND_URL}${suffix}`;
+}
 
 /** Parsed CORS origins as an array */
 export const corsOrigins = data.CORS_ORIGINS.split(',').map(o => o.trim());
