@@ -12,7 +12,7 @@ dist
 dist-ssr
 *.local
 *.tgz
-excalidraw.tgz
+!excalidraw.tgz
 
 # Environment
 .env
