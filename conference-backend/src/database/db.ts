@@ -32,8 +32,8 @@ export const connectDB = async (): Promise<void> => {
 
   try {
     await mongoose.connect(env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
+      serverSelectionTimeoutMS: 30_000,
+      socketTimeoutMS: 45_000,
     });
     // Repair legacy unique googleId index that treated null as a value (breaks local invites).
     try {

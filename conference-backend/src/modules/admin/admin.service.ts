@@ -270,6 +270,10 @@ export const adminService = {
       name: w.name,
       slug: w.slug,
       email: w.email ?? '',
+      phone: (w as { phone?: string }).phone ?? '',
+      description: (w as { description?: string }).description ?? '',
+      industry: (w as { industry?: string }).industry ?? '',
+      organizationSize: (w as { organizationSize?: string }).organizationSize ?? '',
       status: w.status ?? 'active',
       logoUrl: w.logoUrl,
       settings: w.settings,
@@ -316,6 +320,11 @@ export const adminService = {
       slug: string;
       email?: string;
       phone?: string;
+      description?: string;
+      industry?: string;
+      organizationSize?: string;
+      logoUrl?: string | null;
+      ownerName?: string;
       ownerEmail: string;
       planKey?: PlanKey;
     },
@@ -324,6 +333,7 @@ export const adminService = {
     const name = input.name?.trim();
     const slug = input.slug?.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
     const ownerEmail = input.ownerEmail?.trim().toLowerCase();
+    const ownerName = input.ownerName?.trim();
     if (!name) throw new ValidationError('Organization name is required.');
     if (!slug || slug.length < 2) throw new ValidationError('Valid slug is required.');
     if (!ownerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) {
@@ -337,13 +347,17 @@ export const adminService = {
     if (!owner) {
       const passwordHash = await bcrypt.hash(`Temp${Date.now()}!a`, 10);
       owner = await User.create({
-        name: ownerEmail.split('@')[0],
+        name: (ownerName || ownerEmail.split('@')[0]).slice(0, 120),
         email: ownerEmail,
         passwordHash,
         mustChangePassword: true,
         emailVerifiedAt: new Date(),
         phone: input.phone?.trim() ?? '',
       });
+    } else if (ownerName && owner.name !== ownerName) {
+      owner.name = ownerName.slice(0, 120);
+      if (input.phone?.trim()) owner.phone = input.phone.trim();
+      await owner.save();
     }
 
     const planKey: PlanKey =
@@ -354,6 +368,11 @@ export const adminService = {
       name: name.slice(0, 120),
       slug,
       email: input.email?.trim().toLowerCase() ?? ownerEmail,
+      phone: input.phone?.trim() ?? '',
+      description: (input.description ?? '').trim().slice(0, 200),
+      industry: (input.industry ?? '').trim().slice(0, 80),
+      organizationSize: (input.organizationSize ?? '').trim().slice(0, 40),
+      logoUrl: input.logoUrl?.trim() || null,
       ownerId: owner._id,
       status: 'active',
       settings: DEFAULT_WORKSPACE_SETTINGS,

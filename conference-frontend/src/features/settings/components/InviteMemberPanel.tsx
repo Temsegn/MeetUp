@@ -23,7 +23,13 @@ import { SettingsToggle } from './SettingsUi';
 
 type Props = {
   onCancel: () => void;
-  onCreated: (info: { name: string; email: string }) => void;
+  onCreated: (info: {
+    name: string;
+    email: string;
+    emailSent: boolean;
+    emailError?: string | null;
+    joinUrl?: string;
+  }) => void;
 };
 
 const CARD =
@@ -135,8 +141,30 @@ export function InviteMemberPanel({ onCancel, onCreated }: Props) {
         phone: phone.trim() || undefined,
         role,
       });
+      if (sendInvite && !created.emailSent) {
+        setError(
+          created.emailError
+            ? `Invite was created, but email was not sent: ${created.emailError}`
+            : 'Invite was created, but email was not sent. Check SMTP settings on the backend.',
+        );
+        setBusy(false);
+        onCreated({
+          name: created.name,
+          email: created.email,
+          emailSent: false,
+          emailError: created.emailError,
+          joinUrl: created.joinUrl,
+        });
+        return;
+      }
       await new Promise((r) => window.setTimeout(r, 200));
-      onCreated({ name: created.name, email: created.email });
+      onCreated({
+        name: created.name,
+        email: created.email,
+        emailSent: created.emailSent,
+        emailError: created.emailError,
+        joinUrl: created.joinUrl,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create user.');
       setBusy(false);

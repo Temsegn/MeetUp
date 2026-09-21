@@ -609,6 +609,24 @@ export async function createWorkspaceMeeting(opts: CreateMeetingOptions) {
       excludeUserId: opts.userId,
       onlyUserIds: explicitInviteIds,
     });
+    const invitedUsers = await User.find({
+      _id: { $in: explicitInviteIds.filter((id) => Types.ObjectId.isValid(id)) },
+    })
+      .select('email')
+      .lean();
+    const memberEmails = invitedUsers
+      .map((u) => String(u.email || '').trim().toLowerCase())
+      .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+    if (memberEmails.length > 0) {
+      void sendGuestInviteEmails({
+        emails: memberEmails,
+        meetingTitle: title,
+        hostName: opts.userName,
+        roomId: opts.roomId,
+        scheduledAt: m.scheduledAt ?? m.startedAt ?? null,
+        isLive: isInstant,
+      });
+    }
   }
 
   if (guestEmails.length > 0) {
@@ -826,6 +844,25 @@ export async function addMeetingInvites(
       href: isLive ? `/app/meeting/${m.roomId}` : `/app/meetings/${meetingId}`,
       excludeUserId: actor.id,
     });
+
+    const invitedUsers = await User.find({
+      _id: { $in: inviteIds.filter((id) => Types.ObjectId.isValid(id)) },
+    })
+      .select('email')
+      .lean();
+    const memberEmails = invitedUsers
+      .map((u) => String(u.email || '').trim().toLowerCase())
+      .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+    if (memberEmails.length > 0) {
+      void sendGuestInviteEmails({
+        emails: memberEmails,
+        meetingTitle: m.title || m.roomId,
+        hostName: actor.name,
+        roomId: m.roomId,
+        scheduledAt: m.scheduledAt ?? m.startedAt ?? null,
+        isLive,
+      });
+    }
   }
 
   const newGuestEmails = [...new Set(

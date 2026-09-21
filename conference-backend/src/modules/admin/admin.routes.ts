@@ -59,6 +59,11 @@ adminRouter.post('/workspaces', async (req: AuthRequest, res, next) => {
       slug: string;
       email?: string;
       phone?: string;
+      description?: string;
+      industry?: string;
+      organizationSize?: string;
+      logoUrl?: string | null;
+      ownerName?: string;
       ownerEmail: string;
       planKey?: PlanKey;
     };

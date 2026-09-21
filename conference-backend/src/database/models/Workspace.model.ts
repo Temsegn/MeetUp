@@ -10,6 +10,10 @@ export interface IWorkspace extends Document {
   name: string;
   slug: string;
   email: string;
+  phone: string;
+  description: string;
+  industry: string;
+  organizationSize: string;
   logoUrl: string | null;
   ownerId: mongoose.Types.ObjectId;
   status: WorkspaceStatus;
@@ -23,6 +27,10 @@ const workspaceSchema = new Schema<IWorkspace>(
     name: { type: String, required: true, trim: true, maxlength: 120 },
     slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
     email: { type: String, default: '', trim: true, maxlength: 254 },
+    phone: { type: String, default: '', trim: true, maxlength: 40 },
+    description: { type: String, default: '', trim: true, maxlength: 200 },
+    industry: { type: String, default: '', trim: true, maxlength: 80 },
+    organizationSize: { type: String, default: '', trim: true, maxlength: 40 },
     logoUrl: { type: String, default: null },
     ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     status: { type: String, enum: ['active', 'suspended'], default: 'active', index: true },

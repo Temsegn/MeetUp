@@ -397,7 +397,11 @@ export function SettingsPage() {
                   navigate('/app/settings/members', {
                     replace: true,
                     state: {
-                      createdUserMessage: `New user created: ${info.name} (${info.email}). They appear as Pending until they verify and accept.`,
+                      createdUserMessage: info.emailSent
+                        ? `Invitation emailed to ${info.name} (${info.email}). They appear as Pending until they accept.`
+                        : `Invite created for ${info.name} (${info.email}), but the email was not delivered${
+                            info.emailError ? `: ${info.emailError}` : '.'
+                          } Check SMTP_USER/SMTP_PASS in the backend .env.`,
                     },
                   });
                 }}

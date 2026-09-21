@@ -81,15 +81,19 @@ export const emailService = {
       });
       return { delivered: true, mode: 'smtp' };
     } catch (err) {
+      const raw = err instanceof Error ? err.message : String(err);
+      const code = (err as { code?: string })?.code;
       logger.error('Email send failed', {
         to: message.to,
         subject: message.subject,
-        err: err instanceof Error ? err.message : String(err),
+        err: raw,
+        code,
       });
-      throw new EmailDeliveryError(
-        'Could not send email. Check SMTP settings (SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_FROM).',
-        err,
-      );
+      const hint =
+        code === 'EAUTH' || /Username and Password not accepted|BadCredentials|Invalid login/i.test(raw)
+          ? 'Gmail rejected SMTP login. Turn on 2-Step Verification, create a new App Password, and set SMTP_USER/SMTP_PASS in conference-backend/.env (no spaces in the password).'
+          : 'Could not send email. Check SMTP settings (SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_FROM).';
+      throw new EmailDeliveryError(hint, err);
     }
   },
 };
