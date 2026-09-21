@@ -1,6 +1,6 @@
-import { Link } from 'react-router-dom';
 import { ArrowRight, Globe2 } from 'lucide-react';
 import { LANDING_ASSETS } from '../constants/landing.constants';
+import { frontendUrl } from '../../../lib/frontendUrl';
 import { useLandingChrome } from '../landing-chrome';
 import { useLandingCopy } from '../useLandingCopy';
 
@@ -11,7 +11,7 @@ type Props = {
 export function LandingHero({ user }: Props) {
   const copy = useLandingCopy();
   const { goSection } = useLandingChrome();
-  const primaryHref = user ? '/app' : '/auth';
+  const primaryHref = frontendUrl(user ? '/app' : '/auth');
   const primaryLabel = user ? copy.hero.primaryAuthed : copy.hero.primary;
 
   return (
@@ -45,13 +45,13 @@ export function LandingHero({ user }: Props) {
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link
-              to={primaryHref}
+            <a
+              href={primaryHref}
               className="inline-flex h-12 items-center gap-2 rounded-full bg-[#016BE6] px-6 text-[14px] font-semibold text-white transition-colors hover:bg-[#0A4FBF]"
             >
               {primaryLabel}
               <ArrowRight className="size-4 rtl:rotate-180" />
-            </Link>
+            </a>
             <button
               type="button"
               onClick={() => goSection('product')}

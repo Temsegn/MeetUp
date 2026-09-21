@@ -1,6 +1,6 @@
-import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { LANDING_ASSETS } from '../constants/landing.constants';
+import { frontendUrl } from '../../../lib/frontendUrl';
 import { useLandingChrome } from '../landing-chrome';
 import { useLandingCopy } from '../useLandingCopy';
 
@@ -10,7 +10,7 @@ type Props = {
 
 export function LandingCta({ user }: Props) {
   const copy = useLandingCopy();
-  const href = user ? '/app' : '/auth';
+  const href = frontendUrl(user ? '/app' : '/auth');
   const label = user ? copy.cta.actionAuthed : copy.cta.action;
 
   return (
@@ -20,13 +20,13 @@ export function LandingCta({ user }: Props) {
           {copy.cta.title}
         </h2>
         <p className="mt-4 text-[15px] leading-relaxed text-[#5A6B7C]">{copy.cta.body}</p>
-        <Link
-          to={href}
+        <a
+          href={href}
           className="mt-8 inline-flex h-12 items-center gap-2 rounded-lg bg-[#016BE6] px-6 text-[14px] font-semibold text-white transition-colors hover:bg-[#0A4FBF]"
         >
           {label}
           <ArrowRight className="size-4 rtl:rotate-180" />
-        </Link>
+        </a>
       </div>
     </section>
   );

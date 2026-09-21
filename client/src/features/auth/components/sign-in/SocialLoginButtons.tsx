@@ -2,13 +2,14 @@ import React from 'react';
 import { SIGN_IN_COPY } from '../../constants/sign-in.constants';
 import { AUTH_ASSETS } from '../../constants/auth.assets';
 import { API_URL } from '../../../../lib/apiUrl';
+import { FRONTEND_URL } from '../../../../lib/frontendUrl';
 
 
 const outlineBtn =
   'inline-flex h-9 w-full shrink-0 cursor-pointer items-center justify-center gap-2 rounded-[10px] border border-[#E2E8F0] bg-white text-[0.8125rem] font-semibold text-[#1C2842] transition-colors hover:border-slate-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0056EF]';
 
 function startGoogleAuth() {
-  window.location.assign(`${API_URL}/auth/google`);
+  window.location.assign(`${API_URL || FRONTEND_URL}/auth/google`);
 }
 
 /** Google OAuth via full-page redirect; Microsoft coming soon. */

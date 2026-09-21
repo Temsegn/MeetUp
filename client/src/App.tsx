@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { enterApp, goToFrontend, isLocalViteDev, isOnFrontendOrigin } from './lib/frontendUrl';
 import { NotificationCenterProvider } from './contexts/NotificationCenterContext';
 import {
   SignInPage,
@@ -80,14 +81,32 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, initializing } = useAuth();
   if (initializing) return null;
-  if (user) return <Navigate to="/app" replace />;
+  if (user) return <RedirectToApp />;
   return <>{children}</>;
 };
+
+function CanonicalHost({ children }: { children: React.ReactNode }) {
+  const offOrigin =
+    typeof window !== 'undefined' && !isLocalViteDev() && !isOnFrontendOrigin();
+  React.useEffect(() => {
+    if (offOrigin) goToFrontend();
+  }, [offOrigin]);
+  if (offOrigin) return null;
+  return <>{children}</>;
+}
+
+function RedirectToApp() {
+  React.useEffect(() => {
+    enterApp();
+  }, []);
+  return null;
+}
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <CanonicalHost>
         <NotificationCenterProvider>
           <Routes>
             <Route element={<MarketingLayout />}>
@@ -177,6 +196,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </NotificationCenterProvider>
+        </CanonicalHost>
       </AuthProvider>
     </BrowserRouter>
   );

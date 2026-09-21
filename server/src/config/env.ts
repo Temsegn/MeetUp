@@ -32,7 +32,7 @@ const envSchema = z.object({
   LOGIN_LOCKOUT_WINDOW_MS: z.string().default('900000').transform(Number), // 15 min
 
   // Frontend base URL used to build verification / reset links.
-  FRONTEND_URL: z.string().default('http://localhost:5173').transform((val) => val.replace(/\/+$/, '')),
+  FRONTEND_URL: z.string().default('http://46.246.120.148:8980').transform((val) => val.replace(/\/+$/, '')),
   // Optional cookie domain (e.g. '.example.com') for cross-subdomain auth.
   COOKIE_DOMAIN: z.string().optional(),
   // Comma-separated emails auto-promoted to platform super_admin on login/me.

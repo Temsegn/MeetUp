@@ -5,6 +5,7 @@ import {
   refreshSession,
 } from '../../../services/auth/auth.service';
 import { useAuth } from '../../../contexts/AuthContext';
+import { enterApp } from '../../../lib/frontendUrl';
 
 const OAUTH_HANDOFF_KEY = 'samtal_oauth_access_token';
 
@@ -64,7 +65,7 @@ export const OAuthCallbackPage: React.FC = () => {
 
         await refreshUser();
         sessionStorage.removeItem(OAUTH_HANDOFF_KEY);
-        if (!cancelled) navigate('/app', { replace: true });
+        if (!cancelled) enterApp();
       } catch (err) {
         sessionStorage.removeItem(OAUTH_HANDOFF_KEY);
         if (!cancelled) {

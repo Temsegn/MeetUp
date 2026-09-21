@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { cn } from '../../../lib/cn';
+import { frontendUrl } from '../../../lib/frontendUrl';
 import { LANDING_ASSETS, NAV_LINKS } from '../constants/landing.constants';
 import { useLandingChrome } from '../landing-chrome';
 import { useLandingLocale } from '../landing-locale';
@@ -82,27 +83,27 @@ export function LandingNav({ user }: Props) {
             </button>
           </div>
           {user ? (
-            <Link
-              to="/app"
+            <a
+              href={frontendUrl('/app')}
               className="inline-flex h-10 items-center rounded-full bg-[#016BE6] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#0A4FBF]"
             >
               {copy.nav.openDashboard}
-            </Link>
+            </a>
           ) : (
             <>
-              <Link
-                to="/auth"
+              <a
+                href={frontendUrl('/auth')}
                 onClick={() => setMobileOpen(false)}
                 className="px-2.5 text-[13px] font-semibold text-[#5A6B7C] transition-colors hover:text-[#0B1220]"
               >
                 {copy.nav.signIn}
-              </Link>
-              <Link
-                to="/auth"
+              </a>
+              <a
+                href={frontendUrl('/auth')}
                 className="inline-flex h-10 items-center rounded-full bg-[#016BE6] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#0A4FBF]"
               >
                 {copy.nav.getStarted}
-              </Link>
+              </a>
             </>
           )}
         </div>
@@ -162,29 +163,29 @@ export function LandingNav({ user }: Props) {
           </div>
           <div className="mt-2 flex flex-col gap-2">
             {user ? (
-              <Link
-                to="/app"
+              <a
+                href={frontendUrl('/app')}
                 onClick={() => setMobileOpen(false)}
                 className="inline-flex h-10 items-center justify-center rounded-full bg-[#016BE6] text-[13px] font-semibold text-white"
               >
                 {copy.nav.openDashboard}
-              </Link>
+              </a>
             ) : (
               <>
-                <Link
-                  to="/auth"
+                <a
+                  href={frontendUrl('/auth')}
                   onClick={() => setMobileOpen(false)}
                   className="inline-flex h-10 items-center justify-center rounded-full border border-[#E6EAF0] text-[13px] font-semibold text-[#0B1220]"
                 >
                   {copy.nav.signIn}
-                </Link>
-                <Link
-                  to="/auth"
+                </a>
+                <a
+                  href={frontendUrl('/auth')}
                   onClick={() => setMobileOpen(false)}
                   className="inline-flex h-10 items-center justify-center rounded-full bg-[#016BE6] text-[13px] font-semibold text-white"
                 >
                   {copy.nav.getStarted}
-                </Link>
+                </a>
               </>
             )}
           </div>

@@ -1,6 +1,6 @@
-import { Link } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { cn } from '../../../lib/cn';
+import { frontendUrl } from '../../../lib/frontendUrl';
 import { useLandingCopy } from '../useLandingCopy';
 
 type Props = {
@@ -9,7 +9,7 @@ type Props = {
 
 export function PricingTeaser({ user }: Props) {
   const copy = useLandingCopy();
-  const ctaHref = user ? '/app' : '/auth';
+  const ctaHref = frontendUrl(user ? '/app' : '/auth');
 
   return (
     <section id="pricing" className="bg-white py-20 sm:py-24">
@@ -60,8 +60,8 @@ export function PricingTeaser({ user }: Props) {
                   </li>
                 ))}
               </ul>
-              <Link
-                to={ctaHref}
+              <a
+                href={ctaHref}
                 className={cn(
                   'mt-8 inline-flex h-11 items-center justify-center rounded-lg text-[13px] font-semibold transition-colors',
                   tier.highlighted
@@ -70,7 +70,7 @@ export function PricingTeaser({ user }: Props) {
                 )}
               >
                 {user ? copy.pricing.openApp : tier.cta}
-              </Link>
+              </a>
             </article>
           ))}
         </div>
