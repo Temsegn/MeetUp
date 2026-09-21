@@ -6,7 +6,7 @@ function stripTrailingSlash(value: string): string {
   return value.trim().replace(/\/+$/, '');
 }
 
-const CANONICAL_FRONTEND_URL = 'http://46.246.120.148:8980';
+const CANONICAL_FRONTEND_URL = 'https://46.246.120.148:8981';
 
 export const FRONTEND_URL = stripTrailingSlash(
   String(import.meta.env.VITE_FRONTEND_URL || CANONICAL_FRONTEND_URL),

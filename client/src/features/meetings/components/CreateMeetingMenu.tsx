@@ -181,7 +181,7 @@ export function CreateMeetingMenu() {
         onClick={() => setMenuOpen((open) => !open)}
         aria-expanded={menuOpen}
         aria-haspopup="menu"
-        className="inline-flex h-9 w-[168px] shrink-0 items-stretch overflow-hidden rounded-[14px] bg-[#DC6C7C] text-white shadow-sm hover:bg-[#d45a6c]"
+        className="inline-flex h-9 w-auto max-w-[168px] shrink-0 items-stretch overflow-hidden rounded-[14px] bg-[#DC6C7C] text-white shadow-sm hover:bg-[#d45a6c] sm:w-[168px]"
       >
         <span className="flex min-w-0 flex-1 items-center gap-1.5 px-3 text-[13px] font-semibold">
           <Plus className="size-3.5 shrink-0" strokeWidth={2.5} />
@@ -230,8 +230,8 @@ export function CreateMeetingMenu() {
       ) : null}
 
       {createOpen ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+          <div className="max-h-[92svh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-md sm:rounded-2xl">
             <h3 className="text-[16px] font-bold text-[#151D2B]">
               {createOpen === 'instant' ? 'Start instant meeting' : 'Schedule a meeting'}
             </h3>
@@ -242,7 +242,7 @@ export function CreateMeetingMenu() {
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="mt-1 h-10 w-full rounded-lg border border-[#E1E7EE] px-3 text-[12px] outline-none"
+                  className="mt-1 h-12 w-full rounded-lg border border-[#E1E7EE] px-3 text-[16px] outline-none sm:h-10 sm:text-[13px]"
                   placeholder="Weekly sync"
                   autoFocus
                 />
@@ -254,7 +254,7 @@ export function CreateMeetingMenu() {
                     type="datetime-local"
                     value={scheduledAt}
                     onChange={(e) => setScheduledAt(e.target.value)}
-                    className="mt-1 h-10 w-full rounded-lg border border-[#E1E7EE] px-3 text-[12px] outline-none"
+                    className="mt-1 h-12 w-full rounded-lg border border-[#E1E7EE] px-3 text-[16px] outline-none sm:h-10 sm:text-[13px]"
                   />
                 </label>
               ) : null}
@@ -266,7 +266,7 @@ export function CreateMeetingMenu() {
                   max={480}
                   value={duration}
                   onChange={(e) => setDuration(Number(e.target.value) || 30)}
-                  className="mt-1 h-10 w-full rounded-lg border border-[#E1E7EE] px-3 text-[12px] outline-none"
+                  className="mt-1 h-12 w-full rounded-lg border border-[#E1E7EE] px-3 text-[16px] outline-none sm:h-10 sm:text-[13px]"
                 />
               </label>
 
@@ -294,7 +294,7 @@ export function CreateMeetingMenu() {
                           setAgendaItems(next);
                         }}
                         placeholder="Agenda topic"
-                        className="h-9 min-w-0 flex-1 rounded-lg border border-[#E1E7EE] px-3 text-[12px] outline-none"
+                        className="h-11 min-w-0 flex-1 rounded-lg border border-[#E1E7EE] px-3 text-[16px] outline-none sm:h-9 sm:text-[13px]"
                       />
                       {agendaItems.length > 1 ? (
                         <button
@@ -351,7 +351,7 @@ export function CreateMeetingMenu() {
                       }
                     }}
                     placeholder="guest@example.com"
-                    className="h-9 min-w-0 flex-1 rounded-lg border border-[#E1E7EE] px-3 text-[12px] outline-none"
+                    className="h-11 min-w-0 flex-1 rounded-lg border border-[#E1E7EE] px-3 text-[16px] outline-none sm:h-9 sm:text-[13px]"
                   />
                   <button
                     type="button"

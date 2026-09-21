@@ -251,7 +251,7 @@
   border: 1.5px solid var(--auth-border);
   border-radius: 14px;
   padding: 0 44px 0 44px;
-  font-size: 15px;
+  font-size: 16px;
   font-family: inherit;
   color: var(--auth-text);
   background-color: #ffffff !important;

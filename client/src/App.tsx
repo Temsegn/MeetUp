@@ -156,7 +156,7 @@ function App() {
             </Route>
 
             <Route path="/join/:roomId" element={
-              <div className="h-[100dvh] min-h-0 bg-white">
+              <div className="h-[100svh] h-[100dvh] min-h-0 bg-white">
                 <LiveMeetingPage />
               </div>
             } />
@@ -188,7 +188,7 @@ function App() {
             <Route
               path="/room/:roomId"
               element={
-                <div className="h-[100dvh] min-h-0 bg-white">
+                <div className="h-[100svh] h-[100dvh] min-h-0 bg-white">
                   <LiveMeetingPage />
                 </div>
               }

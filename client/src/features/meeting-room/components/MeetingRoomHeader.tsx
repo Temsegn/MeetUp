@@ -78,7 +78,7 @@ export function MeetingRoomHeader({
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h1 className="truncate text-[22px] font-bold tracking-[-0.02em] text-[#121B29] sm:text-[24px] lg:text-[27px]">
+          <h1 className="truncate text-[17px] font-bold tracking-[-0.02em] text-[#121B29] sm:text-[24px] lg:text-[27px]">
             {title}
           </h1>
           <BadgeCheck className="size-5 shrink-0 text-[#076BEE]" aria-hidden />
@@ -172,7 +172,7 @@ export function MeetingRoomHeader({
           <button
             type="button"
             onClick={onLeave}
-            className="inline-flex h-11 items-center gap-2 rounded-[18px] bg-[#DC6C7C] px-4 text-[14px] font-semibold text-white hover:bg-[#D15A6C]"
+            className="hidden h-11 items-center gap-2 rounded-[18px] bg-[#DC6C7C] px-4 text-[14px] font-semibold text-white hover:bg-[#D15A6C] sm:inline-flex"
             aria-label="Leave meeting"
           >
             <LogOut className="size-[18px]" />
@@ -180,7 +180,7 @@ export function MeetingRoomHeader({
           </button>
         </div>
 
-        <div className="flex items-center gap-2 pl-1">
+        <div className="hidden items-center gap-2 pl-1 sm:flex">
           <div className="relative">
             <UserAvatar
               name={userName}

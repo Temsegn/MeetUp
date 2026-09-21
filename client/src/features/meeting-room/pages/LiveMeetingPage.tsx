@@ -55,8 +55,10 @@ export function LiveMeetingPage() {
   const [isJoining, setIsJoining] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
-  const [showParticipants, setShowParticipants] = useState(true);
-  const [showChat, setShowChat] = useState(true);
+  const [showParticipants, setShowParticipants] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches,
+  );
+  const [showChat, setShowChat] = useState(false);
   const [whiteboardOpen, setWhiteboardOpen] = useState(false);
   const [chatDisabled, setChatDisabled] = useState(false);
   const [pendingRemoteShare, setPendingRemoteShare] = useState(false);
@@ -749,11 +751,11 @@ export function LiveMeetingPage() {
     <div ref={stageRef} data-room-id={roomId} className="relative flex h-full min-h-0 flex-col overflow-hidden">
       <div
         className={cn(
-          'grid min-h-0 flex-1 gap-4 overflow-hidden p-4 sm:p-5 lg:p-[26px]',
+          'grid min-h-0 flex-1 gap-3 overflow-hidden p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:gap-4 sm:p-5 lg:p-[26px]',
           panelOpen ? 'xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]' : 'grid-cols-1',
         )}
       >
-        <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-0.5">
+        <div className="flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden sm:gap-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <MeetingRoomHeader
@@ -799,7 +801,7 @@ export function LiveMeetingPage() {
             ) : null}
           </div>
 
-          <div className="relative min-h-[280px] flex-1 overflow-hidden sm:min-h-[320px]">
+          <div className="relative min-h-[180px] flex-1 overflow-hidden sm:min-h-[320px]">
             {whiteboardOpen && socket ? (
               <WhiteboardStage
                 socket={socket}
@@ -874,7 +876,7 @@ export function LiveMeetingPage() {
             ) : (
               <div
                 className={cn(
-                  'grid h-full gap-[18px]',
+                  'grid h-full gap-2 sm:gap-[18px]',
                   labeledTiles.length <= 1 && 'grid-cols-1',
                   labeledTiles.length === 2 && 'grid-cols-1 sm:grid-cols-2',
                   labeledTiles.length >= 3 && labeledTiles.length <= 4 && 'grid-cols-2 grid-rows-2',
@@ -886,7 +888,7 @@ export function LiveMeetingPage() {
                     key={p.id}
                     participant={p}
                     isScreenShare={p.isScreenShare}
-                    className="min-h-[140px] h-full w-full"
+                    className="min-h-[110px] h-full w-full sm:min-h-[140px]"
                   />
                 ))}
               </div>
@@ -978,22 +980,34 @@ export function LiveMeetingPage() {
                 ? () => {
                     const next = !showParticipants;
                     setShowParticipants(next);
-                    setShowChat(false);
+                    if (next) setShowChat(false);
                     void remoteControl.sendAction(
                       next ? 'OPEN_PARTICIPANTS' : 'CLOSE_PARTICIPANTS',
                     );
                   }
-                : () => setShowParticipants((open) => !open)
+                : () => {
+                    setShowParticipants((open) => {
+                      const next = !open;
+                      if (next) setShowChat(false);
+                      return next;
+                    });
+                  }
             }
             onToggleChat={
               controllingRemote
                 ? () => {
                     const next = !showChat;
                     setShowChat(next);
-                    setShowParticipants(false);
+                    if (next) setShowParticipants(false);
                     void remoteControl.sendAction(next ? 'OPEN_CHAT' : 'CLOSE_CHAT');
                   }
-                : () => setShowChat((open) => !open)
+                : () => {
+                    setShowChat((open) => {
+                      const next = !open;
+                      if (next) setShowParticipants(false);
+                      return next;
+                    });
+                  }
             }
             onSendReaction={
               controllingRemote
@@ -1005,7 +1019,7 @@ export function LiveMeetingPage() {
             userName={controllingRemote && controlledPeerName ? controlledPeerName : effectiveName}
           />
 
-          <div className="grid shrink-0 gap-[18px] pb-1 lg:grid-cols-[minmax(0,0.4fr)_minmax(0,0.6fr)]">
+          <div className="hidden shrink-0 gap-[18px] pb-1 md:grid lg:grid-cols-[minmax(0,0.4fr)_minmax(0,0.6fr)]">
             <MeetingAgendaCard items={meetingMeta?.agenda ?? []} />
             <MeetingSharedScreenCard
               sharing={Boolean(screenSharerId)}
@@ -1063,8 +1077,19 @@ export function LiveMeetingPage() {
       </div>
 
       {panelOpen ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 flex max-h-[55vh] flex-col gap-2 border-t border-[#E1E7EE] bg-white p-3 xl:hidden">
+        <div className="fixed inset-0 z-40 xl:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close panel"
+            onClick={() => {
+              setShowParticipants(false);
+              setShowChat(false);
+            }}
+          />
+          <div className="absolute inset-x-0 bottom-0 flex min-h-[52svh] max-h-[78svh] flex-col rounded-t-2xl border-t border-[#E1E7EE] bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-12px_40px_rgba(15,23,42,0.16)]">
           {showParticipants ? (
+            <div className="min-h-0 flex-1">
             <ParticipantsPanel
               participants={panelPeople}
               waiting={waitingList}
@@ -1077,8 +1102,10 @@ export function LiveMeetingPage() {
               onDenyWaiting={handleDenyWaiting}
               onClose={() => setShowParticipants(false)}
             />
+            </div>
           ) : null}
           {showChat ? (
+            <div className="min-h-0 flex-1">
             <MeetingChatPanel
               roomId={roomId}
               peerId={participantId}
@@ -1095,13 +1122,15 @@ export function LiveMeetingPage() {
               }
               onClose={() => setShowChat(false)}
             />
+            </div>
           ) : null}
+          </div>
         </div>
       ) : null}
 
       {inviteOpen && isHost ? (
-        <div className="fixed inset-0 z-[11000] flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#E8ECF1] bg-white p-5 shadow-2xl">
+        <div className="fixed inset-0 z-[11000] flex items-end justify-center bg-black/45 p-0 sm:items-center sm:p-4">
+          <div className="w-full max-w-md rounded-t-2xl border border-[#E8ECF1] bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-2xl">
             <h2 className="text-[16px] font-bold text-[#151D2B]">Invite guest by email</h2>
             <p className="mt-2 text-[13px] text-[#6F7B8C]">
               Guests receive a join link. Their email is stored as invited; they enter a name to join.
@@ -1119,12 +1148,12 @@ export function LiveMeetingPage() {
                   }
                 }}
                 placeholder="guest@example.com"
-                className="mt-1 h-10 w-full rounded-xl border border-[#E1E7EE] px-3 text-[13px] outline-none focus:border-[#016BE6]"
+                className="mt-1 h-12 w-full rounded-xl border border-[#E1E7EE] px-3 text-[16px] outline-none focus:border-[#016BE6] sm:h-10 sm:text-[13px]"
                 autoFocus
               />
             </label>
             {inviteError ? <p className="mt-2 text-[12px] text-[#DC2626]">{inviteError}</p> : null}
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
               <button
                 type="button"
                 disabled={inviteBusy}
@@ -1132,7 +1161,7 @@ export function LiveMeetingPage() {
                   setInviteOpen(false);
                   setInviteError(null);
                 }}
-                className="h-10 rounded-xl border border-[#E1E7EE] px-4 text-[12px] font-semibold text-[#334155] hover:bg-[#F8FAFC]"
+                className="h-12 rounded-xl border border-[#E1E7EE] px-4 text-[14px] font-semibold text-[#334155] hover:bg-[#F8FAFC] sm:h-10 sm:text-[12px]"
               >
                 Cancel
               </button>
@@ -1140,7 +1169,7 @@ export function LiveMeetingPage() {
                 type="button"
                 disabled={inviteBusy || !inviteEmailDraft.trim()}
                 onClick={() => void sendGuestInvite()}
-                className="h-10 rounded-xl bg-[#016BE6] px-4 text-[12px] font-semibold text-white hover:bg-[#0056EF] disabled:opacity-60"
+                className="h-12 rounded-xl bg-[#016BE6] px-4 text-[14px] font-semibold text-white hover:bg-[#0056EF] disabled:opacity-60 sm:h-10 sm:text-[12px]"
               >
                 {inviteBusy ? 'Sending…' : 'Send invitation'}
               </button>
@@ -1150,12 +1179,12 @@ export function LiveMeetingPage() {
       ) : null}
 
       {leavePromptOpen ? (
-        <div className="fixed inset-0 z-[11000] flex items-center justify-center bg-black/45 p-4">
+        <div className="fixed inset-0 z-[11000] flex items-end justify-center bg-black/45 p-0 sm:items-center sm:p-4">
           <div
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="leave-meeting-title"
-            className="w-full max-w-md rounded-2xl border border-[#E8ECF1] bg-white p-5 shadow-2xl"
+            className="w-full max-w-md rounded-t-2xl border border-[#E8ECF1] bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-2xl"
           >
             <h2 id="leave-meeting-title" className="text-[16px] font-bold text-[#151D2B]">
               Leave this meeting?
@@ -1163,18 +1192,18 @@ export function LiveMeetingPage() {
             <p className="mt-2 text-[13px] text-[#6F7B8C]">
               You are still in the live call. Confirm to leave, or stay to continue the meeting.
             </p>
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
               <button
                 type="button"
                 onClick={cancelBlockedLeave}
-                className="h-10 rounded-xl border border-[#E1E7EE] px-4 text-[12px] font-semibold text-[#334155] hover:bg-[#F8FAFC]"
+                className="h-12 rounded-xl border border-[#E1E7EE] px-4 text-[14px] font-semibold text-[#334155] hover:bg-[#F8FAFC] sm:h-10 sm:text-[12px]"
               >
                 Stay in meeting
               </button>
               <button
                 type="button"
                 onClick={() => void confirmBlockedLeave()}
-                className="h-10 rounded-xl bg-[#DC2626] px-4 text-[12px] font-semibold text-white hover:bg-[#B91C1C]"
+                className="h-12 rounded-xl bg-[#DC2626] px-4 text-[14px] font-semibold text-white hover:bg-[#B91C1C] sm:h-10 sm:text-[12px]"
               >
                 Leave meeting
               </button>

@@ -92,7 +92,105 @@ export function MeetingsList({ meetings, filterKey = '', onChanged }: Props) {
 
   return (
     <div className="overflow-hidden rounded-xl border border-[#E8ECF1] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
-      <div className="overflow-x-auto">
+      <div className="divide-y divide-[#F1F4F8] md:hidden">
+        {pageRows.length === 0 ? (
+          <p className="px-4 py-12 text-center text-[13px] text-[#8A94A6]">
+            No meetings match your search or filters.
+          </p>
+        ) : (
+          pageRows.map((m) => {
+            const meta = STATUS_META[m.status];
+            return (
+              <article key={m.id} className="p-4">
+                <button
+                  type="button"
+                  onClick={() => openDetail(m)}
+                  className="flex w-full items-start gap-3 text-left"
+                >
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#E8F1FE] text-[#016BE6]">
+                    <Video className="size-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[14px] font-semibold text-[#151D2B]">{m.title}</p>
+                    <p className="mt-0.5 text-[12px] text-[#8A94A6]">
+                      {m.date} · {m.time} · {m.duration}
+                    </p>
+                    <p className="mt-0.5 truncate text-[12px] text-[#8A94A6]">Hosted by {m.host}</p>
+                  </div>
+                  <span
+                    className={cn(
+                      'inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-semibold',
+                      meta.badge,
+                    )}
+                  >
+                    {m.status === 'live' ? (
+                      <span className={cn('size-2 animate-pulse rounded-full', meta.dot)} />
+                    ) : null}
+                    {meta.label}
+                  </span>
+                </button>
+                <div className="mt-3 flex items-center justify-end gap-2">
+                  {m.status === 'live' ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/app/meeting/${m.roomId ?? m.id}`)}
+                      className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-[#016BE6] px-4 text-[13px] font-semibold text-white hover:bg-[#0056EF]"
+                    >
+                      Join
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => openDetail(m)}
+                      className="inline-flex h-11 flex-1 items-center justify-center rounded-xl border border-[#E1E7EE] bg-white px-4 text-[13px] font-semibold text-[#334155] hover:bg-[#F8FAFC]"
+                    >
+                      Preview
+                    </button>
+                  )}
+                  <RowActionsMenu
+                    actions={[
+                      { label: 'View preview', onClick: () => openDetail(m) },
+                      ...(m.status === 'live'
+                        ? [
+                            {
+                              label: 'Join conference',
+                              onClick: () => navigate(`/app/meeting/${m.roomId ?? m.id}`),
+                            },
+                          ]
+                        : []),
+                      ...(m.status === 'ended' && m.recordingId
+                        ? [
+                            {
+                              label: 'Open recording',
+                              onClick: () => navigate(`/app/recordings/${m.recordingId}`),
+                            },
+                          ]
+                        : []),
+                      {
+                        label: 'Copy invite link',
+                        onClick: () => {
+                          void navigator.clipboard.writeText(guestJoinUrl(m.roomId ?? m.id));
+                        },
+                      },
+                      ...(canCancelMeeting(m)
+                        ? [
+                            {
+                              label: busyId === m.id ? 'Cancelling…' : 'Cancel meeting',
+                              danger: true as const,
+                              onClick: () => setCancelTarget(m),
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+                </div>
+              </article>
+            );
+          })
+        )}
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[880px] border-collapse text-left">
           <thead>
             <tr className="border-b border-[#EEF1F5] bg-[#FAFBFC]">

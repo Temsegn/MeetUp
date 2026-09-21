@@ -33,8 +33,8 @@ export function AppShellLayout() {
 
       <div
         className={`fixed inset-y-0 left-0 z-50 transition-transform duration-200 lg:relative lg:static lg:z-20 ${
-          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        }`}
+          isLiveMeetingRoom ? 'hidden lg:block' : ''
+        } ${mobileOpen && !isLiveMeetingRoom ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
         <AppSidebar
           collapsed={sidebarCollapsed}
@@ -47,7 +47,12 @@ export function AppShellLayout() {
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-[#E1E7EE] bg-white/80 px-4 py-3 backdrop-blur lg:hidden">
+        <div
+          className={cn(
+            'flex items-center gap-2 border-b border-[#E1E7EE] bg-white/80 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur lg:hidden',
+            isLiveMeetingRoom && 'hidden',
+          )}
+        >
           <button
             type="button"
             onClick={() => setMobileOpen(true)}

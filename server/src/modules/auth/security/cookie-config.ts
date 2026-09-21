@@ -40,7 +40,7 @@ export function readCookie(req: Request, name: string): string | undefined {
  *    but not on cross-site POST CSRF.
  *  - Secure only when the public frontend is HTTPS. NODE_ENV=production on
  *    plain HTTP would otherwise drop cookies (browsers never store Secure
- *    cookies on http://46.246.120.148:8980).
+ *    cookies on an http:// public origin).
  *  - Optional COOKIE_DOMAIN for frontend/API on sibling subdomains. Leave
  *    unset for this IP:port deployment.
  */

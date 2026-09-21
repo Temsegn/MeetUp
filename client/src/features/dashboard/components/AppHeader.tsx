@@ -135,7 +135,7 @@ export function AppHeader({
         <button
           type="button"
           onClick={() => navigate('/app/settings/members')}
-          className={cn(HEADER_BTN, 'min-w-[52px] gap-1.5 px-2.5')}
+          className={cn(HEADER_BTN, 'hidden min-w-[52px] gap-1.5 px-2.5 sm:inline-flex')}
           aria-label={`Workspace members: ${memberCount ?? 0}`}
           title="Members"
         >

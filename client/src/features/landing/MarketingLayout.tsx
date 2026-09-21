@@ -109,9 +109,9 @@ function MarketingLayoutInner() {
       <div
         dir={dir}
         lang={locale}
-        className="samtal-light flex h-full min-h-0 flex-col bg-[#C5D4E6] p-2.5 font-sans text-[#0B1220] antialiased sm:p-4"
+        className="samtal-light flex h-full min-h-0 flex-col bg-[#C5D4E6] p-0 font-sans text-[#0B1220] antialiased sm:p-2.5 md:p-4"
       >
-        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-white/80 bg-white shadow-[0_28px_80px_-36px_rgba(15,35,70,0.45)] sm:rounded-[28px]">
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-none border-0 border-white/80 bg-white shadow-none sm:rounded-[22px] sm:border sm:shadow-[0_28px_80px_-36px_rgba(15,35,70,0.45)] md:rounded-[28px]">
           <LandingNav user={user} />
           <div
             ref={scrollRef}

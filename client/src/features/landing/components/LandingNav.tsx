@@ -34,7 +34,7 @@ export function LandingNav({ user }: Props) {
 
   return (
     <header className="relative z-30 shrink-0 border-b border-[#E8EEF4] bg-white/90 backdrop-blur-xl">
-      <div className="grid h-[4.25rem] grid-cols-[auto_1fr_auto] items-center gap-3 px-4 sm:px-6 lg:grid-cols-[1fr_auto_1fr] lg:px-7">
+      <div className="grid min-h-[4.25rem] grid-cols-[auto_1fr_auto] items-center gap-3 px-4 pt-[env(safe-area-inset-top)] sm:px-6 lg:grid-cols-[1fr_auto_1fr] lg:px-7">
         <button type="button" onClick={goHome} className="flex shrink-0 items-center justify-self-start" aria-label="Samtal">
           <img src={LANDING_ASSETS.logo} alt="Samtal" className="h-8 w-auto" />
         </button>

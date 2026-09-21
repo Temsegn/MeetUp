@@ -45,7 +45,7 @@ export function ParticipantsPanel({
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-[#E8ECF1] bg-white">
       <div className="flex items-center justify-between border-b border-[#F1F4F8] px-3 py-2.5">
         <h3 className="text-[13px] font-semibold text-[#151D2B]">Participants ({participants.length})</h3>
-        <button type="button" onClick={onClose} className="rounded-lg p-1 text-[#64748B] hover:bg-[#F8FAFC]" aria-label="Close">
+        <button type="button" onClick={onClose} className="rounded-lg p-2 text-[#64748B] hover:bg-[#F8FAFC]" aria-label="Close">
           <X className="size-4" />
         </button>
       </div>
@@ -65,26 +65,26 @@ export function ParticipantsPanel({
                     size="md"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12px] font-semibold text-[#151D2B]">{w.name}</p>
-                    <p className="text-[10px] text-[#92400E]">{w.isGuest ? 'Guest' : 'Registered'}</p>
+                    <p className="truncate text-[13px] font-semibold text-[#151D2B] sm:text-[12px]">{w.name}</p>
+                    <p className="text-[11px] text-[#92400E] sm:text-[10px]">{w.isGuest ? 'Guest' : 'Registered'}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => onAdmitWaiting?.(w.requestId)}
-                    className="rounded-lg bg-[#016BE6] p-1.5 text-white hover:bg-[#0056EF]"
+                    className="inline-flex size-11 items-center justify-center rounded-lg bg-[#016BE6] text-white hover:bg-[#0056EF] sm:size-8"
                     aria-label={`Admit ${w.name}`}
                     title="Admit"
                   >
-                    <Check className="size-3.5" />
+                    <Check className="size-4 sm:size-3.5" />
                   </button>
                   <button
                     type="button"
                     onClick={() => onDenyWaiting?.(w.requestId)}
-                    className="rounded-lg border border-[#FECACA] p-1.5 text-[#DC2626] hover:bg-[#FEF2F2]"
+                    className="inline-flex size-11 items-center justify-center rounded-lg border border-[#FECACA] text-[#DC2626] hover:bg-[#FEF2F2] sm:size-8"
                     aria-label={`Deny ${w.name}`}
                     title="Deny"
                   >
-                    <X className="size-3.5" />
+                    <X className="size-4 sm:size-3.5" />
                   </button>
                 </li>
               ))}

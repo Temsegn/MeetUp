@@ -64,13 +64,13 @@ function LabeledControl({ item }: { item: ControlItem }) {
       type="button"
       onClick={item.onClick}
       disabled={item.disabled}
-      className="flex w-[72px] shrink-0 flex-col items-center gap-1.5 py-1 disabled:opacity-40 sm:w-[84px]"
+      className="flex w-11 shrink-0 flex-col items-center gap-1 py-1 disabled:opacity-40 sm:w-[72px] sm:gap-1.5 md:w-[84px]"
       aria-label={item.label}
       title={item.label}
     >
       <span
         className={cn(
-          'inline-flex size-11 items-center justify-center rounded-full transition-colors sm:size-[49px]',
+          'inline-flex size-10 items-center justify-center rounded-full transition-colors sm:size-11 md:size-[49px]',
           item.active
             ? item.danger || item.recording
               ? 'bg-[#FEE2E2] text-[#DC2626]'
@@ -83,7 +83,7 @@ function LabeledControl({ item }: { item: ControlItem }) {
           strokeWidth={2}
         />
       </span>
-      <span className="max-w-full truncate text-[11px] tracking-[0.02em] text-[#667383] sm:text-[12px]">
+      <span className="hidden max-w-full truncate text-[11px] tracking-[0.02em] text-[#667383] sm:block sm:text-[12px]">
         {item.label}
       </span>
     </button>
@@ -186,8 +186,8 @@ export function ConferenceControlBar(props: Props) {
   const endAction = props.canEndMeeting ? props.onEndCall : props.onLeave;
 
   return (
-    <div className="mx-auto flex w-full max-w-[830px] flex-wrap items-center justify-center gap-2 rounded-[22px] border border-[#E0E7EE] bg-white p-3 shadow-[0_1px_2px_rgba(55,72,99,0.04)] sm:gap-3 sm:p-3.5">
-      <div className="flex min-w-0 flex-1 flex-wrap items-center justify-center gap-0.5 sm:justify-start">
+    <div className="mx-auto flex w-full max-w-[830px] items-center justify-between gap-1 overflow-x-auto scrollbar-none rounded-[18px] border border-[#E0E7EE] bg-white p-2 shadow-[0_1px_2px_rgba(55,72,99,0.04)] sm:gap-3 sm:overflow-visible sm:rounded-[22px] sm:p-3.5">
+      <div className="flex min-w-0 flex-1 items-center justify-start gap-0.5 sm:flex-wrap sm:justify-center md:justify-start">
         {primary.map((item) => (
           <LabeledControl key={item.id} item={item} />
         ))}
@@ -259,12 +259,12 @@ export function ConferenceControlBar(props: Props) {
       <button
         type="button"
         onClick={endAction}
-        className="inline-flex h-12 items-center gap-2 rounded-[18px] bg-[#DF1E39] px-6 text-[14px] font-semibold text-white hover:bg-[#C91830] sm:h-[52px] sm:px-7"
+        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-[16px] bg-[#DF1E39] px-3 text-[13px] font-semibold text-white hover:bg-[#C91830] sm:h-12 sm:rounded-[18px] sm:px-6 sm:text-[14px] md:h-[52px] md:px-7"
         aria-label={endLabel}
         title={props.canEndMeeting ? 'End meeting for everyone' : 'Leave meeting'}
       >
         <PhoneOff className="size-[18px]" strokeWidth={2} />
-        {endLabel}
+        <span className="hidden sm:inline">{endLabel}</span>
       </button>
     </div>
   );

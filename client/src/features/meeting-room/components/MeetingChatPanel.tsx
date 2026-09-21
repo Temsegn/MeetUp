@@ -54,7 +54,7 @@ export function MeetingChatPanel({
             </p>
           ) : null}
         </div>
-        <button type="button" onClick={onClose} className="rounded-lg p-1 text-[#64748B] hover:bg-[#F8FAFC]" aria-label="Close">
+        <button type="button" onClick={onClose} className="rounded-lg p-2 text-[#64748B] hover:bg-[#F8FAFC]" aria-label="Close">
           <X className="size-4" />
         </button>
       </div>
@@ -94,12 +94,12 @@ export function MeetingChatPanel({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={actingAsName ? `Message as ${actingAsName}…` : 'Type a message…'}
-            className="min-w-0 flex-1 rounded-xl border border-[#E1E7EE] bg-white px-3 py-2 text-[12px] text-[#151D2B] outline-none placeholder:text-[#94A3B8] focus:border-[#016BE6]"
+            className="min-h-11 min-w-0 flex-1 rounded-xl border border-[#E1E7EE] bg-white px-3 py-2 text-[16px] text-[#151D2B] outline-none placeholder:text-[#94A3B8] focus:border-[#016BE6] sm:min-h-0 sm:text-[13px]"
           />
           <button
             type="submit"
             disabled={!draft.trim()}
-            className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#016BE6] text-white hover:bg-[#0056EF] disabled:opacity-40"
+            className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#016BE6] text-white hover:bg-[#0056EF] disabled:opacity-40 sm:size-9"
             aria-label="Send message"
           >
             <Send className="size-4" />

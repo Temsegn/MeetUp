@@ -153,8 +153,8 @@ export function InviteJoinPage() {
       : Boolean(password));
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] p-4">
-      <div className="w-full max-w-md rounded-2xl border border-[#E8ECF1] bg-white p-6 shadow-sm">
+    <div className="flex min-h-[100svh] min-h-[100dvh] items-end justify-center bg-[#F8FAFC] p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center">
+      <div className="w-full max-w-md rounded-2xl border border-[#E8ECF1] bg-white p-5 shadow-sm sm:p-6">
         <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8A94A6]">
           Samhal
         </p>
@@ -200,7 +200,7 @@ export function InviteJoinPage() {
                     type="text"
                     value={temporaryPassword}
                     onChange={(e) => setTemporaryPassword(e.target.value)}
-                    className="mt-1 h-10 w-full rounded-lg border border-[#E1E7EE] px-3 text-[12px] outline-none"
+                    className="mt-1 h-12 w-full rounded-lg border border-[#E1E7EE] px-3 text-[16px] outline-none sm:h-10 sm:text-[13px]"
                     placeholder="From your invitation email"
                     autoComplete="off"
                   />
@@ -211,7 +211,7 @@ export function InviteJoinPage() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="mt-1 h-10 w-full rounded-lg border border-[#E1E7EE] px-3 text-[12px] outline-none"
+                    className="mt-1 h-12 w-full rounded-lg border border-[#E1E7EE] px-3 text-[16px] outline-none sm:h-10 sm:text-[13px]"
                     autoComplete="new-password"
                   />
                 </label>
@@ -221,7 +221,7 @@ export function InviteJoinPage() {
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="mt-1 h-10 w-full rounded-lg border border-[#E1E7EE] px-3 text-[12px] outline-none"
+                    className="mt-1 h-12 w-full rounded-lg border border-[#E1E7EE] px-3 text-[16px] outline-none sm:h-10 sm:text-[13px]"
                     autoComplete="new-password"
                   />
                 </label>
@@ -238,7 +238,7 @@ export function InviteJoinPage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="mt-1 h-10 w-full rounded-lg border border-[#E1E7EE] px-3 text-[12px] outline-none"
+                  className="mt-1 h-12 w-full rounded-lg border border-[#E1E7EE] px-3 text-[16px] outline-none sm:h-10 sm:text-[13px]"
                   autoComplete="current-password"
                 />
               </label>
@@ -252,7 +252,7 @@ export function InviteJoinPage() {
           type="button"
           disabled={busy || !canSubmit}
           onClick={() => void submit()}
-          className="mt-5 h-11 w-full rounded-xl bg-[#016BE6] text-[13px] font-semibold text-white hover:bg-[#0056EF] disabled:opacity-60"
+          className="mt-5 h-12 w-full rounded-xl bg-[#016BE6] text-[14px] font-semibold text-white hover:bg-[#0056EF] disabled:opacity-60 sm:h-11 sm:text-[13px]"
         >
           {busy || verifying
             ? verifying
