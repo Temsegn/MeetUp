@@ -1,11 +1,15 @@
+```yaml
 services:
   server:
     build:
       context: ./server
       dockerfile: Dockerfile
+
     restart: unless-stopped
+
     env_file:
       - ./server/.env
+
     environment:
       NODE_ENV: production
       PORT: "4001"
@@ -14,23 +18,30 @@ services:
       MEDIASOUP_WORKERS: "2"
       MEDIASOUP_MIN_PORT: "40000"
       MEDIASOUP_MAX_PORT: "40199"
-      # Public IP/hostname of this host — required for WebRTC in production
+
+      # Public IP/hostname of this host.
+      # Required for WebRTC in production.
       MEDIASOUP_ANNOUNCED_IP: ${MEDIASOUP_ANNOUNCED_IP:-127.0.0.1}
       MEDIASOUP_LISTEN_IP: 0.0.0.0
+
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://localhost:80,http://127.0.0.1}
+
+    # Backend HTTP stays internal.
+    # Only mediasoup UDP ports are exposed publicly.
     ports:
-      - "4001:4001"
       - "40000-40199:40000-40199/udp"
+
     volumes:
       - server_storage:/app/storage
+
     healthcheck:
       test:
         [
           "CMD",
           "node",
           "-e",
-          "fetch('http://127.0.0.1:4001/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "fetch('http://127.0.0.1:4001/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
         ]
       interval: 30s
       timeout: 5s
@@ -41,15 +52,22 @@ services:
     build:
       context: ./client
       dockerfile: Dockerfile
+
+      # Frontend uses same-origin requests.
       args:
-        # Same-origin via nginx proxy (recommended)
         VITE_API_URL: ""
+
     restart: unless-stopped
+
+    # Host Nginx owns public ports 80/443.
+    # Frontend container is available only locally on port 8080.
     ports:
-      - "80:80"
+      - "127.0.0.1:8080:80"
+
     depends_on:
       server:
         condition: service_healthy
 
 volumes:
   server_storage:
+```
