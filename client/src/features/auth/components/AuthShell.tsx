@@ -4,7 +4,7 @@ import { cn } from '../../../lib/cn';
 import { SIGN_IN_PAGE_INSET } from '../constants/sign-in.constants';
 
 export const AuthShell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="samtal-light flex h-full min-h-0 w-full flex-col overflow-hidden bg-white font-sans text-auth-text">
+  <div className="samtal-light flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-white font-sans text-auth-text">
     <div className="flex min-h-0 w-full flex-1 flex-col bg-white">{children}</div>
   </div>
 );

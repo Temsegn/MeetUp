@@ -12,7 +12,7 @@ import {
   OAuthCallbackPage,
 } from './features/auth';
 import { SecuritySettingsPage } from './pages/SecuritySettingsPage';
-import { LandingPage } from './features/landing';
+import { LandingPage, MarketingLayout } from './features/landing';
 import { HomePage } from './pages/HomePage';
 import {
   AppShellLayout,
@@ -90,10 +90,12 @@ function App() {
       <AuthProvider>
         <NotificationCenterProvider>
           <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/auth" element={<PublicRoute><SignInPage /></PublicRoute>} />
-            <Route path="/auth/sign-up" element={<PublicRoute><SignUpPage /></PublicRoute>} />
-            <Route path="/auth/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+            <Route element={<MarketingLayout />}>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/auth" element={<PublicRoute><SignInPage /></PublicRoute>} />
+              <Route path="/auth/sign-up" element={<PublicRoute><SignUpPage /></PublicRoute>} />
+              <Route path="/auth/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+            </Route>
             <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
             <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
             <Route path="/auth/set-password" element={<SetInvitePasswordPage />} />

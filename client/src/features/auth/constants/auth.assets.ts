@@ -4,12 +4,12 @@ export const AUTH_ASSETS = {
   /** Signup-only logo (user-provided) */
   signUpLogo: '/auth/signup-logo.png?v=2',
   /** Figma right-panel showcase (node 16:754) — trimmed left padding */
-  signInShowcase: '/auth/signin-showcase.png?v=2',
+  signInShowcase: '/marketing/auth-showcase.png',
   /** Figma signup dashboard mock (node 16:1001) */
-  signUpDashboard: '/auth/signup-dashboard.png?v=3',
-  promoDashboard: '/auth/promo-dashboard.png',
-  promoDashboardAlt: '/auth/promo-dashboard-alt.png',
-  promoSecureMail: '/auth/promo-secure-mail.png',
+  signUpDashboard: '/marketing/hero-workspace.png',
+  promoDashboard: '/marketing/hero-workspace.png',
+  promoDashboardAlt: '/marketing/meetings.png',
+  promoSecureMail: '/marketing/messages.png',
   google: '/auth/icon-google.svg',
   microsoft: '/auth/icon-microsoft.svg',
   email: '/auth/icon-email.svg',
@@ -26,5 +26,5 @@ export const AUTH_ASSETS = {
   signUpPlatform: '/auth/icon-signup-platform.svg',
   signUpSecure: '/auth/icon-signup-secure.svg',
   signUpInsights: '/auth/icon-signup-insights.svg',
-  forgotIllustration: '/auth/forgot-illustration.png',
+  forgotIllustration: '/marketing/auth-forgot.png',
 } as const;

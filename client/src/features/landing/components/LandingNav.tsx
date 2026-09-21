@@ -1,78 +1,107 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { cn } from '../../../lib/cn';
 import { LANDING_ASSETS, NAV_LINKS } from '../constants/landing.constants';
+import { useLandingChrome } from '../landing-chrome';
+import { useLandingLocale } from '../landing-locale';
+import { useLandingCopy } from '../useLandingCopy';
 
 type Props = {
   user: { name?: string } | null;
 };
 
 export function LandingNav({ user }: Props) {
-  const [scrolled, setScrolled] = useState(false);
+  const copy = useLandingCopy();
+  const { locale, setLocale } = useLandingLocale();
+  const { goSection, activeId, pathname } = useLandingChrome();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  const navLabels: Record<(typeof NAV_LINKS)[number]['id'], string> = {
+    product: copy.nav.product,
+    platform: copy.nav.platform,
+    security: copy.nav.security,
+    pricing: copy.nav.pricing,
+  };
 
-  useEffect(() => {
-    document.body.style.overflow = mobileOpen ? 'hidden' : '';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [mobileOpen]);
+  const goHome = () => {
+    setMobileOpen(false);
+    if (pathname !== '/') navigate('/');
+    else goSection('top');
+  };
 
   return (
-    <header
-      className={cn(
-        'sticky top-0 z-50 border-b transition-colors duration-200',
-        scrolled
-          ? 'border-[#E8ECF1] bg-white/90 backdrop-blur-md'
-          : 'border-transparent bg-white',
-      )}
-    >
-      <div className="mx-auto flex h-[60px] max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-        <Link to="/" className="flex shrink-0 items-center" aria-label="Samtal home">
+    <header className="relative z-30 shrink-0 border-b border-[#E8EEF4] bg-white/90 backdrop-blur-xl">
+      <div className="grid h-[4.25rem] grid-cols-[auto_1fr_auto] items-center gap-3 px-4 sm:px-6 lg:grid-cols-[1fr_auto_1fr] lg:px-7">
+        <button type="button" onClick={goHome} className="flex shrink-0 items-center justify-self-start" aria-label="Samtal">
           <img src={LANDING_ASSETS.logo} alt="Samtal" className="h-8 w-auto" />
-        </Link>
+        </button>
 
-        <nav className="hidden items-center gap-8 md:flex" aria-label="Main">
-          {NAV_LINKS.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              className="text-[13px] font-semibold text-[#6F7B8C] transition-colors hover:text-[#016BE6]"
-            >
-              {link.label}
-            </a>
-          ))}
+        <nav className="hidden items-center justify-center lg:flex" aria-label="Main">
+          <div className="flex items-center gap-0.5 rounded-full bg-[#F4F7FB] p-1">
+            {NAV_LINKS.map((link) => (
+              <button
+                key={link.id}
+                type="button"
+                onClick={() => goSection(link.id)}
+                className={cn(
+                  'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors',
+                  activeId === link.id
+                    ? 'bg-white text-[#0B1220] shadow-[0_1px_2px_rgba(15,35,70,0.08)]'
+                    : 'text-[#5A6B7C] hover:text-[#0B1220]',
+                )}
+              >
+                {navLabels[link.id]}
+              </button>
+            ))}
+          </div>
         </nav>
 
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center justify-self-end gap-2 lg:flex">
+          <div className="me-1 flex rounded-full border border-[#E6EAF0] bg-white p-0.5 text-[11px] font-semibold">
+            <button
+              type="button"
+              onClick={() => setLocale('en')}
+              className={cn(
+                'rounded-full px-2.5 py-1',
+                locale === 'en' ? 'bg-[#0B1220] text-white' : 'text-[#5A6B7C]',
+              )}
+            >
+              {copy.nav.langEn}
+            </button>
+            <button
+              type="button"
+              onClick={() => setLocale('ar')}
+              className={cn(
+                'rounded-full px-2.5 py-1',
+                locale === 'ar' ? 'bg-[#0B1220] text-white' : 'text-[#5A6B7C]',
+              )}
+            >
+              {copy.nav.langAr}
+            </button>
+          </div>
           {user ? (
             <Link
               to="/app"
-              className="inline-flex h-10 items-center rounded-full bg-[#DC6C7C] px-5 text-[13px] font-semibold text-white transition-colors hover:bg-[#C85A6A]"
+              className="inline-flex h-10 items-center rounded-full bg-[#016BE6] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#0A4FBF]"
             >
-              Open dashboard
+              {copy.nav.openDashboard}
             </Link>
           ) : (
             <>
               <Link
                 to="/auth"
-                className="text-[13px] font-semibold text-[#6F7B8C] transition-colors hover:text-[#151D2B]"
+                onClick={() => setMobileOpen(false)}
+                className="px-2.5 text-[13px] font-semibold text-[#5A6B7C] transition-colors hover:text-[#0B1220]"
               >
-                Sign in
+                {copy.nav.signIn}
               </Link>
               <Link
                 to="/auth"
-                className="inline-flex h-10 items-center rounded-full bg-[#DC6C7C] px-5 text-[13px] font-semibold text-white transition-colors hover:bg-[#C85A6A]"
+                className="inline-flex h-10 items-center rounded-full bg-[#016BE6] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#0A4FBF]"
               >
-                Get started
+                {copy.nav.getStarted}
               </Link>
             </>
           )}
@@ -80,8 +109,9 @@ export function LandingNav({ user }: Props) {
 
         <button
           type="button"
-          className="rounded-lg p-2 text-[#6F7B8C] hover:bg-[#F1F5F9] md:hidden"
+          className="justify-self-end rounded-lg p-2 text-[#5A6B7C] hover:bg-[#F4F7FB] lg:hidden"
           aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={mobileOpen}
           onClick={() => setMobileOpen((v) => !v)}
         >
           {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
@@ -89,40 +119,71 @@ export function LandingNav({ user }: Props) {
       </div>
 
       {mobileOpen ? (
-        <div className="border-t border-[#E8ECF1] bg-white px-4 py-4 md:hidden">
-          <nav className="flex flex-col gap-1">
+        <div className="absolute inset-x-0 top-full z-40 border-b border-[#E6EAF0] bg-white px-4 py-4 shadow-[0_16px_40px_-24px_rgba(15,35,70,0.35)] lg:hidden">
+          <nav className="flex flex-col">
             {NAV_LINKS.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                onClick={() => setMobileOpen(false)}
-                className="rounded-lg px-3 py-2.5 text-[14px] font-semibold text-[#151D2B] hover:bg-[#F8FAFC]"
+              <button
+                key={link.id}
+                type="button"
+                onClick={() => {
+                  setMobileOpen(false);
+                  goSection(link.id);
+                }}
+                className={cn(
+                  'rounded-lg px-3 py-2.5 text-start text-[14px] font-medium hover:bg-[#F4F7FB]',
+                  activeId === link.id ? 'bg-[#F4F7FB] text-[#016BE6]' : 'text-[#0B1220]',
+                )}
               >
-                {link.label}
-              </a>
+                {navLabels[link.id]}
+              </button>
             ))}
           </nav>
-          <div className="mt-3 flex flex-col gap-2 border-t border-[#F1F4F8] pt-3">
+          <div className="mt-3 flex gap-2 border-t border-[#EEF2F6] pt-3">
+            <button
+              type="button"
+              onClick={() => setLocale('en')}
+              className={cn(
+                'h-10 flex-1 rounded-lg border text-[13px] font-semibold',
+                locale === 'en' ? 'border-[#0B1220] bg-[#0B1220] text-white' : 'border-[#E6EAF0]',
+              )}
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              onClick={() => setLocale('ar')}
+              className={cn(
+                'h-10 flex-1 rounded-lg border text-[13px] font-semibold',
+                locale === 'ar' ? 'border-[#0B1220] bg-[#0B1220] text-white' : 'border-[#E6EAF0]',
+              )}
+            >
+              عربي
+            </button>
+          </div>
+          <div className="mt-2 flex flex-col gap-2">
             {user ? (
               <Link
                 to="/app"
-                className="inline-flex h-10 items-center justify-center rounded-full bg-[#DC6C7C] text-[13px] font-semibold text-white"
+                onClick={() => setMobileOpen(false)}
+                className="inline-flex h-10 items-center justify-center rounded-full bg-[#016BE6] text-[13px] font-semibold text-white"
               >
-                Open dashboard
+                {copy.nav.openDashboard}
               </Link>
             ) : (
               <>
                 <Link
                   to="/auth"
-                  className="inline-flex h-10 items-center justify-center rounded-xl border border-[#E1E7EE] text-[13px] font-semibold text-[#334155]"
+                  onClick={() => setMobileOpen(false)}
+                  className="inline-flex h-10 items-center justify-center rounded-full border border-[#E6EAF0] text-[13px] font-semibold text-[#0B1220]"
                 >
-                  Sign in
+                  {copy.nav.signIn}
                 </Link>
                 <Link
                   to="/auth"
-                  className="inline-flex h-10 items-center justify-center rounded-full bg-[#DC6C7C] text-[13px] font-semibold text-white"
+                  onClick={() => setMobileOpen(false)}
+                  className="inline-flex h-10 items-center justify-center rounded-full bg-[#016BE6] text-[13px] font-semibold text-white"
                 >
-                  Get started
+                  {copy.nav.getStarted}
                 </Link>
               </>
             )}

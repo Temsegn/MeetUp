@@ -27,7 +27,7 @@ export const SignUpPage: React.FC = () => {
 
   return (
     <div
-      className="samtal-light flex h-full min-h-0 w-full overflow-hidden font-sans text-[#161E35]"
+      className="samtal-light flex h-full min-h-0 w-full flex-1 overflow-hidden font-sans text-[#161E35]"
       style={{ backgroundColor: SIGN_UP_PAGE_BG }}
     >
       <div className="flex min-h-0 w-full flex-1 flex-col lg:flex-row">

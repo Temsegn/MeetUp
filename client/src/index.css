@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", "Noto Sans Arabic", "Inter", system-ui, sans-serif;
   --font-meeting: "Inter", system-ui, sans-serif;
 
   --color-brand: #016be6;
