@@ -132,7 +132,8 @@ export function LiveMeetingPage() {
     addToast,
   });
 
-  const { localStream, screenStream, startLocalMedia, startScreenShare, stopScreenShare } = useLocalMedia();
+  const { localStream, screenStream, startLocalMedia, startScreenShare, stopScreenShare, error: mediaError } =
+    useLocalMedia();
   const { activeReactions, sendReaction, raisedHands, toggleRaiseHand, setRaiseHand } = useReactions(
     roomId,
     participantId || '__pre_join__',
@@ -191,7 +192,7 @@ export function LiveMeetingPage() {
   }, [joined]);
 
   useEffect(() => {
-    void startLocalMedia();
+    void startLocalMedia().catch(() => {});
   }, [startLocalMedia]);
 
   useEffect(() => {
@@ -245,7 +246,9 @@ export function LiveMeetingPage() {
 
       const stream = localStream ?? (await startLocalMedia());
       if (!stream || stream.getTracks().length === 0) {
-        throw new Error('Could not access camera/microphone. Allow permissions and try again.');
+        throw mediaError ?? new Error(
+          'Could not access camera or microphone. Click Allow camera and microphone, then choose Allow in the browser prompt.',
+        );
       }
       await joinMeeting(token);
     } catch (err: unknown) {
@@ -728,6 +731,8 @@ export function LiveMeetingPage() {
         avatarUrl={user?.avatarUrl}
         avatarColor={user?.avatarColor}
         localStream={localStream}
+        mediaError={mediaError?.message ?? null}
+        onRequestMedia={() => void startLocalMedia().catch(() => {})}
         isJoining={isJoining}
         isWaiting={waiting}
         isHostJoining={Boolean(user?.id && meetingMeta?.createdBy === user.id)}

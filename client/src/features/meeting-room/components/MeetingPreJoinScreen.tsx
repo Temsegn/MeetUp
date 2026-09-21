@@ -17,6 +17,8 @@ type Props = {
   avatarUrl?: string | null;
   avatarColor?: string | null;
   localStream: MediaStream | null;
+  mediaError?: string | null;
+  onRequestMedia?: () => void;
   isJoining?: boolean;
   isWaiting?: boolean;
   isHostJoining?: boolean;
@@ -40,6 +42,8 @@ export function MeetingPreJoinScreen({
   avatarUrl,
   avatarColor,
   localStream,
+  mediaError = null,
+  onRequestMedia,
   isJoining = false,
   isWaiting = false,
   isHostJoining = false,
@@ -54,12 +58,24 @@ export function MeetingPreJoinScreen({
   const [copied, setCopied] = useState(false);
 
   const toggleAudio = () => {
-    if (localStream) localStream.getAudioTracks().forEach((t) => { t.enabled = audioMuted; });
+    if (!localStream) {
+      onRequestMedia?.();
+      return;
+    }
+    localStream.getAudioTracks().forEach((t) => {
+      t.enabled = audioMuted;
+    });
     setAudioMuted((v) => !v);
   };
 
   const toggleVideo = () => {
-    if (localStream) localStream.getVideoTracks().forEach((t) => { t.enabled = videoMuted; });
+    if (!localStream) {
+      onRequestMedia?.();
+      return;
+    }
+    localStream.getVideoTracks().forEach((t) => {
+      t.enabled = videoMuted;
+    });
     setVideoMuted((v) => !v);
   };
 
@@ -116,7 +132,7 @@ export function MeetingPreJoinScreen({
             {localStream && !videoMuted ? (
               <VideoPlayer stream={localStream} muted className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full w-full flex-col items-center justify-center gap-2">
+              <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-4">
                 <UserAvatar
                   name={userName || 'Guest'}
                   avatarUrl={avatarUrl}
@@ -124,7 +140,18 @@ export function MeetingPreJoinScreen({
                   size="xl"
                   className="size-20 text-[28px]"
                 />
-                <span className="text-[12px] text-[#94A3B8]">Camera is off</span>
+                <span className="text-[12px] text-[#94A3B8]">
+                  {localStream ? 'Camera is off' : 'Camera and microphone are off'}
+                </span>
+                {!localStream ? (
+                  <button
+                    type="button"
+                    onClick={() => onRequestMedia?.()}
+                    className="rounded-full bg-white px-4 py-2 text-[12px] font-semibold text-[#0F172A] hover:bg-[#F8FAFC]"
+                  >
+                    Allow camera and microphone
+                  </button>
+                ) : null}
               </div>
             )}
             <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
@@ -210,17 +237,29 @@ export function MeetingPreJoinScreen({
             </button>
           </div>
 
-          {joinError ? (
+          {(mediaError || joinError) ? (
             <div className="mt-3 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-[12px] text-[#DC2626]">
-              {joinError}
+              {joinError || mediaError}
             </div>
+          ) : null}
+
+          {!localStream ? (
+            <button
+              type="button"
+              onClick={() => onRequestMedia?.()}
+              className="mt-4 flex h-11 w-full items-center justify-center rounded-xl border border-[#016BE6] bg-white text-[13px] font-semibold text-[#016BE6] hover:bg-[#F4F8FF]"
+            >
+              Allow camera and microphone
+            </button>
           ) : null}
 
           <button
             type="button"
             onClick={onJoin}
             disabled={isJoining || !canJoin}
-            className="mt-4 flex h-11 w-full items-center justify-center rounded-xl bg-[#016BE6] text-[13px] font-semibold text-white hover:bg-[#0056EF] disabled:opacity-60"
+            className={`flex h-11 w-full items-center justify-center rounded-xl bg-[#016BE6] text-[13px] font-semibold text-white hover:bg-[#0056EF] disabled:opacity-60 ${
+              localStream ? 'mt-4' : 'mt-2'
+            }`}
           >
             {isJoining ? 'Connecting…' : isHostJoining ? 'Join' : 'Ask to join'}
           </button>

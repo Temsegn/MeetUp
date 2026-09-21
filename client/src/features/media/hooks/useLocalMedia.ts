@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { canUseGetUserMedia, describeMediaError } from '../lib/mediaErrors';
 
 export const useLocalMedia = () => {
   const [localStream,  setLocalStream]  = useState<MediaStream | null>(null);
@@ -8,29 +9,36 @@ export const useLocalMedia = () => {
   const localStreamRef = useRef<MediaStream | null>(null);
 
   const startLocalMedia = useCallback(async (audio = true, video = true): Promise<MediaStream | null> => {
-    // Stop existing stream first
-    localStreamRef.current?.getTracks().forEach(t => t.stop());
+    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    setError(null);
+
+    if (!canUseGetUserMedia()) {
+      const fail = new Error(describeMediaError(new Error('mediaDevices unavailable')));
+      setError(fail);
+      throw fail;
+    }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio, video });
       localStreamRef.current = stream;
       setLocalStream(stream);
       return stream;
-    } catch (err: any) {
-      console.warn('Failed to get video+audio, trying audio only...', err);
+    } catch (err: unknown) {
       if (video) {
         try {
           const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
           localStreamRef.current = audioOnly;
           setLocalStream(audioOnly);
           return audioOnly;
-        } catch (fallback: any) {
-          setError(fallback);
-          return null;
+        } catch (fallback: unknown) {
+          const fail = new Error(describeMediaError(fallback));
+          setError(fail);
+          throw fail;
         }
       }
-      setError(err);
-      return null;
+      const fail = new Error(describeMediaError(err));
+      setError(fail);
+      throw fail;
     }
   }, []);
 
