@@ -2,7 +2,7 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-const CANONICAL_FRONTEND_URL = 'https://46.246.120.148:8981'
+const CANONICAL_FRONTEND_URL = 'http://46.246.120.148:8980'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {

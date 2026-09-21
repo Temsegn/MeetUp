@@ -9,7 +9,7 @@ const envSchema = z.object({
 
   // CORS — comma-separated list of allowed origins.
   // In production, must be explicit (no wildcard).
-  CORS_ORIGINS: z.string().default('https://46.246.120.148:8981,http://localhost:5173'),
+  CORS_ORIGINS: z.string().default('http://46.246.120.148:8980,http://localhost:5173'),
 
   MONGODB_URI: z.string().default('mongodb://127.0.0.1:27017/meetspace'),
 
@@ -32,7 +32,7 @@ const envSchema = z.object({
   LOGIN_LOCKOUT_WINDOW_MS: z.string().default('900000').transform(Number), // 15 min
 
   // Frontend base URL used to build verification / reset / OAuth return links.
-  FRONTEND_URL: z.string().default('https://46.246.120.148:8981').transform((val) => val.replace(/\/+$/, '')),
+  FRONTEND_URL: z.string().default('http://46.246.120.148:8980').transform((val) => val.replace(/\/+$/, '')),
   // Optional cookie domain (e.g. '.example.com') for cross-subdomain auth.
   COOKIE_DOMAIN: z.string().optional(),
   // Override Secure cookie flag. Unset = derive from FRONTEND_URL (https → true).
