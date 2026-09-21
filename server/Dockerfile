@@ -2,8 +2,10 @@
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 
+# mediasoup falls back to a local worker build when no prebuilt binary matches.
+# That compile needs Python pip (and venv on Debian) plus kernel headers.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ ca-certificates \
+    python3 python3-pip python3-venv make g++ linux-libc-dev ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
