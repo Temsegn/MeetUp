@@ -18,6 +18,7 @@ import { UserAvatar } from '../../../components/ui/UserAvatar';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { cn } from '../../../lib/cn';
 import { useAuth } from '../../../contexts/AuthContext';
+import { recordingShareUrl } from '../../../lib/frontendUrl';
 import { recordingsService, type Recording } from '../../../services/recordings/recordings.service';
 
 /**
@@ -88,7 +89,7 @@ export function RecordingDetailPage() {
   };
 
   const share = async () => {
-    const url = window.location.href;
+    const url = recordingShareUrl(recording.id);
     try {
       await navigator.clipboard.writeText(url);
       notify('Link copied to clipboard');
@@ -156,7 +157,7 @@ export function RecordingDetailPage() {
               { label: 'Copy link', onClick: () => void share() },
               {
                 label: 'Open in new tab',
-                onClick: () => window.open(window.location.href, '_blank'),
+                onClick: () => window.open(recordingShareUrl(recording.id), '_blank'),
               },
               {
                 label: 'Rename',

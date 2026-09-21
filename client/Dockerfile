@@ -11,6 +11,8 @@ COPY . .
 # Empty = same-origin (nginx proxies API). Override for split-host deploys.
 ARG VITE_API_URL=
 ENV VITE_API_URL=$VITE_API_URL
+ARG VITE_FRONTEND_URL=
+ENV VITE_FRONTEND_URL=$VITE_FRONTEND_URL
 
 RUN npm run build
 

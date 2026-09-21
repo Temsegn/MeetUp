@@ -24,8 +24,8 @@ services:
       MEDIASOUP_ANNOUNCED_IP: ${MEDIASOUP_ANNOUNCED_IP:-127.0.0.1}
       MEDIASOUP_LISTEN_IP: 0.0.0.0
 
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://localhost:80,http://127.0.0.1}
+      FRONTEND_URL: ${FRONTEND_URL:-http://46.246.120.148:8980}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://46.246.120.148:8980,http://localhost,http://localhost:80,http://127.0.0.1}
 
     # Backend HTTP stays internal.
     # Only mediasoup UDP ports are exposed publicly.
@@ -56,6 +56,7 @@ services:
       # Frontend uses same-origin requests.
       args:
         VITE_API_URL: ""
+        VITE_FRONTEND_URL: ${VITE_FRONTEND_URL:-http://46.246.120.148:8980}
 
     restart: unless-stopped
 

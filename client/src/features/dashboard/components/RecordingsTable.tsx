@@ -13,6 +13,7 @@ import { RowActionsMenu } from './RowActionsMenu';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { type RecordingRow } from '../data/recordings.data';
+import { recordingShareUrl } from '../../../lib/frontendUrl';
 
 export type { RecordingRow };
 
@@ -171,7 +172,7 @@ export function RecordingsTable({
     {
       label: 'Share link',
       onClick: async () => {
-        const url = `${window.location.origin}/app/recordings/${r.id}`;
+        const url = recordingShareUrl(r.id);
         try {
           await navigator.clipboard.writeText(url);
           notify('Share link copied');

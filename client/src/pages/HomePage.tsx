@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { guestJoinUrl } from '../lib/frontendUrl';
 import { authService, authedFetch } from '../services/auth/auth.service';
 import { Video, Link2, LogOut, Copy, Check, Users, Clock, ExternalLink, RefreshCw, Calendar, X, Zap, Trash2, Shield, AlertTriangle, Mail } from 'lucide-react';
 
@@ -116,7 +117,7 @@ export const HomePage: React.FC = () => {
   };
 
   const copyLink = (roomId: string) => {
-    navigator.clipboard.writeText(`${window.location.origin}/app/meeting/${roomId}`);
+    navigator.clipboard.writeText(guestJoinUrl(roomId));
     setCopied(roomId);
     setTimeout(() => setCopied(null), 2000);
   };

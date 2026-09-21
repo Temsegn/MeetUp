@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, Check, Copy, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 import { VideoPlayer } from '../../../components/video/VideoPlayer';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
+import { guestJoinUrl } from '../../../lib/frontendUrl';
 
 type Props = {
   roomId: string;
@@ -63,7 +64,7 @@ export function MeetingPreJoinScreen({
   };
 
   const copyLink = () => {
-    void navigator.clipboard.writeText(`${window.location.origin}/join/${roomId}`);
+    void navigator.clipboard.writeText(guestJoinUrl(roomId));
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   };

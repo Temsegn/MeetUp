@@ -19,6 +19,7 @@ import {
   workspaceService,
   type WorkspaceDirectoryMember,
 } from '../../../services/workspace/workspace.service';
+import { workspaceInviteUrl } from '../../../lib/frontendUrl';
 import { SettingsToggle } from './SettingsUi';
 
 type Props = {
@@ -153,7 +154,7 @@ export function InviteMemberPanel({ onCancel, onCreated }: Props) {
           email: created.email,
           emailSent: false,
           emailError: created.emailError,
-          joinUrl: created.joinUrl,
+          joinUrl: created.token ? workspaceInviteUrl(created.token) : undefined,
         });
         return;
       }
@@ -163,7 +164,7 @@ export function InviteMemberPanel({ onCancel, onCreated }: Props) {
         email: created.email,
         emailSent: created.emailSent,
         emailError: created.emailError,
-        joinUrl: created.joinUrl,
+        joinUrl: created.token ? workspaceInviteUrl(created.token) : undefined,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create user.');

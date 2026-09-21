@@ -6,6 +6,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { cn } from '../../../lib/cn';
 import { useAuth } from '../../../contexts/AuthContext';
 import { meetingsService } from '../../../services/meetings/meetings.service';
+import { guestJoinUrl } from '../../../lib/frontendUrl';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
 import {
   STATUS_META,
@@ -269,7 +270,12 @@ export function MeetingsList({ meetings, filterKey = '', onChanged }: Props) {
                                   },
                                 ]
                               : []),
-                            { label: 'Copy invite link' },
+                            {
+                              label: 'Copy invite link',
+                              onClick: () => {
+                                void navigator.clipboard.writeText(guestJoinUrl(m.roomId ?? m.id));
+                              },
+                            },
                             ...(canCancelMeeting(m)
                               ? [
                                   {

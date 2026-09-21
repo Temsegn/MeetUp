@@ -10,6 +10,7 @@ import {
   type WorkspaceInvite,
   type WorkspaceMember,
 } from '../../../services/workspace/workspace.service';
+import { workspaceInviteUrl } from '../../../lib/frontendUrl';
 
 export function MembersPage() {
   const { activeWorkspace, user } = useAuth();
@@ -222,20 +223,16 @@ export function MembersPage() {
                         : ' Share the link below, then fix SMTP settings.'}
                     </p>
                   )}
-                  {lastInvite.joinUrl || lastInvite.token ? (
+                  {lastInvite.token ? (
                     <div className="flex flex-wrap items-center gap-2">
                       <code className="max-w-full flex-1 truncate rounded-md bg-white px-2 py-1 text-[11px] text-[#016BE6]">
-                        {lastInvite.joinUrl ??
-                          `${window.location.origin}/auth/invite?token=${encodeURIComponent(lastInvite.token)}`}
+                        {workspaceInviteUrl(lastInvite.token)}
                       </code>
                       <button
                         type="button"
                         className="rounded-lg border border-[#016BE6] px-2.5 py-1 text-[11px] font-semibold text-[#016BE6] hover:bg-[#E8F1FF]"
                         onClick={() => {
-                          const url =
-                            lastInvite.joinUrl ??
-                            `${window.location.origin}/auth/invite?token=${encodeURIComponent(lastInvite.token)}`;
-                          void navigator.clipboard.writeText(url);
+                          void navigator.clipboard.writeText(workspaceInviteUrl(lastInvite.token));
                         }}
                       >
                         Copy link

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BadgeCheck, ChevronDown, LogOut, Mail, MoreHorizontal, Users } from 'lucide-react';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
+import { guestJoinUrl } from '../../../lib/frontendUrl';
 
 type Props = {
   title: string;
@@ -145,7 +146,7 @@ export function MeetingRoomHeader({
                   type="button"
                   className="block w-full px-3 py-2 text-left text-[12px] font-medium text-[#151D2B] hover:bg-[#F8FAFC]"
                   onClick={() => {
-                    void navigator.clipboard.writeText(`${window.location.origin}/join/${roomId}`);
+                    void navigator.clipboard.writeText(guestJoinUrl(roomId));
                     setMenuOpen(false);
                   }}
                 >
