@@ -8,10 +8,16 @@ Thumbs.db
 *.swp
 *.swo
 
-# Env (belt-and-suspenders)
+# Env
 **/.env
 !**/.env.example
 
-# Recorded files on disk (not source modules)
-/conference-backend/recordings/
-/conference-backend/storage/
+# Build / deps
+**/node_modules/
+**/dist/
+**/.vite/
+**/coverage/
+
+# Runtime data
+/server/recordings/
+/server/storage/
