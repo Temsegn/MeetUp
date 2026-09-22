@@ -9,7 +9,7 @@ export { AdminCreateUserPage } from './pages/AdminCreateUserPage';
 export { AdminUserDetailPage } from './pages/AdminUserDetailPage';
 export { AdminSubscriptionsPage } from './pages/AdminSubscriptionsPage';
 export { AdminPlansPage } from './pages/AdminPlansPage';
-export { AdminInvoicesPage } from './pages/AdminInvoicesPage';
+export { AdminInvoicesPage, AdminInvoiceDetailPage } from './pages/AdminInvoicesPage';
 export {
   AdminBillingPage,
   AdminAuditLogsPage,

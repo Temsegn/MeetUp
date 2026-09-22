@@ -32,9 +32,23 @@ router.patch('/plan', requireWorkspace('owner'), async (req: AuthRequest, res) =
   res.json(data);
 });
 
-/** Invoice list — empty until a payment provider is connected. */
+/** Invoices generated from plan + usage. */
 router.get('/invoices', requireWorkspace('member'), async (req: AuthRequest, res) => {
   const data = await billingService.listInvoices(req.workspaceId!);
+  res.json(data);
+});
+
+router.get('/invoices/:invoiceId', requireWorkspace('member'), async (req: AuthRequest, res) => {
+  const data = await billingService.getInvoice(req.workspaceId!, String(req.params.invoiceId));
+  res.json(data);
+});
+
+router.post('/invoices/:invoiceId/pay', requireWorkspace('admin'), async (req: AuthRequest, res) => {
+  const data = await billingService.payInvoice(
+    req.workspaceId!,
+    String(req.params.invoiceId),
+    req.workspaceRole!,
+  );
   res.json(data);
 });
 

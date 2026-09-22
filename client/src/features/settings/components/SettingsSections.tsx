@@ -442,63 +442,20 @@ export function SecuritySection({
   );
 }
 
-export function IntegrationsSection({
-  settings,
-  busy,
-  onToggle,
-}: Common & {
+export function IntegrationsSection(_props: Common & {
   onToggle: (key: keyof UserSettings['integrations'], value: boolean) => void;
 }) {
-  const items: {
-    key: keyof UserSettings['integrations'];
-    name: string;
-    color: string;
-  }[] = [
-    { key: 'googleCalendar', name: 'Google Calendar', color: 'bg-[#EA4335]' },
-    { key: 'slack', name: 'Slack', color: 'bg-[#4A154B]' },
-    { key: 'outlook', name: 'Microsoft Outlook', color: 'bg-[#0078D4]' },
-  ];
-
   return (
     <SettingsCard>
       <SettingsSectionHeader
         title="Integrations"
-        description="Connect with your favorite tools."
+        description="Calendar and chat providers will connect here later."
         action={<SettingsIcon size={18} className="text-[#94A3B8]" />}
       />
-      <div className="space-y-4">
-        {items.map((item) => {
-          const connected = settings.integrations[item.key];
-          return (
-            <div
-              key={item.key}
-              className="flex items-center justify-between gap-3 border-b border-[#F1F4F8] pb-4 last:border-0 last:pb-0"
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`flex size-9 items-center justify-center rounded-lg text-xs font-bold text-white ${item.color}`}
-                >
-                  {item.name.charAt(0)}
-                </div>
-                <div>
-                  <p className="text-[13px] font-semibold text-[#151D2B]">{item.name}</p>
-                  <p className={`text-[12px] ${connected ? 'text-[#00A45C]' : 'text-[#6F7B8C]'}`}>
-                    {connected ? 'Connected' : 'Not connected'}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onToggle(item.key, !connected)}
-                className="text-[13px] font-semibold text-[#016BE6] hover:underline disabled:opacity-50"
-              >
-                {connected ? 'Disconnect' : 'Connect'}
-              </button>
-            </div>
-          );
-        })}
-      </div>
+      <p className="text-[13px] leading-6 text-[#6F7B8C]">
+        Google Calendar, Slack, and Outlook are not wired yet. Meetings, invites, and recordings
+        already work without them.
+      </p>
     </SettingsCard>
   );
 }

@@ -9,23 +9,44 @@ export function AdminUsersPage() {
   const [search, setSearch] = useState('');
   const [items, setItems] = useState<Array<Record<string, unknown>>>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = () => {
+    setLoading(true);
     adminApi
       .listUsers({ search })
       .then((res) => setItems(res.items))
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'));
+      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load users.'))
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
+
+  const setStatus = async (id: string, accountStatus: 'active' | 'suspended' | 'banned') => {
+    if (accountStatus === 'banned' && !window.confirm('Ban this user? They will not be able to sign in.')) {
+      return;
+    }
+    setBusyId(id);
+    setError(null);
+    try {
+      await adminApi.setUserStatus(id, accountStatus);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update user.');
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <div>
       <AdminPageHeader
         title="Users"
-        subtitle="All users across workspaces"
+        subtitle="All accounts across the platform."
         actions={
           <button
             type="button"
@@ -59,6 +80,7 @@ export function AdminUsersPage() {
           <tbody>
             {items.map((u) => {
               const id = String(u.id);
+              const status = String(u.accountStatus);
               return (
                 <tr key={id} className="border-t border-[#E8ECF1]">
                   <td className="px-4 py-3">
@@ -69,34 +91,54 @@ export function AdminUsersPage() {
                   </td>
                   <td className="px-4 py-3 capitalize">{String(u.platformRole).replace('_', ' ')}</td>
                   <td className="px-4 py-3">
-                    <StatusBadge status={String(u.accountStatus)} />
+                    <StatusBadge status={status} />
                   </td>
                   <td className="px-4 py-3 space-x-2">
                     <button
                       type="button"
-                      className="text-[12px] font-semibold text-[#016BE6]"
-                      onClick={() =>
-                        adminApi
-                          .setUserStatus(
-                            id,
-                            u.accountStatus === 'suspended' ? 'active' : 'suspended',
-                          )
-                          .then(load)
-                      }
+                      disabled={busyId === id}
+                      className="text-[12px] font-semibold text-[#016BE6] disabled:opacity-50"
+                      onClick={() => void setStatus(id, status === 'suspended' ? 'active' : 'suspended')}
                     >
-                      {u.accountStatus === 'suspended' ? 'Reactivate' : 'Suspend'}
+                      {status === 'suspended' ? 'Reactivate' : 'Suspend'}
                     </button>
-                    <button
-                      type="button"
-                      className="text-[12px] font-semibold text-rose-600"
-                      onClick={() => adminApi.setUserStatus(id, 'banned').then(load)}
-                    >
-                      Ban
-                    </button>
+                    {status !== 'banned' ? (
+                      <button
+                        type="button"
+                        disabled={busyId === id}
+                        className="text-[12px] font-semibold text-rose-600 disabled:opacity-50"
+                        onClick={() => void setStatus(id, 'banned')}
+                      >
+                        Ban
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={busyId === id}
+                        className="text-[12px] font-semibold text-[#016BE6] disabled:opacity-50"
+                        onClick={() => void setStatus(id, 'active')}
+                      >
+                        Unban
+                      </button>
+                    )}
                   </td>
                 </tr>
               );
             })}
+            {loading ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-10 text-center text-[#94A3B8]">
+                  Loading users…
+                </td>
+              </tr>
+            ) : null}
+            {!loading && items.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-10 text-center text-[#94A3B8]">
+                  {search ? 'No users match that search.' : 'No users yet.'}
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </AdminTableShell>

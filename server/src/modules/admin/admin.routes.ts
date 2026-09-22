@@ -170,6 +170,21 @@ adminRouter.get('/subscriptions', async (req, res, next) => {
   }
 });
 
+adminRouter.patch('/subscriptions/:id', async (req: AuthRequest, res, next) => {
+  try {
+    res.json(
+      await adminService.updateSubscription(
+        req.user!,
+        String(req.params.id),
+        req.body as { planKey?: PlanKey; status?: 'active' | 'past_due' | 'cancelled' },
+        req.ip,
+      ),
+    );
+  } catch (err) {
+    next(err);
+  }
+});
+
 adminRouter.get('/billing', async (_req, res, next) => {
   try {
     res.json(await adminService.billingOverview());
@@ -183,10 +198,27 @@ adminRouter.get('/invoices', async (req, res, next) => {
     res.json(
       await adminService.listInvoices({
         search: typeof req.query.search === 'string' ? req.query.search : undefined,
+        status: typeof req.query.status === 'string' ? req.query.status : undefined,
         page: req.query.page ? Number(req.query.page) : undefined,
         limit: req.query.limit ? Number(req.query.limit) : undefined,
       }),
     );
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.get('/invoices/:id', async (req, res, next) => {
+  try {
+    res.json(await adminService.getInvoice(String(req.params.id)));
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.post('/invoices/:id/pay', async (req: AuthRequest, res, next) => {
+  try {
+    res.json(await adminService.payInvoice(req.user!, String(req.params.id), req.ip));
   } catch (err) {
     next(err);
   }

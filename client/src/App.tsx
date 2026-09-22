@@ -33,6 +33,7 @@ import { LiveMeetingPage } from './features/meeting-room';
 import { TemplatesPage } from './features/templates';
 import {
   BillingPage,
+  InvoiceDetailPage,
   ContactsPage,
   InviteJoinPage,
 } from './features/workspace';
@@ -50,6 +51,7 @@ import {
   AdminSubscriptionsPage,
   AdminBillingPage,
   AdminInvoicesPage,
+  AdminInvoiceDetailPage,
   AdminAuditLogsPage,
   AdminSystemSettingsPage,
 } from './features/admin';
@@ -148,6 +150,7 @@ function App() {
               <Route path="settings" element={<SettingsPage />} />
               <Route path="settings/:section" element={<SettingsPage />} />
               <Route path="billing" element={<BillingPage />} />
+              <Route path="billing/invoices/:invoiceId" element={<InvoiceDetailPage />} />
               <Route path="workspace" element={<Navigate to="/app/settings/workspace" replace />} />
               <Route path="workspace/members" element={<Navigate to="/app/settings/members" replace />} />
               <Route path="workspace/rooms" element={<Navigate to="/app/settings/rooms" replace />} />
@@ -180,6 +183,7 @@ function App() {
                 <Route path="subscriptions" element={<AdminSubscriptionsPage />} />
                 <Route path="billing" element={<AdminBillingPage />} />
                 <Route path="invoices" element={<AdminInvoicesPage />} />
+                <Route path="invoices/:id" element={<AdminInvoiceDetailPage />} />
                 <Route path="plans" element={<AdminPlansPage />} />
                 <Route path="audit-logs" element={<AdminAuditLogsPage />} />
                 <Route path="system" element={<AdminSystemSettingsPage />} />

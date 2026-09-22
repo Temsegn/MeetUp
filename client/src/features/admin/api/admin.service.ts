@@ -131,6 +131,14 @@ export const adminApi = {
       `/admin/invoices${qs ? `?${qs}` : ''}`,
     );
   },
+  getInvoice: (id: string) => apiFetch<Record<string, unknown>>(`/admin/invoices/${id}`),
+  payInvoice: (id: string) =>
+    apiFetch<Record<string, unknown>>(`/admin/invoices/${id}/pay`, { method: 'POST' }),
+  updateSubscription: (id: string, body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(`/admin/subscriptions/${id}`, {
+      method: 'PATCH',
+      body,
+    }),
   auditLogs: (q: Record<string, string | number | undefined> = {}) => {
     const params = new URLSearchParams();
     Object.entries(q).forEach(([k, v]) => {

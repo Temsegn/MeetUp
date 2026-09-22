@@ -8,6 +8,7 @@ import { WorkspaceRoom } from '../../database/models/WorkspaceRoom.model';
 import { Recording } from '../../database/models/Recording.model';
 import { PlatformAuditLog } from '../../database/models/PlatformAuditLog.model';
 import { Plan, DEFAULT_PLANS, type PlanKey } from '../../database/models/Plan.model';
+import { Invoice } from '../../database/models/Invoice.model';
 import { SystemSettings } from '../../database/models/SystemSettings.model';
 import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors/AppError';
 import { DEFAULT_WORKSPACE_SETTINGS } from '../workspace/workspace.types';
@@ -16,8 +17,13 @@ import { isMongoConnected } from '../../database/db';
 import { workerManager } from '../../media/managers/worker-manager';
 import type { UserRecord } from '../auth/auth.types';
 import { ensureDevPlatformAdmin } from './platform-admin.sync';
-
-const PLAN_MRR: Record<string, number> = { free: 0, pro: 49, enterprise: 299 };
+import {
+  markInvoicePaid,
+  planMonthlyPrice,
+  syncAllInvoices,
+  syncInvoiceForWorkspace,
+  toInvoiceDto,
+} from '../billing/invoice.helpers';
 
 async function audit(
   actor: UserRecord,
@@ -73,7 +79,7 @@ export const adminService = {
       ]).catch(() => [] as Array<{ bytes?: number }>),
     ]);
 
-    const mrr = subs.reduce((sum, s) => sum + (PLAN_MRR[s.planKey] ?? 0), 0);
+    const mrr = subs.reduce((sum, s) => sum + planMonthlyPrice(s.planKey), 0);
     const liveMeetings = metrics.activeRooms.get();
     const storageBytes = storageAgg[0]?.bytes ?? 0;
     const storageGb = Math.round((storageBytes / (1024 * 1024 * 1024)) * 10) / 10;
@@ -246,7 +252,7 @@ export const adminService = {
           plan: sub?.planKey ?? 'free',
           subscriptionStatus: sub?.status ?? 'active',
           members,
-          mrr: PLAN_MRR[sub?.planKey ?? 'free'] ?? 0,
+          mrr: planMonthlyPrice(sub?.planKey ?? 'free'),
           ownerName: owner?.name ?? '—',
           ownerEmail: owner?.email ?? '',
           createdAt: w.createdAt,
@@ -289,7 +295,7 @@ export const adminService = {
             currentPeriodEnd: sub.currentPeriodEnd,
             participantMinutesUsed: sub.participantMinutesUsed,
             participantMinutesIncluded: sub.participantMinutesIncluded,
-            mrr: PLAN_MRR[sub.planKey] ?? 0,
+            mrr: planMonthlyPrice(sub.planKey),
           }
         : null,
       members: members.map((m) => {
@@ -568,7 +574,7 @@ export const adminService = {
           maxConcurrentMeetings: p.maxConcurrentMeetings,
           recordingStorageGb: p.recordingStorageGb,
           features: p.features,
-          priceMonthly: PLAN_MRR[key] ?? 0,
+          priceMonthly: planMonthlyPrice(key, p.monthlyPrice),
           subscribers,
         };
       }),
@@ -581,6 +587,7 @@ export const adminService = {
     key: PlanKey,
     patch: Partial<{
       name: string;
+      monthlyPrice: number;
       includedParticipantMinutes: number;
       overageRatePerMinute: number;
       maxMembers: number;
@@ -595,6 +602,9 @@ export const adminService = {
       {
         $set: {
           ...(patch.name !== undefined ? { name: patch.name } : {}),
+          ...(patch.monthlyPrice !== undefined && Number.isFinite(Number(patch.monthlyPrice))
+            ? { monthlyPrice: Number(patch.monthlyPrice) }
+            : {}),
           ...(patch.includedParticipantMinutes !== undefined
             ? { includedParticipantMinutes: patch.includedParticipantMinutes }
             : {}),
@@ -617,6 +627,7 @@ export const adminService = {
     ).lean();
     if (!updated) throw new NotFoundError('Plan');
     await audit(actor, 'plan.update', { type: 'plan', id: key }, patch as Record<string, unknown>, ip);
+    await syncAllInvoices();
     return this.listPlans();
   },
 
@@ -663,8 +674,7 @@ export const adminService = {
           workspaceId: s.workspaceId,
           status: 'active',
         });
-        const planLabel =
-          s.planKey === 'enterprise' ? 'Business' : s.planKey === 'pro' ? 'Pro' : 'Free';
+        const planDoc = await Plan.findOne({ key: s.planKey }).lean();
         return {
           id: String(s._id),
           workspaceId: String(s.workspaceId),
@@ -672,16 +682,17 @@ export const adminService = {
           email: w?.email || '',
           slug: w?.slug ?? '',
           plan: s.planKey,
-          planLabel,
+          planLabel: planDoc?.name ?? s.planKey,
           status: s.status,
-          amount: PLAN_MRR[s.planKey] ?? 0,
+          amount: planMonthlyPrice(s.planKey, planDoc?.monthlyPrice),
           billingPeriod: 'Monthly',
           nextBilling: s.currentPeriodEnd,
-          paymentMethod: s.stripeCustomerId ? 'VISA •••• 4242' : '—',
+          paymentMethod: 'Invoice',
           invoiceEmail: w?.email || '',
           members,
           minutesUsed: s.participantMinutesUsed,
           minutesIncluded: s.participantMinutesIncluded,
+          recordingStorageGb: planDoc?.recordingStorageGb ?? 0,
           createdAt: w?.createdAt ?? s.createdAt,
         };
       }),
@@ -691,7 +702,9 @@ export const adminService = {
     const pastDue = await Subscription.countDocuments({ status: 'past_due' });
     const cancelled = await Subscription.countDocuments({ status: 'cancelled' });
     const mrrSubs = await Subscription.find({ status: 'active' }).select('planKey').lean();
-    const mrr = mrrSubs.reduce((sum, s) => sum + (PLAN_MRR[s.planKey] ?? 0), 0);
+    const plans = await Plan.find().lean();
+    const priceByKey = new Map(plans.map((p) => [p.key, planMonthlyPrice(p.key, p.monthlyPrice)]));
+    const mrr = mrrSubs.reduce((sum, s) => sum + (priceByKey.get(s.planKey) ?? planMonthlyPrice(s.planKey)), 0);
 
     return {
       kpis: {
@@ -709,11 +722,45 @@ export const adminService = {
     };
   },
 
+  async updateSubscription(
+    actor: UserRecord,
+    id: string,
+    patch: { planKey?: PlanKey; status?: 'active' | 'past_due' | 'cancelled' },
+    ip = '',
+  ) {
+    if (!Types.ObjectId.isValid(id)) throw new NotFoundError('Subscription');
+    const sub = await Subscription.findById(id);
+    if (!sub) throw new NotFoundError('Subscription');
+    if (patch.planKey) {
+      const plan = await Plan.findOne({ key: patch.planKey }).lean();
+      if (!plan) throw new ValidationError('Unknown plan.');
+      sub.planKey = patch.planKey;
+      sub.participantMinutesIncluded = plan.includedParticipantMinutes;
+    }
+    if (patch.status) {
+      sub.status = patch.status;
+    }
+    await sub.save();
+    await syncInvoiceForWorkspace(String(sub.workspaceId));
+    await audit(
+      actor,
+      'subscription.update',
+      { type: 'subscription', id },
+      patch as Record<string, unknown>,
+      ip,
+    );
+    const listed = await this.listSubscriptions({ page: 1, limit: 100, search: undefined });
+    const item = listed.items.find((row) => row && String((row as { id: string }).id) === id);
+    return item ?? { id: String(sub._id), plan: sub.planKey, status: sub.status };
+  },
+
   async billingOverview() {
     const subs = await Subscription.find().lean();
+    const plans = await Plan.find().lean();
+    const priceByKey = new Map(plans.map((p) => [p.key, planMonthlyPrice(p.key, p.monthlyPrice)]));
     const mrr = subs
       .filter((s) => s.status === 'active')
-      .reduce((sum, s) => sum + (PLAN_MRR[s.planKey] ?? 0), 0);
+      .reduce((sum, s) => sum + (priceByKey.get(s.planKey) ?? planMonthlyPrice(s.planKey)), 0);
     const pastDue = subs.filter((s) => s.status === 'past_due');
     const byPlan = {
       free: subs.filter((s) => s.planKey === 'free' && s.status === 'active').length,
@@ -725,45 +772,33 @@ export const adminService = {
       arr: mrr * 12,
       activeSubscriptions: subs.filter((s) => s.status === 'active').length,
       pastDueCount: pastDue.length,
-      pastDueAmount: pastDue.reduce((sum, s) => sum + (PLAN_MRR[s.planKey] ?? 0), 0),
+      pastDueAmount: pastDue.reduce(
+        (sum, s) => sum + (priceByKey.get(s.planKey) ?? planMonthlyPrice(s.planKey)),
+        0,
+      ),
       byPlan,
     };
   },
 
-  async listInvoices(q: { page?: number; limit?: number; search?: string }) {
+  async listInvoices(q: { page?: number; limit?: number; search?: string; status?: string }) {
+    await syncAllInvoices();
     const page = Math.max(1, q.page ?? 1);
     const limit = Math.min(100, Math.max(1, q.limit ?? 25));
-    const subs = await Subscription.find().sort({ updatedAt: -1 }).lean();
-    const all = await Promise.all(
-      subs.map(async (s, idx) => {
-        const w = await Workspace.findById(s.workspaceId).lean();
-        const amount = PLAN_MRR[s.planKey] ?? 0;
-        const number = `INV-${String(1000 + idx).padStart(4, '0')}`;
-        const row = {
-          id: String(s._id),
-          number,
-          workspaceId: String(s.workspaceId),
-          organization: w?.name ?? '—',
-          email: w?.email || '',
-          amount,
-          status: s.status === 'active' ? 'paid' : s.status === 'past_due' ? 'overdue' : 'void',
-          issuedAt: s.currentPeriodStart,
-          dueAt: s.currentPeriodEnd,
-          plan: s.planKey,
-        };
-        if (q.search?.trim()) {
-          const term = q.search.trim().toLowerCase();
-          if (
-            !row.organization.toLowerCase().includes(term) &&
-            !row.number.toLowerCase().includes(term)
-          ) {
-            return null;
-          }
-        }
-        return row;
-      }),
-    );
-    const filtered = all.filter(Boolean) as NonNullable<(typeof all)[number]>[];
+    const filter: Record<string, unknown> = {};
+    if (q.status === 'issued' || q.status === 'paid' || q.status === 'void') {
+      filter.status = q.status;
+    }
+    const rows = await Invoice.find(filter).sort({ issuedAt: -1 }).exec();
+    const mapped = await Promise.all(rows.map((row) => toInvoiceDto(row)));
+    const term = q.search?.trim().toLowerCase() ?? '';
+    const filtered = term
+      ? mapped.filter(
+          (row) =>
+            row.organization.toLowerCase().includes(term) ||
+            row.number.toLowerCase().includes(term) ||
+            row.email.toLowerCase().includes(term),
+        )
+      : mapped;
     const start = (page - 1) * limit;
     return {
       items: filtered.slice(start, start + limit),
@@ -771,6 +806,19 @@ export const adminService = {
       page,
       limit,
     };
+  },
+
+  async getInvoice(id: string) {
+    if (!Types.ObjectId.isValid(id)) throw new NotFoundError('Invoice');
+    const inv = await Invoice.findById(id);
+    if (!inv) throw new NotFoundError('Invoice');
+    return toInvoiceDto(inv);
+  },
+
+  async payInvoice(actor: UserRecord, id: string, ip = '') {
+    const paid = await markInvoicePaid(id);
+    await audit(actor, 'invoice.pay', { type: 'invoice', id }, { number: paid.number }, ip);
+    return toInvoiceDto(paid);
   },
 
   async listAuditLogs(q: { search?: string; page?: number; limit?: number }) {

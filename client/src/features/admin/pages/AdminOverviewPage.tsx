@@ -50,7 +50,7 @@ function KpiCard({
         </span>
       </div>
       <p className="mt-2 text-[26px] font-bold tracking-tight text-[#151D2B]">{value}</p>
-      <p className="mt-1 text-[11px] font-medium text-emerald-600">{trend}</p>
+      <p className="mt-1 text-[11px] font-medium text-[#6F7B8C]">{trend}</p>
     </div>
   );
 }
@@ -213,35 +213,35 @@ export function AdminOverviewPage() {
         <KpiCard
           label="Total Rooms"
           value={kpis.totalRooms}
-          trend="+12% vs last 30 days"
+          trend="Across all workspaces"
           icon={Building2}
           iconClass="bg-[#E2F0FF] text-[#016BE6]"
         />
         <KpiCard
           label="Active Users"
           value={kpis.activeUsers.toLocaleString()}
-          trend="+8% vs last 30 days"
+          trend={`${kpis.totalUsers.toLocaleString()} total accounts`}
           icon={Users}
           iconClass="bg-[#F3E8FF] text-[#7C3AED]"
         />
         <KpiCard
           label="Meetings Today"
           value={kpis.meetingsToday}
-          trend="+14% vs yesterday"
+          trend="Started today"
           icon={CalendarDays}
           iconClass="bg-[#DCFCE7] text-[#16A34A]"
         />
         <KpiCard
           label="Total Recordings"
           value={kpis.totalRecordings.toLocaleString()}
-          trend="+11% vs last 30 days"
+          trend="Stored recordings"
           icon={Film}
           iconClass="bg-[#FEF3C7] text-[#D97706]"
         />
         <KpiCard
           label="Storage Used"
           value={`${kpis.storageUsedGb} GB`}
-          trend={`+6% of ${kpis.storageLimitGb >= 1024 ? '1 TB' : `${kpis.storageLimitGb} GB`}`}
+          trend={`${kpis.storageLimitGb >= 1024 ? '1 TB' : `${kpis.storageLimitGb} GB`} plan limit`}
           icon={CloudUpload}
           iconClass="bg-[#E2F0FF] text-[#016BE6]"
         />

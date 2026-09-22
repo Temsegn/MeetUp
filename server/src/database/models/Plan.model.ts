@@ -12,6 +12,7 @@ export interface IPlanFeatures {
 export interface IPlan extends Document {
   key: PlanKey;
   name: string;
+  monthlyPrice: number;
   includedParticipantMinutes: number;
   overageRatePerMinute: number;
   maxMembers: number;
@@ -24,6 +25,7 @@ const planSchema = new Schema<IPlan>(
   {
     key: { type: String, enum: ['free', 'pro', 'enterprise'], required: true, unique: true },
     name: { type: String, required: true },
+    monthlyPrice: { type: Number, required: true, default: 0 },
     includedParticipantMinutes: { type: Number, required: true },
     overageRatePerMinute: { type: Number, required: true, default: 0 },
     maxMembers: { type: Number, required: true },
@@ -45,6 +47,7 @@ export const DEFAULT_PLANS: Array<Omit<IPlan, keyof Document>> = [
   {
     key: 'free',
     name: 'Free',
+    monthlyPrice: 0,
     includedParticipantMinutes: 500,
     overageRatePerMinute: 0.004,
     maxMembers: 5,
@@ -55,6 +58,7 @@ export const DEFAULT_PLANS: Array<Omit<IPlan, keyof Document>> = [
   {
     key: 'pro',
     name: 'Pro',
+    monthlyPrice: 49,
     includedParticipantMinutes: 10000,
     overageRatePerMinute: 0.002,
     maxMembers: 50,
@@ -65,6 +69,7 @@ export const DEFAULT_PLANS: Array<Omit<IPlan, keyof Document>> = [
   {
     key: 'enterprise',
     name: 'Enterprise',
+    monthlyPrice: 299,
     includedParticipantMinutes: 100000,
     overageRatePerMinute: 0.001,
     maxMembers: 1000,

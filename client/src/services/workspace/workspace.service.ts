@@ -96,6 +96,7 @@ export interface BillingUsage {
 export interface PlanInfo {
   key: 'free' | 'pro' | 'enterprise';
   name: string;
+  monthlyPrice?: number;
   includedParticipantMinutes: number;
   overageRatePerMinute: number;
   maxMembers: number;
@@ -107,6 +108,27 @@ export interface PlanInfo {
     waitingRoom: boolean;
     autoRecord: boolean;
   };
+}
+
+export interface BillingInvoice {
+  id: string;
+  number: string;
+  workspaceId: string;
+  organization: string;
+  email: string;
+  status: 'issued' | 'paid' | 'void' | string;
+  planKey: string;
+  currency: string;
+  subtotal: number;
+  tax: number;
+  total: number;
+  periodStart: string;
+  periodEnd: string;
+  lineItems: Array<{ description: string; quantity: number; unitAmount: number; amount: number }>;
+  issuedAt: string;
+  paidAt: string | null;
+  dueAt: string;
+  notes: string;
 }
 
 export interface BillingSubscription {
@@ -325,10 +347,22 @@ export const workspaceService = {
   },
 
   async listInvoices(workspaceId: string) {
-    return apiFetch<{ invoices: Array<{ id: string; date: string; amount: string; status: string }> }>(
-      '/billing/invoices',
-      { headers: workspaceHeaders(workspaceId) },
-    );
+    return apiFetch<{ invoices: BillingInvoice[] }>('/billing/invoices', {
+      headers: workspaceHeaders(workspaceId),
+    });
+  },
+
+  async getInvoice(workspaceId: string, invoiceId: string) {
+    return apiFetch<BillingInvoice>(`/billing/invoices/${invoiceId}`, {
+      headers: workspaceHeaders(workspaceId),
+    });
+  },
+
+  async payInvoice(workspaceId: string, invoiceId: string) {
+    return apiFetch<BillingInvoice>(`/billing/invoices/${invoiceId}/pay`, {
+      method: 'POST',
+      headers: workspaceHeaders(workspaceId),
+    });
   },
 
   async listPaymentMethods(workspaceId: string) {

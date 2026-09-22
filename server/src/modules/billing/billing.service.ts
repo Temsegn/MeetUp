@@ -1,11 +1,18 @@
 import { Types } from 'mongoose';
 import { Plan } from '../../database/models/Plan.model';
 import { Subscription } from '../../database/models/Subscription.model';
+import { Invoice } from '../../database/models/Invoice.model';
 import { ParticipantMinuteLog } from '../../database/models/ParticipantMinuteLog.model';
 import { Meeting } from '../../database/models/Meeting.model';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../shared/errors/AppError';
 import type { WorkspaceRole } from '../workspace/workspace.types';
 import type { PlanKey } from '../../database/models/Plan.model';
+import {
+  getInvoiceForWorkspace,
+  markInvoicePaid,
+  syncInvoiceForWorkspace,
+  toInvoiceDto,
+} from './invoice.helpers';
 
 export function createBillingService() {
   return {
@@ -14,6 +21,7 @@ export function createBillingService() {
       return plans.map((p) => ({
         key: p.key,
         name: p.name,
+        monthlyPrice: p.monthlyPrice ?? 0,
         includedParticipantMinutes: p.includedParticipantMinutes,
         overageRatePerMinute: p.overageRatePerMinute,
         maxMembers: p.maxMembers,
@@ -42,6 +50,7 @@ export function createBillingService() {
           ? {
               key: plan.key,
               name: plan.name,
+              monthlyPrice: plan.monthlyPrice ?? 0,
               includedParticipantMinutes: plan.includedParticipantMinutes,
               overageRatePerMinute: plan.overageRatePerMinute,
               maxMembers: plan.maxMembers,
@@ -139,6 +148,7 @@ export function createBillingService() {
         { new: true },
       ).lean();
       if (!sub) throw new NotFoundError('Subscription');
+      await syncInvoiceForWorkspace(workspaceId);
       return { subscription: sub, plan };
     },
 
@@ -150,9 +160,28 @@ export function createBillingService() {
       );
     },
 
-    /** Placeholder until a payment provider (e.g. Stripe) is connected. */
-    async listInvoices(_workspaceId: string) {
-      return { invoices: [] as Array<{ id: string; date: string; amount: string; status: string }> };
+    async listInvoices(workspaceId: string) {
+      await syncInvoiceForWorkspace(workspaceId);
+      const rows = await Invoice.find({ workspaceId: new Types.ObjectId(workspaceId) })
+        .sort({ issuedAt: -1 })
+        .exec();
+      const invoices = await Promise.all(rows.map((row) => toInvoiceDto(row)));
+      return { invoices };
+    },
+
+    async getInvoice(workspaceId: string, invoiceId: string) {
+      await syncInvoiceForWorkspace(workspaceId);
+      const inv = await getInvoiceForWorkspace(workspaceId, invoiceId);
+      return toInvoiceDto(inv);
+    },
+
+    async payInvoice(workspaceId: string, invoiceId: string, actorRole: WorkspaceRole) {
+      if (actorRole !== 'owner' && actorRole !== 'admin') {
+        throw new ForbiddenError('Only an owner or admin can mark an invoice paid.');
+      }
+      const inv = await getInvoiceForWorkspace(workspaceId, invoiceId);
+      const paid = await markInvoicePaid(String(inv._id));
+      return toInvoiceDto(paid);
     },
 
     async listPaymentMethods(_workspaceId: string) {

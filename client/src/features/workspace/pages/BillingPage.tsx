@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { CreditCard } from 'lucide-react';
 import { AppHeader } from '../../dashboard/components/AppHeader';
 import { useAuth } from '../../../contexts/AuthContext';
 import {
   workspaceService,
+  type BillingInvoice,
   type BillingUsage,
   type PlanInfo,
   type BillingSubscription,
 } from '../../../services/workspace/workspace.service';
+import { fmtDate, InvoiceStatusPill, money } from '../components/InvoiceDocument';
 
 export function BillingPage() {
   const { activeWorkspace } = useAuth();
@@ -15,6 +18,7 @@ export function BillingPage() {
   const [subscription, setSubscription] = useState<BillingSubscription | null>(null);
   const [plan, setPlan] = useState<PlanInfo | null>(null);
   const [usage, setUsage] = useState<BillingUsage | null>(null);
+  const [invoices, setInvoices] = useState<BillingInvoice[]>([]);
   const [meetings, setMeetings] = useState<
     { meetingId: string | null; title: string; participantMinutes: number; durationSeconds: number }[]
   >([]);
@@ -26,29 +30,38 @@ export function BillingPage() {
   const isOwner = activeWorkspace?.role === 'owner';
   const isAdmin = activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
 
-  useEffect(() => {
+  const load = async () => {
     if (!activeWorkspace?.workspaceId) {
       setLoading(false);
       return;
     }
     setLoading(true);
-    Promise.all([
-      workspaceService.listPlans(activeWorkspace.workspaceId),
-      workspaceService.getBillingPlan(activeWorkspace.workspaceId),
-      workspaceService.getBillingUsage(activeWorkspace.workspaceId),
-      isAdmin
-        ? workspaceService.getBillingUsageByMeeting(activeWorkspace.workspaceId)
-        : Promise.resolve({ meetings: [] }),
-    ])
-      .then(([planList, planData, usageData, meetingData]) => {
-        setPlans(planList);
-        setSubscription(planData.subscription);
-        setPlan(planData.plan);
-        setUsage(usageData);
-        setMeetings(meetingData.meetings);
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load billing.'))
-      .finally(() => setLoading(false));
+    try {
+      const [planList, planData, usageData, invoiceData, meetingData] = await Promise.all([
+        workspaceService.listPlans(activeWorkspace.workspaceId),
+        workspaceService.getBillingPlan(activeWorkspace.workspaceId),
+        workspaceService.getBillingUsage(activeWorkspace.workspaceId),
+        workspaceService.listInvoices(activeWorkspace.workspaceId),
+        isAdmin
+          ? workspaceService.getBillingUsageByMeeting(activeWorkspace.workspaceId)
+          : Promise.resolve({ meetings: [] }),
+      ]);
+      setPlans(planList);
+      setSubscription(planData.subscription);
+      setPlan(planData.plan);
+      setUsage(usageData);
+      setInvoices(invoiceData.invoices);
+      setMeetings(meetingData.meetings);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load billing.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspace?.workspaceId, isAdmin]);
 
   const changePlan = async (planKey: 'free' | 'pro' | 'enterprise') => {
@@ -61,8 +74,12 @@ export function BillingPage() {
       setSubscription(data.subscription);
       setPlan(data.plan);
       setMessage(`Plan updated to ${data.plan.name}.`);
-      const usageData = await workspaceService.getBillingUsage(activeWorkspace.workspaceId);
+      const [usageData, invoiceData] = await Promise.all([
+        workspaceService.getBillingUsage(activeWorkspace.workspaceId),
+        workspaceService.listInvoices(activeWorkspace.workspaceId),
+      ]);
       setUsage(usageData);
+      setInvoices(invoiceData.invoices);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not change plan.');
     } finally {
@@ -80,7 +97,7 @@ export function BillingPage() {
         <div className="border-b border-[#E8ECF1] px-3.5 pt-3.5 pb-3 sm:px-5 md:pl-6 lg:pr-6">
           <AppHeader
             title="Billing & Plan"
-            subtitle="Participant-minute usage across your organization."
+            subtitle="Live participant-minute usage, plan, and invoices for this workspace."
           />
         </div>
 
@@ -107,9 +124,9 @@ export function BillingPage() {
                 <div className="h-full rounded-full bg-[#016BE6]" style={{ width: `${usedPct}%` }} />
               </div>
               <p className="mt-2 text-[11px] text-[#8A94A6]">
-                Period {new Date(usage.periodStart).toLocaleDateString()} –{' '}
-                {new Date(usage.periodEnd).toLocaleDateString()}
-                {subscription ? ` · status ${subscription.status}` : ''}
+                Period {fmtDate(usage.periodStart)} – {fmtDate(usage.periodEnd)}
+                {subscription ? ` · ${subscription.status}` : ''}
+                {plan ? ` · ${money(plan.monthlyPrice ?? 0)} / month` : ''}
               </p>
             </section>
           ) : null}
@@ -133,15 +150,17 @@ export function BillingPage() {
                     ) : null}
                   </div>
                   <p className="text-[20px] font-bold text-[#151D2B]">
-                    {p.includedParticipantMinutes.toLocaleString()}
-                    <span className="ml-1 text-[12px] font-medium text-[#6F7B8C]">participant-min</span>
+                    {(p.monthlyPrice ?? 0) > 0 ? money(p.monthlyPrice ?? 0) : 'Free'}
+                    <span className="ml-1 text-[12px] font-medium text-[#6F7B8C]">/ month</span>
+                  </p>
+                  <p className="mt-1 text-[12px] text-[#6F7B8C]">
+                    {p.includedParticipantMinutes.toLocaleString()} participant-min included
                   </p>
                   <ul className="mt-3 space-y-1 text-[11px] text-[#6F7B8C]">
                     <li>Up to {p.maxMembers} members</li>
                     <li>{p.maxConcurrentMeetings} concurrent meetings</li>
                     <li>{p.recordingStorageGb} GB recordings</li>
-                    <li>Messages: {p.features.messages ? 'Yes' : 'No'}</li>
-                    <li>Reports: {p.features.reports ? 'Yes' : 'No'}</li>
+                    <li>Overage {money(p.overageRatePerMinute)} / min</li>
                   </ul>
                   {isOwner && !active ? (
                     <button
@@ -181,15 +200,44 @@ export function BillingPage() {
           <section className="rounded-xl border border-[#E8ECF1] bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
             <h2 className="mb-2 text-[13px] font-semibold text-[#151D2B]">Payment method</h2>
             <p className="text-[12px] text-[#6F7B8C]">
-              No payment methods on file. Card checkout can be connected when a payment provider is enabled.
+              No card on file. Invoices are generated from the current plan and usage. An owner or admin
+              can mark an invoice paid until a payment provider is connected.
             </p>
           </section>
 
-          <section className="rounded-xl border border-[#E8ECF1] bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
-            <h2 className="mb-2 text-[13px] font-semibold text-[#151D2B]">Invoices</h2>
-            <p className="text-[12px] text-[#6F7B8C]">
-              No invoices yet. History will appear here after billing is connected.
-            </p>
+          <section className="overflow-hidden rounded-xl border border-[#E8ECF1] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+            <div className="border-b border-[#F1F4F8] px-4 py-3">
+              <h2 className="text-[13px] font-semibold text-[#151D2B]">Invoices</h2>
+            </div>
+            {invoices.length === 0 && !loading ? (
+              <p className="px-4 py-6 text-[12px] text-[#6F7B8C]">
+                No invoices yet. One is created for the current billing period when a plan is active.
+              </p>
+            ) : (
+              <ul className="divide-y divide-[#F1F4F8]">
+                {invoices.map((inv) => (
+                  <li key={inv.id}>
+                    <Link
+                      to={`/app/billing/invoices/${inv.id}`}
+                      className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-[#F8FAFC]"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-[12px] font-semibold text-[#151D2B]">{inv.number}</p>
+                        <p className="text-[11px] text-[#8A94A6]">
+                          {fmtDate(inv.issuedAt)} · {fmtDate(inv.periodStart)} – {fmtDate(inv.periodEnd)}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <span className="text-[12px] font-semibold text-[#151D2B]">
+                          {money(inv.total, inv.currency)}
+                        </span>
+                        <InvoiceStatusPill status={inv.status} />
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </div>
       </div>

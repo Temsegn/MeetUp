@@ -17,7 +17,11 @@ function slugify(name: string, userId: string): string {
 
 export async function seedPlans(): Promise<void> {
   for (const plan of DEFAULT_PLANS) {
-    await Plan.updateOne({ key: plan.key }, { $set: plan }, { upsert: true });
+    await Plan.updateOne({ key: plan.key }, { $setOnInsert: plan }, { upsert: true });
+    await Plan.updateOne(
+      { key: plan.key, monthlyPrice: { $exists: false } },
+      { $set: { monthlyPrice: plan.monthlyPrice } },
+    );
   }
 }
 
