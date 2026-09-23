@@ -21,3 +21,6 @@ Thumbs.db
 # Runtime data
 /server/recordings/
 /server/storage/
+
+# Local QA Google Sheets workbooks (import only — do not commit)
+docs/qa/

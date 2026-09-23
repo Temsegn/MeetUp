@@ -3,7 +3,11 @@ import { Link } from 'react-router-dom';
 import { Building2, Users, CreditCard, Save } from 'lucide-react';
 import { AppHeader } from '../../dashboard/components/AppHeader';
 import { useAuth } from '../../../contexts/AuthContext';
-import { workspaceService, type Workspace } from '../../../services/workspace/workspace.service';
+import {
+  workspaceService,
+  type PaymentMethodInfo,
+  type Workspace,
+} from '../../../services/workspace/workspace.service';
 
 export function WorkspacePage() {
   const { activeWorkspace } = useAuth();
@@ -12,6 +16,7 @@ export function WorkspacePage() {
   const [waitingRoom, setWaitingRoom] = useState(false);
   const [autoRecord, setAutoRecord] = useState(false);
   const [maxMinutes, setMaxMinutes] = useState(120);
+  const [methods, setMethods] = useState<PaymentMethodInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -36,6 +41,10 @@ export function WorkspacePage() {
       })
       .catch(() => setError('Could not load workspace.'))
       .finally(() => setLoading(false));
+    workspaceService
+      .listPaymentMethods(activeWorkspace.workspaceId)
+      .then((data) => setMethods(data.paymentMethods))
+      .catch(() => setMethods([]));
   }, [activeWorkspace?.workspaceId]);
 
   const save = async () => {
@@ -193,10 +202,22 @@ export function WorkspacePage() {
                     <CreditCard className="mt-0.5 size-4 text-[#016BE6]" />
                     <div>
                       <p className="text-[13px] font-semibold text-[#151D2B]">Payment method</p>
-                      <p className="mt-0.5 text-[12px] text-[#6F7B8C]">
-                        Card on file will appear here after Stripe billing is connected.
-                      </p>
-                      <p className="mt-2 text-[11px] font-semibold text-[#8A94A6]">No payment method yet</p>
+                      {methods[0] ? (
+                        <p className="mt-0.5 text-[12px] text-[#6F7B8C]">
+                          {methods[0].brand.charAt(0).toUpperCase() + methods[0].brand.slice(1)} ••••{' '}
+                          {methods[0].last4} · {methods[0].exp}
+                        </p>
+                      ) : (
+                        <p className="mt-0.5 text-[12px] text-[#6F7B8C]">
+                          Add a card on Billing to pay and upgrade to Pro or Enterprise.
+                        </p>
+                      )}
+                      <Link
+                        to="/app/billing"
+                        className="mt-2 inline-block text-[11px] font-semibold text-[#016BE6]"
+                      >
+                        {methods[0] ? 'Manage billing' : 'Pay to upgrade'}
+                      </Link>
                     </div>
                   </div>
                 </div>

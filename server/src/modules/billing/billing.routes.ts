@@ -32,6 +32,19 @@ router.patch('/plan', requireWorkspace('owner'), async (req: AuthRequest, res) =
   res.json(data);
 });
 
+/** Pay with a card to move onto a paid plan. Card number is never stored. */
+router.post('/upgrade', requireWorkspace('owner'), async (req: AuthRequest, res) => {
+  const body = req.body as { planKey?: PlanKey; card?: unknown };
+  const planKey = body.planKey ?? 'pro';
+  const data = await billingService.upgradePlan(
+    req.workspaceId!,
+    req.workspaceRole!,
+    planKey,
+    body.card,
+  );
+  res.json(data);
+});
+
 /** Invoices generated from plan + usage. */
 router.get('/invoices', requireWorkspace('member'), async (req: AuthRequest, res) => {
   const data = await billingService.listInvoices(req.workspaceId!);
@@ -48,13 +61,22 @@ router.post('/invoices/:invoiceId/pay', requireWorkspace('admin'), async (req: A
     req.workspaceId!,
     String(req.params.invoiceId),
     req.workspaceRole!,
+    (req.body as { card?: unknown })?.card,
   );
   res.json(data);
 });
 
-/** Payment methods — empty until a payment provider is connected. */
 router.get('/payment-methods', requireWorkspace('member'), async (req: AuthRequest, res) => {
   const data = await billingService.listPaymentMethods(req.workspaceId!);
+  res.json(data);
+});
+
+router.post('/payment-methods', requireWorkspace('admin'), async (req: AuthRequest, res) => {
+  const data = await billingService.addPaymentMethod(
+    req.workspaceId!,
+    req.workspaceRole!,
+    (req.body as { card?: unknown })?.card ?? req.body,
+  );
   res.json(data);
 });
 

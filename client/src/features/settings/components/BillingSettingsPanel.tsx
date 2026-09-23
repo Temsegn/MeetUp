@@ -94,7 +94,7 @@ export function BillingSettingsPanel() {
             <div className="h-full rounded-full bg-[#016BE6]" style={{ width: `${usedPct}%` }} />
           </div>
           <p className="mt-3 text-[12px] text-[#6F7B8C]">
-            Invoices on file: {invoiceCount}. Payment methods connect when a provider is enabled.
+            Invoices on file: {invoiceCount}. Pay with a card on Billing to upgrade to Pro or Enterprise.
           </p>
         </>
       ) : null}

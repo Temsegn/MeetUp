@@ -142,6 +142,23 @@ export interface BillingSubscription {
   participantMinutesIncluded: number;
 }
 
+export interface PaymentMethodInfo {
+  id: string;
+  brand: string;
+  last4: string;
+  exp: string;
+  holderName?: string;
+  isDefault?: boolean;
+}
+
+export interface CheckoutCard {
+  holderName: string;
+  number: string;
+  expMonth: number;
+  expYear: number;
+  cvc: string;
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function workspaceHeaders(workspaceId?: string | null): Record<string, string> {
@@ -358,17 +375,39 @@ export const workspaceService = {
     });
   },
 
-  async payInvoice(workspaceId: string, invoiceId: string) {
+  async payInvoice(workspaceId: string, invoiceId: string, card?: CheckoutCard) {
     return apiFetch<BillingInvoice>(`/billing/invoices/${invoiceId}/pay`, {
       method: 'POST',
+      body: card ? { card } : {},
       headers: workspaceHeaders(workspaceId),
     });
   },
 
   async listPaymentMethods(workspaceId: string) {
+    return apiFetch<{ paymentMethods: PaymentMethodInfo[] }>('/billing/payment-methods', {
+      headers: workspaceHeaders(workspaceId),
+    });
+  },
+
+  async addPaymentMethod(workspaceId: string, card: CheckoutCard) {
+    return apiFetch<{ paymentMethods: PaymentMethodInfo[] }>('/billing/payment-methods', {
+      method: 'POST',
+      body: { card },
+      headers: workspaceHeaders(workspaceId),
+    });
+  },
+
+  async upgradePlan(workspaceId: string, planKey: 'free' | 'pro' | 'enterprise', card?: CheckoutCard) {
     return apiFetch<{
-      paymentMethods: Array<{ id: string; brand: string; last4: string; exp: string }>;
-    }>('/billing/payment-methods', { headers: workspaceHeaders(workspaceId) });
+      subscription: BillingSubscription;
+      plan: PlanInfo;
+      invoice: BillingInvoice | null;
+      paymentMethods: PaymentMethodInfo[];
+    }>('/billing/upgrade', {
+      method: 'POST',
+      body: { planKey, card },
+      headers: workspaceHeaders(workspaceId),
+    });
   },
 
   async listAuditLogs(workspaceId: string, params: { page?: number; limit?: number } = {}) {

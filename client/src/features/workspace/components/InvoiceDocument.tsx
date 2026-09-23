@@ -82,7 +82,7 @@ export function InvoiceDocument({
               onClick={onPay}
               className="inline-flex h-9 items-center rounded-xl bg-[#016BE6] px-3 text-[12px] font-semibold text-white disabled:opacity-60"
             >
-              {paying ? 'Marking paid…' : 'Mark paid'}
+              {paying ? 'Paying…' : invoice.total > 0 ? 'Pay now' : 'Mark paid'}
             </button>
           ) : null}
         </div>
@@ -110,7 +110,7 @@ export function InvoiceDocument({
             <div className="mt-4 space-y-2.5 border-t border-[#E1E7EE] pt-4 text-[12px]">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[#62728F]">Payment method</span>
-                <span className="text-[#091A49]">Invoice (manual settlement)</span>
+                <span className="text-[#091A49]">Card checkout</span>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[#62728F]">Billing period</span>

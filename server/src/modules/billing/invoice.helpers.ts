@@ -119,37 +119,68 @@ export async function syncInvoiceForWorkspace(workspaceId: string): Promise<IInv
     return existing;
   }
 
-  const y = sub.currentPeriodStart.getUTCFullYear();
-  const m = String(sub.currentPeriodStart.getUTCMonth() + 1).padStart(2, '0');
-  const suffix = String(sub.workspaceId).slice(-6).toUpperCase();
-  const number = `INV-${y}${m}-${suffix}`;
+  const payload = {
+    workspaceId: sub.workspaceId,
+    status: (autoPaid ? 'paid' : 'issued') as const,
+    planKey: sub.planKey,
+    currency: 'USD',
+    subtotal,
+    tax,
+    total,
+    periodStart: sub.currentPeriodStart,
+    periodEnd: sub.currentPeriodEnd,
+    lineItems,
+    issuedAt: new Date(),
+    paidAt: autoPaid ? new Date() : null,
+    dueAt: sub.currentPeriodEnd,
+    notes: 'Generated from workspace plan and participant-minute usage.',
+  };
 
   try {
     return await Invoice.create({
-      workspaceId: sub.workspaceId,
-      number,
-      status: autoPaid ? 'paid' : 'issued',
-      planKey: sub.planKey,
-      currency: 'USD',
-      subtotal,
-      tax,
-      total,
-      periodStart: sub.currentPeriodStart,
-      periodEnd: sub.currentPeriodEnd,
-      lineItems,
-      issuedAt: new Date(),
-      paidAt: autoPaid ? new Date() : null,
-      dueAt: sub.currentPeriodEnd,
-      notes: 'Generated from workspace plan and participant-minute usage.',
+      ...payload,
+      number: await nextInvoiceNumber(String(sub.workspaceId), sub.currentPeriodStart),
     });
   } catch (err) {
-    const dup = await Invoice.findOne({
+    const dupPeriod = await Invoice.findOne({
       workspaceId: sub.workspaceId,
       periodStart: sub.currentPeriodStart,
     });
-    if (dup) return dup;
+    if (dupPeriod) return dupPeriod;
+    if (isDuplicateKey(err)) {
+      try {
+        return await Invoice.create({
+          ...payload,
+          number: await nextInvoiceNumber(String(sub.workspaceId), sub.currentPeriodStart, true),
+        });
+      } catch (retryErr) {
+        const again = await Invoice.findOne({
+          workspaceId: sub.workspaceId,
+          periodStart: sub.currentPeriodStart,
+        });
+        if (again) return again;
+        throw retryErr;
+      }
+    }
     throw err;
   }
+}
+
+function isDuplicateKey(err: unknown): boolean {
+  return Boolean(err && typeof err === 'object' && (err as { code?: number }).code === 11000);
+}
+
+async function nextInvoiceNumber(workspaceId: string, periodStart: Date, forceUnique = false): Promise<string> {
+  const y = periodStart.getUTCFullYear();
+  const m = String(periodStart.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(periodStart.getUTCDate()).padStart(2, '0');
+  const suffix = workspaceId.slice(-6).toUpperCase();
+  const base = `INV-${y}${m}${d}-${suffix}`;
+  if (!forceUnique) {
+    const taken = await Invoice.exists({ number: base });
+    if (!taken) return base;
+  }
+  return `${base}-${Date.now().toString(36).toUpperCase()}`;
 }
 
 export async function syncAllInvoices(): Promise<void> {

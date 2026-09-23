@@ -9,8 +9,11 @@ import {
   type BillingUsage,
   type PlanInfo,
   type BillingSubscription,
+  type PaymentMethodInfo,
+  type CheckoutCard,
 } from '../../../services/workspace/workspace.service';
 import { fmtDate, InvoiceStatusPill, money } from '../components/InvoiceDocument';
+import { PlanCheckoutModal } from '../components/PlanCheckoutModal';
 
 export function BillingPage() {
   const { activeWorkspace } = useAuth();
@@ -19,6 +22,7 @@ export function BillingPage() {
   const [plan, setPlan] = useState<PlanInfo | null>(null);
   const [usage, setUsage] = useState<BillingUsage | null>(null);
   const [invoices, setInvoices] = useState<BillingInvoice[]>([]);
+  const [methods, setMethods] = useState<PaymentMethodInfo[]>([]);
   const [meetings, setMeetings] = useState<
     { meetingId: string | null; title: string; participantMinutes: number; durationSeconds: number }[]
   >([]);
@@ -26,6 +30,11 @@ export function BillingPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [checkout, setCheckout] = useState<
+    | { mode: 'upgrade'; plan: PlanInfo }
+    | { mode: 'card' }
+    | null
+  >(null);
 
   const isOwner = activeWorkspace?.role === 'owner';
   const isAdmin = activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
@@ -37,7 +46,7 @@ export function BillingPage() {
     }
     setLoading(true);
     try {
-      const [planList, planData, usageData, invoiceData, meetingData] = await Promise.all([
+      const [planList, planData, usageData, invoiceData, meetingData, methodData] = await Promise.all([
         workspaceService.listPlans(activeWorkspace.workspaceId),
         workspaceService.getBillingPlan(activeWorkspace.workspaceId),
         workspaceService.getBillingUsage(activeWorkspace.workspaceId),
@@ -45,6 +54,7 @@ export function BillingPage() {
         isAdmin
           ? workspaceService.getBillingUsageByMeeting(activeWorkspace.workspaceId)
           : Promise.resolve({ meetings: [] }),
+        workspaceService.listPaymentMethods(activeWorkspace.workspaceId),
       ]);
       setPlans(planList);
       setSubscription(planData.subscription);
@@ -52,6 +62,7 @@ export function BillingPage() {
       setUsage(usageData);
       setInvoices(invoiceData.invoices);
       setMeetings(meetingData.meetings);
+      setMethods(methodData.paymentMethods);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load billing.');
     } finally {
@@ -64,24 +75,82 @@ export function BillingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspace?.workspaceId, isAdmin]);
 
-  const changePlan = async (planKey: 'free' | 'pro' | 'enterprise') => {
+  const currentPrice = plan?.monthlyPrice ?? 0;
+
+  const startPlanChange = (next: PlanInfo) => {
     if (!activeWorkspace?.workspaceId || !isOwner) return;
-    setBusy(true);
     setError(null);
     setMessage(null);
+    if ((next.monthlyPrice ?? 0) > currentPrice) {
+      setCheckout({ mode: 'upgrade', plan: next });
+      return;
+    }
+    void applyDowngrade(next.key);
+  };
+
+  const applyDowngrade = async (planKey: 'free' | 'pro' | 'enterprise') => {
+    if (!activeWorkspace?.workspaceId) return;
+    setBusy(true);
+    setError(null);
     try {
       const data = await workspaceService.changePlan(activeWorkspace.workspaceId, planKey);
       setSubscription(data.subscription);
       setPlan(data.plan);
       setMessage(`Plan updated to ${data.plan.name}.`);
-      const [usageData, invoiceData] = await Promise.all([
-        workspaceService.getBillingUsage(activeWorkspace.workspaceId),
-        workspaceService.listInvoices(activeWorkspace.workspaceId),
-      ]);
-      setUsage(usageData);
-      setInvoices(invoiceData.invoices);
+      await refreshAfterChange();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not change plan.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const refreshAfterChange = async () => {
+    if (!activeWorkspace?.workspaceId) return;
+    const [usageData, invoiceData, methodData] = await Promise.all([
+      workspaceService.getBillingUsage(activeWorkspace.workspaceId),
+      workspaceService.listInvoices(activeWorkspace.workspaceId),
+      workspaceService.listPaymentMethods(activeWorkspace.workspaceId),
+    ]);
+    setUsage(usageData);
+    setInvoices(invoiceData.invoices);
+    setMethods(methodData.paymentMethods);
+  };
+
+  const payUpgrade = async (card?: CheckoutCard) => {
+    if (!activeWorkspace?.workspaceId || checkout?.mode !== 'upgrade') return;
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await workspaceService.upgradePlan(
+        activeWorkspace.workspaceId,
+        checkout.plan.key,
+        card,
+      );
+      setSubscription(data.subscription);
+      setPlan(data.plan);
+      setMethods(data.paymentMethods);
+      setMessage(`Demo payment OK. Upgraded to ${data.plan.name}.`);
+      setCheckout(null);
+      await refreshAfterChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Payment failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveCard = async (card?: CheckoutCard) => {
+    if (!activeWorkspace?.workspaceId || !card) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await workspaceService.addPaymentMethod(activeWorkspace.workspaceId, card);
+      setMethods(data.paymentMethods);
+      setMessage('Card saved. You can use it to pay for Pro or Enterprise.');
+      setCheckout(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save card.');
     } finally {
       setBusy(false);
     }
@@ -103,7 +172,7 @@ export function BillingPage() {
 
         <div className="space-y-4 px-3.5 py-4 sm:px-5 md:px-6 lg:pr-6">
           {loading ? <p className="text-[13px] text-[#6F7B8C]">Loading billing…</p> : null}
-          {error ? <p className="text-[12px] text-[#DC2626]">{error}</p> : null}
+          {error && !checkout ? <p className="text-[12px] text-[#DC2626]">{error}</p> : null}
           {message ? <p className="text-[12px] text-[#059669]">{message}</p> : null}
 
           {!loading && usage ? (
@@ -134,6 +203,7 @@ export function BillingPage() {
           <section className="grid gap-3 lg:grid-cols-3">
             {plans.map((p) => {
               const active = plan?.key === p.key || usage?.planKey === p.key;
+              const isUpgrade = (p.monthlyPrice ?? 0) > currentPrice;
               return (
                 <div
                   key={p.key}
@@ -166,10 +236,10 @@ export function BillingPage() {
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => void changePlan(p.key)}
+                      onClick={() => startPlanChange(p)}
                       className="mt-4 h-9 w-full rounded-xl bg-[#016BE6] text-[12px] font-semibold text-white hover:bg-[#0056EF] disabled:opacity-60"
                     >
-                      Switch to {p.name}
+                      {isUpgrade ? `Pay ${money(p.monthlyPrice ?? 0)} · Upgrade to ${p.name}` : `Switch to ${p.name}`}
                     </button>
                   ) : null}
                 </div>
@@ -198,11 +268,41 @@ export function BillingPage() {
           ) : null}
 
           <section className="rounded-xl border border-[#E8ECF1] bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
-            <h2 className="mb-2 text-[13px] font-semibold text-[#151D2B]">Payment method</h2>
-            <p className="text-[12px] text-[#6F7B8C]">
-              No card on file. Invoices are generated from the current plan and usage. An owner or admin
-              can mark an invoice paid until a payment provider is connected.
-            </p>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <h2 className="text-[13px] font-semibold text-[#151D2B]">Payment method</h2>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setCheckout({ mode: 'card' });
+                  }}
+                  className="text-[12px] font-semibold text-[#016BE6]"
+                >
+                  Add card
+                </button>
+              ) : null}
+            </div>
+            {methods.length === 0 ? (
+              <p className="text-[12px] text-[#6F7B8C]">
+                No card on file. Pay with a card to upgrade to Pro or Enterprise. Only the brand, last 4 digits,
+                and expiry are saved.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {methods.map((m) => (
+                  <li key={m.id} className="flex items-center justify-between rounded-lg border border-[#F1F4F8] px-3 py-2">
+                    <p className="text-[12px] font-semibold text-[#151D2B]">
+                      {m.brand.charAt(0).toUpperCase() + m.brand.slice(1)} •••• {m.last4}
+                    </p>
+                    <p className="text-[11px] text-[#6F7B8C]">
+                      {m.exp}
+                      {m.isDefault ? ' · Default' : ''}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="overflow-hidden rounded-xl border border-[#E8ECF1] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
@@ -241,6 +341,25 @@ export function BillingPage() {
           </section>
         </div>
       </div>
+
+      <PlanCheckoutModal
+        open={Boolean(checkout)}
+        mode={checkout?.mode === 'card' ? 'card' : 'upgrade'}
+        title={
+          checkout?.mode === 'upgrade'
+            ? `Upgrade to ${checkout.plan.name}`
+            : 'Add payment method'
+        }
+        amount={checkout?.mode === 'upgrade' ? checkout.plan.monthlyPrice ?? 0 : 0}
+        savedMethods={methods}
+        busy={busy}
+        error={error}
+        onClose={() => {
+          setCheckout(null);
+          setError(null);
+        }}
+        onPay={checkout?.mode === 'card' ? saveCard : payUpgrade}
+      />
     </div>
   );
 }
