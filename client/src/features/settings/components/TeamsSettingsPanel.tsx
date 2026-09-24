@@ -284,7 +284,9 @@ export function TeamsSettingsPanel({ onCreateTeam }: Props) {
                             </div>
                           </div>
                         ) : (
-                          <span className="text-[12px] text-[#8A94A6]">—</span>
+                          <span className="inline-flex h-6 items-center rounded-full bg-[#F8FAFC] px-2 text-[10px] font-semibold text-[#8A94A6]">
+                            No lead
+                          </span>
                         )}
                       </td>
                       <td className="truncate px-2 py-2.5 text-[12px] text-[#475569]">

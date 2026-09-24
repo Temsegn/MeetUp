@@ -6,7 +6,6 @@ import {
   CalendarDays,
   CloudUpload,
   Film,
-  MoreHorizontal,
   Plus,
   Users,
   Video,
@@ -14,6 +13,7 @@ import {
   CircleDot,
 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
+import { UserAvatar } from '../../../components/ui/UserAvatar';
 import { cn } from '../../../lib/cn';
 import { adminApi, type AdminOverview } from '../api/admin.service';
 import { StatusBadge } from '../components/AdminUi';
@@ -166,8 +166,20 @@ export function AdminOverviewPage() {
     ];
   }, [data?.subscriptionOverview]);
 
-  if (error) return <p className="text-sm text-rose-600">{error}</p>;
-  if (!data) return <p className="text-sm text-[#6F7B8C]">Loading SaaS dashboard…</p>;
+  if (error) {
+    return (
+      <div>
+        <p className="text-sm text-rose-600">{error}</p>
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <div className="rounded-[14px] border border-[#E2E7ED] bg-white p-8 text-center text-[13px] text-[#6F7B8C]">
+        Loading dashboard…
+      </div>
+    );
+  }
 
   const { kpis, growth, topActiveRooms, recentActivity, subscriptionOverview: sub } = data;
 
@@ -175,9 +187,9 @@ export function AdminOverviewPage() {
     <div className="pb-6">
       <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-[26px] font-bold tracking-tight text-[#151D2B]">SaaS Dashboard</h1>
+          <h1 className="text-[26px] font-bold tracking-tight text-[#151D2B]">Dashboard</h1>
           <p className="mt-1 text-[13px] text-[#6F7B8C]">
-            Overview of your workspace and meeting activity
+            Platform health, organizations, and meeting activity
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -187,25 +199,12 @@ export function AdminOverviewPage() {
           </span>
           <button
             type="button"
-            className="rounded-full border border-[#E8ECF1] bg-white p-2 text-[#64748B] hover:bg-[#F8FAFC]"
-            aria-label="More"
-          >
-            <MoreHorizontal className="size-4" />
-          </button>
-          <button
-            type="button"
             onClick={() => navigate('/admin/workspaces/new')}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-[#E11D48] px-3.5 py-2 text-[12px] font-semibold text-white hover:bg-[#BE123C]"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-[#016BE6] px-3.5 py-2 text-[12px] font-semibold text-white hover:bg-[#0059C4]"
           >
-            <Plus className="size-3.5" /> Create Room
+            <Plus className="size-3.5" /> Create Organization
           </button>
-          <div
-            className="flex size-9 items-center justify-center rounded-full text-[12px] font-bold text-white"
-            style={{ background: user?.avatarColor || '#016BE6' }}
-            title={user?.name}
-          >
-            {(user?.name || 'A').slice(0, 1).toUpperCase()}
-          </div>
+          <UserAvatar name={user?.name} avatarUrl={user?.avatarUrl} avatarColor={user?.avatarColor} size="md" />
         </div>
       </div>
 
@@ -213,7 +212,7 @@ export function AdminOverviewPage() {
         <KpiCard
           label="Total Rooms"
           value={kpis.totalRooms}
-          trend="Across all workspaces"
+          trend="Across all organizations"
           icon={Building2}
           iconClass="bg-[#E2F0FF] text-[#016BE6]"
         />
@@ -349,7 +348,7 @@ export function AdminOverviewPage() {
                 {topActiveRooms.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-4 py-10 text-center text-[#94A3B8]">
-                      No rooms yet — create rooms in workspaces
+                      No rooms yet — create rooms in organizations
                     </td>
                   </tr>
                 ) : null}

@@ -238,11 +238,11 @@ export function AdminSubscriptionsPage() {
     <div>
       <AdminPageHeader
         title="Subscriptions"
-        subtitle="Workspace plans, usage, and billing from live data."
+        subtitle="Organization plans, usage, and billing from live data."
       />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <Kpi label="Total Workspaces" value={kpis.totalWorkspaces} meta="All organizations" iconSrc={iconKpiUsers} iconClass="bg-[#E4EFFF]" />
+        <Kpi label="Organizations" value={kpis.totalWorkspaces} meta="All organizations" iconSrc={iconKpiUsers} iconClass="bg-[#E4EFFF]" />
         <Kpi label="Active Subscriptions" value={kpis.active} meta="Currently billed" iconSrc={iconKpiCheck} iconClass="bg-[#D5F9E0]" />
         <Kpi label="MRR" value={money(kpis.mrr)} meta="Active paid plans" iconSrc={iconKpiDollar} iconClass="bg-[#F0EAFF]" />
         <Kpi label="Annual Revenue" value={money(kpis.arr)} meta="MRR × 12" iconSrc={iconKpiChart} iconClass="bg-[#E4EFFF]" />
@@ -263,7 +263,7 @@ export function AdminSubscriptionsPage() {
                   setPage(1);
                   setSearch(e.target.value);
                 }}
-                placeholder="Search workspaces..."
+                placeholder="Search organizations..."
                 className="h-9 w-full rounded-xl border border-[#E4E8ED] bg-white pr-3 pl-9 text-[13px] text-[#141A29] outline-none placeholder:text-[#6F7B8C] focus:border-[#1C59E5]"
               />
             </div>
@@ -298,7 +298,7 @@ export function AdminSubscriptionsPage() {
           <table className="w-full table-fixed text-left text-[13px]">
             <thead>
               <tr className="border-y border-[#E4E8ED] bg-[rgba(243,246,250,0.4)] text-[12px] font-semibold text-[#6F7B8C]">
-                <th className="px-3 py-2.5">Workspace</th>
+                <th className="px-3 py-2.5">Organization</th>
                 <th className="px-2 py-2.5">Plan</th>
                 <th className="px-2 py-2.5">Status</th>
                 <th className="px-2 py-2.5">Members</th>
@@ -355,7 +355,7 @@ export function AdminSubscriptionsPage() {
               {!loading && items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-3 py-10 text-center text-[#94A3B8]">
-                    No workspaces match your filters
+                    No organizations match your filters
                   </td>
                 </tr>
               ) : null}
@@ -364,7 +364,7 @@ export function AdminSubscriptionsPage() {
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#E4E8ED] px-3 py-2.5">
             <p className="text-[12px] text-[#6F7B8C]">
-              Showing {from} to {to} of {total} workspaces
+              Showing {from} to {to} of {total} organizations
             </p>
             <div className="flex flex-wrap items-center gap-1.5">
               {Array.from({ length: Math.min(5, pageCount) }, (_, i) => i + 1).map((n) => (
@@ -500,7 +500,7 @@ export function AdminSubscriptionsPage() {
                 to={`/admin/workspaces/${selected.workspaceId}`}
                 className="inline-flex h-9 items-center justify-center rounded-xl border border-[rgba(28,89,229,0.4)] text-[12px] font-semibold text-[#1C59E5]"
               >
-                Workspace
+                Organization
               </Link>
               <Link
                 to="/admin/invoices"

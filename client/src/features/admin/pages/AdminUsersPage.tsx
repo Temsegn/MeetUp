@@ -1,22 +1,68 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Search } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Eye, Plus, ShieldOff, UserX } from 'lucide-react';
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { adminApi } from '../api/admin.service';
-import { AdminPageHeader, AdminTableShell, StatusBadge } from '../components/AdminUi';
+import {
+  AdminPageHeader,
+  AdminTable,
+  AdminTableShell,
+  AdminTHead,
+  AlertBanner,
+  EmptyState,
+  FilterChips,
+  MenuItem,
+  PaginationBar,
+  PersonCell,
+  RoleChip,
+  RowActions,
+  SAAS_PRIMARY,
+  SearchField,
+  SelectField,
+  StatusBadge,
+  TableSkeleton,
+  useDebouncedValue,
+} from '../components/AdminUi';
+
+type UserRow = {
+  id: string;
+  name: string;
+  email: string;
+  avatarColor?: string | null;
+  avatarUrl?: string | null;
+  jobTitle?: string;
+  platformRole: string;
+  accountStatus: string;
+};
 
 export function AdminUsersPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
-  const [items, setItems] = useState<Array<Record<string, unknown>>>([]);
+  const debouncedSearch = useDebouncedValue(search);
+  const [status, setStatus] = useState('');
+  const [role, setRole] = useState('all');
+  const [items, setItems] = useState<UserRow[]>([]);
+  const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [menuKey, setMenuKey] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [confirm, setConfirm] = useState<{
+    id: string;
+    name: string;
+    next: 'active' | 'suspended' | 'banned';
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const load = () => {
     setLoading(true);
     adminApi
-      .listUsers({ search })
-      .then((res) => setItems(res.items))
+      .listUsers({ search: debouncedSearch, status: status || undefined, limit: 100, page: 1 })
+      .then((res) => {
+        setItems((res.items as UserRow[]) ?? []);
+        setTotal(res.total);
+      })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load users.'))
       .finally(() => setLoading(false));
   };
@@ -24,21 +70,42 @@ export function AdminUsersPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [debouncedSearch, status]);
 
-  const setStatus = async (id: string, accountStatus: 'active' | 'suspended' | 'banned') => {
-    if (accountStatus === 'banned' && !window.confirm('Ban this user? They will not be able to sign in.')) {
-      return;
-    }
-    setBusyId(id);
+  useEffect(() => {
+    if (!menuKey) return;
+    const onPointer = () => setMenuKey(null);
+    document.addEventListener('mousedown', onPointer);
+    return () => document.removeEventListener('mousedown', onPointer);
+  }, [menuKey]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, status, role, pageSize]);
+
+  const filtered = useMemo(() => {
+    if (role === 'all') return items;
+    return items.filter((u) => u.platformRole === role);
+  }, [items, role]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const from = filtered.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const to = Math.min(safePage * pageSize, filtered.length);
+
+  const applyStatus = async () => {
+    if (!confirm) return;
+    setBusy(true);
     setError(null);
     try {
-      await adminApi.setUserStatus(id, accountStatus);
+      await adminApi.setUserStatus(confirm.id, confirm.next);
+      setConfirm(null);
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update user.');
     } finally {
-      setBusyId(null);
+      setBusy(false);
     }
   };
 
@@ -46,102 +113,188 @@ export function AdminUsersPage() {
     <div>
       <AdminPageHeader
         title="Users"
-        subtitle="All accounts across the platform."
+        subtitle="Manage every account on the platform — roles, access, and account status."
         actions={
-          <button
-            type="button"
-            onClick={() => navigate('/admin/users/new')}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-[#016BE6] px-3 py-2 text-[12px] font-semibold text-white"
-          >
+          <button type="button" onClick={() => navigate('/admin/users/new')} className={SAAS_PRIMARY}>
             <Plus className="size-3.5" /> Create User
           </button>
         }
       />
-      <div className="relative mb-4 max-w-md">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[#94A3B8]" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search users…"
-          className="h-10 w-full rounded-xl border border-[#E8ECF1] bg-white pr-3 pl-9 text-[13px]"
+
+      <div className="mb-4">
+        <FilterChips
+          value={status}
+          onChange={setStatus}
+          options={[
+            { key: '', label: 'All' },
+            { key: 'active', label: 'Active', dot: 'bg-[#22C55E]' },
+            { key: 'suspended', label: 'Suspended', dot: 'bg-[#F97316]' },
+            { key: 'banned', label: 'Banned', dot: 'bg-[#EF4444]' },
+          ]}
         />
       </div>
-      {error ? <p className="mb-3 text-sm text-rose-600">{error}</p> : null}
-      <AdminTableShell>
-        <table className="min-w-full text-left text-[13px]">
-          <thead className="bg-[#F8FAFC] text-[11px] font-semibold uppercase tracking-wide text-[#6F7B8C]">
-            <tr>
-              <th className="px-4 py-2.5">User</th>
-              <th className="px-4 py-2.5">Platform role</th>
-              <th className="px-4 py-2.5">Status</th>
-              <th className="px-4 py-2.5">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((u) => {
-              const id = String(u.id);
-              const status = String(u.accountStatus);
-              return (
-                <tr key={id} className="border-t border-[#E8ECF1]">
-                  <td className="px-4 py-3">
-                    <Link to={`/admin/users/${id}`} className="font-semibold hover:text-[#016BE6]">
-                      {String(u.name)}
-                    </Link>
-                    <p className="text-[11px] text-[#94A3B8]">{String(u.email)}</p>
-                  </td>
-                  <td className="px-4 py-3 capitalize">{String(u.platformRole).replace('_', ' ')}</td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={status} />
-                  </td>
-                  <td className="px-4 py-3 space-x-2">
-                    <button
-                      type="button"
-                      disabled={busyId === id}
-                      className="text-[12px] font-semibold text-[#016BE6] disabled:opacity-50"
-                      onClick={() => void setStatus(id, status === 'suspended' ? 'active' : 'suspended')}
-                    >
-                      {status === 'suspended' ? 'Reactivate' : 'Suspend'}
+
+      {error ? (
+        <div className="mb-3">
+          <AlertBanner tone="error">{error}</AlertBanner>
+        </div>
+      ) : null}
+
+      {loading ? (
+        <AdminTableShell title={`Users (${total})`} subtitle="Search, filter, and take action on platform accounts.">
+          <TableSkeleton cols={5} />
+        </AdminTableShell>
+      ) : (
+        <AdminTableShell
+          title={`Users (${filtered.length})`}
+          subtitle="Search, filter, and take action on platform accounts."
+          toolbar={
+            <>
+              <SearchField value={search} onChange={setSearch} placeholder="Search users..." />
+              <SelectField value={role} onChange={setRole} className="w-[150px]">
+                <option value="all">All roles</option>
+                <option value="none">Member</option>
+                <option value="admin">Admin</option>
+                <option value="super_admin">Super admin</option>
+              </SelectField>
+            </>
+          }
+          footer={
+            <PaginationBar
+              from={from}
+              to={to}
+              total={filtered.length}
+              page={safePage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              onPage={setPage}
+              onPageSize={setPageSize}
+              noun="users"
+            />
+          }
+        >
+          <AdminTable>
+            <AdminTHead
+              columns={[
+                { label: 'User' },
+                { label: 'Job title' },
+                { label: 'Platform role' },
+                { label: 'Status' },
+                { label: 'Actions', align: 'center' },
+              ]}
+            />
+            <tbody>
+              {pageRows.length === 0 ? (
+                <EmptyState
+                  colSpan={5}
+                  title={search || status || role !== 'all' ? 'No users match those filters' : 'No users yet'}
+                  description="Create a user to grant platform or organization access."
+                  action={
+                    <button type="button" onClick={() => navigate('/admin/users/new')} className={SAAS_PRIMARY}>
+                      <Plus className="size-3.5" /> Create User
                     </button>
-                    {status !== 'banned' ? (
-                      <button
-                        type="button"
-                        disabled={busyId === id}
-                        className="text-[12px] font-semibold text-rose-600 disabled:opacity-50"
-                        onClick={() => void setStatus(id, 'banned')}
+                  }
+                />
+              ) : (
+                pageRows.map((u) => (
+                  <tr key={u.id} className="border-t border-[#E2E7ED]/70 text-[12px] text-[#151D2B]">
+                    <td className="px-3 py-2.5 sm:px-4">
+                      <PersonCell
+                        name={u.name}
+                        email={u.email}
+                        avatarUrl={u.avatarUrl}
+                        avatarColor={u.avatarColor}
+                        to={`/admin/users/${u.id}`}
+                      />
+                    </td>
+                    <td className="px-2 py-2.5 text-[#475569]">{u.jobTitle || '—'}</td>
+                    <td className="px-2 py-2.5">
+                      <RoleChip role={u.platformRole} />
+                    </td>
+                    <td className="px-2 py-2.5">
+                      <StatusBadge status={u.accountStatus} />
+                    </td>
+                    <td className="relative px-3 py-2.5 text-center sm:px-4">
+                      <RowActions
+                        label={`Actions for ${u.name}`}
+                        open={menuKey === u.id}
+                        onToggle={() => setMenuKey((k) => (k === u.id ? null : u.id))}
                       >
-                        Ban
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={busyId === id}
-                        className="text-[12px] font-semibold text-[#016BE6] disabled:opacity-50"
-                        onClick={() => void setStatus(id, 'active')}
-                      >
-                        Unban
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-            {loading ? (
-              <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-[#94A3B8]">
-                  Loading users…
-                </td>
-              </tr>
-            ) : null}
-            {!loading && items.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-[#94A3B8]">
-                  {search ? 'No users match that search.' : 'No users yet.'}
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </AdminTableShell>
+                        <MenuItem
+                          onClick={() => {
+                            setMenuKey(null);
+                            navigate(`/admin/users/${u.id}`);
+                          }}
+                        >
+                          <Eye size={14} /> View profile
+                        </MenuItem>
+                        <MenuItem
+                          onClick={() => {
+                            setMenuKey(null);
+                            setConfirm({
+                              id: u.id,
+                              name: u.name,
+                              next: u.accountStatus === 'suspended' ? 'active' : 'suspended',
+                            });
+                          }}
+                        >
+                          <ShieldOff size={14} />
+                          {u.accountStatus === 'suspended' ? 'Reactivate' : 'Suspend'}
+                        </MenuItem>
+                        {u.accountStatus !== 'banned' ? (
+                          <MenuItem
+                            danger
+                            onClick={() => {
+                              setMenuKey(null);
+                              setConfirm({ id: u.id, name: u.name, next: 'banned' });
+                            }}
+                          >
+                            <UserX size={14} /> Ban user
+                          </MenuItem>
+                        ) : (
+                          <MenuItem
+                            onClick={() => {
+                              setMenuKey(null);
+                              setConfirm({ id: u.id, name: u.name, next: 'active' });
+                            }}
+                          >
+                            Unban user
+                          </MenuItem>
+                        )}
+                      </RowActions>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </AdminTable>
+        </AdminTableShell>
+      )}
+
+      <ConfirmDialog
+        open={Boolean(confirm)}
+        danger={confirm?.next === 'banned'}
+        busy={busy}
+        title={
+          confirm?.next === 'banned'
+            ? `Ban ${confirm.name}?`
+            : confirm?.next === 'suspended'
+              ? `Suspend ${confirm?.name}?`
+              : `Reactivate ${confirm?.name}?`
+        }
+        description={
+          confirm?.next === 'banned'
+            ? 'They will not be able to sign in until an admin unbans the account.'
+            : confirm?.next === 'suspended'
+              ? 'Access is paused until the account is reactivated.'
+              : 'The account will be able to sign in again.'
+        }
+        confirmLabel={confirm?.next === 'banned' ? 'Ban user' : confirm?.next === 'suspended' ? 'Suspend' : 'Reactivate'}
+        onConfirm={() => void applyStatus()}
+        onClose={() => {
+          if (!busy) setConfirm(null);
+        }}
+      />
     </div>
   );
 }

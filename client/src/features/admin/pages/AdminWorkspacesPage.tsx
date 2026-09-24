@@ -1,141 +1,279 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Search } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Building2, Eye, Plus } from 'lucide-react';
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { adminApi } from '../api/admin.service';
-import { AdminPageHeader, AdminTableShell, StatusBadge } from '../components/AdminUi';
+import {
+  AdminKpiCard,
+  AdminPageHeader,
+  AdminTable,
+  AdminTableShell,
+  AdminTHead,
+  AlertBanner,
+  EmptyState,
+  FilterChips,
+  MenuItem,
+  PaginationBar,
+  PersonCell,
+  RoleChip,
+  RowActions,
+  SAAS_PRIMARY,
+  SearchField,
+  StatusBadge,
+  TableSkeleton,
+  useDebouncedValue,
+} from '../components/AdminUi';
+
+type OrgRow = {
+  id: string;
+  name: string;
+  slug: string;
+  ownerName: string;
+  ownerEmail: string;
+  plan: string;
+  members: number;
+  mrr: number;
+  status: string;
+};
 
 export function AdminWorkspacesPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search);
   const [status, setStatus] = useState('');
-  const [items, setItems] = useState<Array<Record<string, unknown>>>([]);
+  const [items, setItems] = useState<OrgRow[]>([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [menuKey, setMenuKey] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [confirm, setConfirm] = useState<{ id: string; name: string; next: 'active' | 'suspended' } | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const load = () => {
+    setLoading(true);
     adminApi
-      .listWorkspaces({ search, status: status || undefined })
+      .listWorkspaces({ search: debouncedSearch, status: status || undefined, limit: 100 })
       .then((res) => {
-        setItems(res.items);
+        setItems((res.items as OrgRow[]) ?? []);
         setTotal(res.total);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'));
+      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load organizations.'))
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     load();
-  }, [search, status]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, status]);
 
-  const toggleStatus = async (id: string, next: 'active' | 'suspended') => {
-    setBusyId(id);
+  useEffect(() => {
+    if (!menuKey) return;
+    const onPointer = () => setMenuKey(null);
+    document.addEventListener('mousedown', onPointer);
+    return () => document.removeEventListener('mousedown', onPointer);
+  }, [menuKey]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, status, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = items.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const from = items.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const to = Math.min(safePage * pageSize, items.length);
+
+  const kpis = useMemo(() => {
+    const active = items.filter((r) => r.status === 'active').length;
+    const suspended = items.filter((r) => r.status === 'suspended').length;
+    const mrr = items.reduce((sum, r) => sum + Number(r.mrr || 0), 0);
+    return { active, suspended, mrr };
+  }, [items]);
+
+  const applyStatus = async () => {
+    if (!confirm) return;
+    setBusy(true);
+    setError(null);
     try {
-      await adminApi.setWorkspaceStatus(id, next);
+      await adminApi.setWorkspaceStatus(confirm.id, confirm.next);
+      setConfirm(null);
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Update failed');
     } finally {
-      setBusyId(null);
+      setBusy(false);
     }
   };
 
   return (
     <div>
       <AdminPageHeader
-        title="Workspaces"
-        subtitle={`Manage all organizations · ${total} total`}
+        title="Organizations"
+        subtitle={`Customer workspaces on Samtal · ${total} total`}
         actions={
-          <button
-            type="button"
-            onClick={() => navigate('/admin/workspaces/new')}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-[#016BE6] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#0059C4]"
-          >
+          <button type="button" onClick={() => navigate('/admin/workspaces/new')} className={SAAS_PRIMARY}>
             <Plus className="size-3.5" /> Create Organization
           </button>
         }
       />
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[#94A3B8]" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search organizations…"
-            className="h-10 w-full rounded-xl border border-[#E8ECF1] bg-white pr-3 pl-9 text-[13px] outline-none focus:border-[#016BE6]"
-          />
-        </div>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="h-10 rounded-xl border border-[#E8ECF1] bg-white px-3 text-[13px]"
-        >
-          <option value="">All statuses</option>
-          <option value="active">Active</option>
-          <option value="suspended">Suspended</option>
-        </select>
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <AdminKpiCard label="Organizations" value={total} meta="All tenants" icon={<Building2 className="size-4" />} />
+        <AdminKpiCard label="Active" value={kpis.active} meta="Can sign in and meet" />
+        <AdminKpiCard label="Suspended" value={kpis.suspended} meta="Access paused" />
+        <AdminKpiCard label="MRR" value={`$${kpis.mrr.toLocaleString()}`} meta="From listed organizations" />
       </div>
 
-      {error ? <p className="mb-3 text-sm text-rose-600">{error}</p> : null}
+      <div className="mb-4">
+        <FilterChips
+          value={status}
+          onChange={setStatus}
+          options={[
+            { key: '', label: 'All' },
+            { key: 'active', label: 'Active', dot: 'bg-[#22C55E]' },
+            { key: 'suspended', label: 'Suspended', dot: 'bg-[#F97316]' },
+          ]}
+        />
+      </div>
 
-      <AdminTableShell>
-        <table className="min-w-full text-left text-[13px]">
-          <thead className="bg-[#F8FAFC] text-[11px] font-semibold uppercase tracking-wide text-[#6F7B8C]">
-            <tr>
-              <th className="px-4 py-2.5">Organization</th>
-              <th className="px-4 py-2.5">Owner</th>
-              <th className="px-4 py-2.5">Plan</th>
-              <th className="px-4 py-2.5">Members</th>
-              <th className="px-4 py-2.5">MRR</th>
-              <th className="px-4 py-2.5">Status</th>
-              <th className="px-4 py-2.5">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((row) => {
-              const id = String(row.id);
-              const st = String(row.status);
-              return (
-                <tr key={id} className="border-t border-[#E8ECF1]">
-                  <td className="px-4 py-3">
-                    <Link to={`/admin/workspaces/${id}`} className="font-semibold text-[#151D2B] hover:text-[#016BE6]">
-                      {String(row.name)}
-                    </Link>
-                    <p className="text-[11px] text-[#94A3B8]">{String(row.slug)}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p>{String(row.ownerName)}</p>
-                    <p className="text-[11px] text-[#94A3B8]">{String(row.ownerEmail)}</p>
-                  </td>
-                  <td className="px-4 py-3 capitalize">{String(row.plan)}</td>
-                  <td className="px-4 py-3">{String(row.members)}</td>
-                  <td className="px-4 py-3">${String(row.mrr)}</td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={st} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      disabled={busyId === id}
-                      onClick={() => toggleStatus(id, st === 'suspended' ? 'active' : 'suspended')}
-                      className="text-[12px] font-semibold text-[#016BE6] hover:underline disabled:opacity-50"
-                    >
-                      {st === 'suspended' ? 'Reactivate' : 'Suspend'}
+      {error ? (
+        <div className="mb-3">
+          <AlertBanner tone="error">{error}</AlertBanner>
+        </div>
+      ) : null}
+
+      {loading ? (
+        <AdminTableShell title="Organizations" subtitle="Search tenants, plans, and owners.">
+          <TableSkeleton cols={6} />
+        </AdminTableShell>
+      ) : (
+        <AdminTableShell
+          title={`Organizations (${items.length})`}
+          subtitle="Search tenants, plans, and owners."
+          toolbar={<SearchField value={search} onChange={setSearch} placeholder="Search organizations..." className="sm:w-[260px]" />}
+          footer={
+            <PaginationBar
+              from={from}
+              to={to}
+              total={items.length}
+              page={safePage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              onPage={setPage}
+              onPageSize={setPageSize}
+              noun="organizations"
+            />
+          }
+        >
+          <AdminTable>
+            <AdminTHead
+              columns={[
+                { label: 'Organization' },
+                { label: 'Owner' },
+                { label: 'Plan' },
+                { label: 'Members' },
+                { label: 'MRR' },
+                { label: 'Status' },
+                { label: 'Actions', align: 'center' },
+              ]}
+            />
+            <tbody>
+              {pageRows.length === 0 ? (
+                <EmptyState
+                  colSpan={7}
+                  title={search || status ? 'No organizations match those filters' : 'No organizations yet'}
+                  description="Create an organization to provision a customer workspace."
+                  action={
+                    <button type="button" onClick={() => navigate('/admin/workspaces/new')} className={SAAS_PRIMARY}>
+                      <Plus className="size-3.5" /> Create Organization
                     </button>
-                  </td>
-                </tr>
-              );
-            })}
-            {items.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-[#94A3B8]">
-                  No workspaces found
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </AdminTableShell>
+                  }
+                />
+              ) : (
+                pageRows.map((row) => (
+                  <tr key={row.id} className="border-t border-[#E2E7ED]/70 text-[12px] text-[#151D2B]">
+                    <td className="px-3 py-2.5 sm:px-4">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-[#E8F1FE] text-[12px] font-bold text-[#016BE6]">
+                          {row.name.charAt(0).toUpperCase()}
+                        </span>
+                        <div className="min-w-0">
+                          <button
+                            type="button"
+                            className="truncate text-left text-[12px] font-semibold text-[#151D2B] hover:text-[#016BE6]"
+                            onClick={() => navigate(`/admin/workspaces/${row.id}`)}
+                          >
+                            {row.name}
+                          </button>
+                          <p className="truncate text-[11px] text-[#6F7B8C]">{row.slug}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-2 py-2.5">
+                      <PersonCell name={row.ownerName} email={row.ownerEmail} />
+                    </td>
+                    <td className="px-2 py-2.5">
+                      <RoleChip role={String(row.plan || 'free')} />
+                    </td>
+                    <td className="px-2 py-2.5 text-[#475569]">{row.members}</td>
+                    <td className="px-2 py-2.5 font-semibold tabular-nums">${Number(row.mrr || 0).toLocaleString()}</td>
+                    <td className="px-2 py-2.5">
+                      <StatusBadge status={row.status} />
+                    </td>
+                    <td className="relative px-3 py-2.5 text-center sm:px-4">
+                      <RowActions
+                        label={`Actions for ${row.name}`}
+                        open={menuKey === row.id}
+                        onToggle={() => setMenuKey((k) => (k === row.id ? null : row.id))}
+                      >
+                        <MenuItem
+                          onClick={() => {
+                            setMenuKey(null);
+                            navigate(`/admin/workspaces/${row.id}`);
+                          }}
+                        >
+                          <Eye size={14} /> View
+                        </MenuItem>
+                        <MenuItem
+                          onClick={() => {
+                            setMenuKey(null);
+                            setConfirm({
+                              id: row.id,
+                              name: row.name,
+                              next: row.status === 'suspended' ? 'active' : 'suspended',
+                            });
+                          }}
+                        >
+                          {row.status === 'suspended' ? 'Reactivate' : 'Suspend'}
+                        </MenuItem>
+                      </RowActions>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </AdminTable>
+        </AdminTableShell>
+      )}
+
+      <ConfirmDialog
+        open={Boolean(confirm)}
+        danger={confirm?.next === 'suspended'}
+        busy={busy}
+        title={confirm?.next === 'suspended' ? `Suspend ${confirm.name}?` : `Reactivate ${confirm?.name}?`}
+        description={
+          confirm?.next === 'suspended'
+            ? 'Members of this organization will not be able to hold meetings until you reactivate it.'
+            : 'Members will regain access to meetings and billing.'
+        }
+        confirmLabel={confirm?.next === 'suspended' ? 'Suspend' : 'Reactivate'}
+        onConfirm={() => void applyStatus()}
+        onClose={() => {
+          if (!busy) setConfirm(null);
+        }}
+      />
     </div>
   );
 }

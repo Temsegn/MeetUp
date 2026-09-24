@@ -178,7 +178,7 @@ export function AdminPlansPage() {
         <Kpi
           label="Total Subscribers"
           value={totalSubscribers.toLocaleString()}
-          meta="Active workspaces"
+          meta="Active organizations"
           iconSrc={iconKpiUsers}
           iconClass="bg-[#EFEBFF]"
         />
@@ -277,7 +277,7 @@ export function AdminPlansPage() {
                 </span>
                 <h2 className="mt-3 text-[15px] font-bold text-[#151E35]">{selected.name} Plan</h2>
                 <p className="mt-2 text-[12px] leading-relaxed text-[#6F7B8C]">
-                  {PLAN_STYLE[selected.key].tagline}. {selected.subscribers} active workspace
+                  {PLAN_STYLE[selected.key].tagline}. {selected.subscribers} active organizations
                   {selected.subscribers === 1 ? '' : 's'}.
                 </p>
               </div>

@@ -48,7 +48,7 @@ export function AdminSidebar({ collapsed, onToggle }: Props) {
             onClick={() => setAdminOpen((o) => !o)}
             className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-[11px] font-bold tracking-[0.08em] text-white/85"
           >
-            ADMIN
+            ADMIN CONSOLE
             <ChevronDown className={cn('size-3.5 transition', !adminOpen && '-rotate-90')} />
           </button>
         ) : null}
