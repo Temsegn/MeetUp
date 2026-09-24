@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { Invoice, type IInvoice } from '../../database/models/Invoice.model';
+import { Invoice, type IInvoice, type InvoiceStatus } from '../../database/models/Invoice.model';
 import { Plan, type PlanKey } from '../../database/models/Plan.model';
 import { Subscription } from '../../database/models/Subscription.model';
 import { Workspace } from '../../database/models/Workspace.model';
@@ -119,9 +119,10 @@ export async function syncInvoiceForWorkspace(workspaceId: string): Promise<IInv
     return existing;
   }
 
+  const status: InvoiceStatus = autoPaid ? 'paid' : 'issued';
   const payload = {
     workspaceId: sub.workspaceId,
-    status: (autoPaid ? 'paid' : 'issued') as const,
+    status,
     planKey: sub.planKey,
     currency: 'USD',
     subtotal,
