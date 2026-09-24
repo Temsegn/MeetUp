@@ -8,7 +8,8 @@ import {
   AdminTHead,
   AlertBanner,
   EmptyState,
-  Field,
+  FormSkeleton,
+  KpiRowSkeleton,
   SAAS_CARD,
   SAAS_PRIMARY,
   SAAS_TEXT_INPUT,
@@ -33,7 +34,15 @@ export function AdminBillingPage() {
     return (
       <div>
         <AdminPageHeader title="Billing" subtitle="Platform revenue and failed charges." />
-        <TableSkeleton cols={4} rows={3} />
+        <KpiRowSkeleton count={4} />
+        <div className={`${SAAS_CARD} mt-5 p-5`}>
+          <span className="mb-3 inline-block h-4 w-40 animate-pulse rounded-md bg-[#E8ECF1]" />
+          <div className="grid gap-2 sm:grid-cols-3">
+            <span className="h-10 animate-pulse rounded-xl bg-[#E8ECF1]" />
+            <span className="h-10 animate-pulse rounded-xl bg-[#E8ECF1]" />
+            <span className="h-10 animate-pulse rounded-xl bg-[#E8ECF1]" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -137,7 +146,7 @@ export function AdminSystemSettingsPage() {
     adminApi.getSystemSettings().then(setData);
   }, []);
 
-  if (!data) return <p className="text-[13px] text-[#6F7B8C]">Loading settings…</p>;
+  if (!data) return <FormSkeleton />;
 
   const general = (data.general as Record<string, unknown>) ?? {};
   const featureFlags = (data.featureFlags as Record<string, boolean>) ?? {};

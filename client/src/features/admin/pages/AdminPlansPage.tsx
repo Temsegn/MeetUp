@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { cn } from '../../../lib/cn';
 import { adminApi } from '../api/admin.service';
-import { AdminPageHeader } from '../components/AdminUi';
+import { AdminPageHeader, TableRowSkeleton } from '../components/AdminUi';
 import { money } from '../../workspace/components/InvoiceDocument';
 
 import iconSearch from '../assets/plans/search.svg';
@@ -212,7 +212,7 @@ export function AdminPlansPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => {
+              {loading ? <TableRowSkeleton cols={4} rows={3} /> : filtered.map((p) => {
                 const style = PLAN_STYLE[p.key];
                 const active = p.key === selected?.key;
                 return (
@@ -247,13 +247,6 @@ export function AdminPlansPage() {
                   </tr>
                 );
               })}
-              {loading ? (
-                <tr>
-                  <td colSpan={4} className="px-3 py-10 text-center text-[#94A3B8]">
-                    Loading plans…
-                  </td>
-                </tr>
-              ) : null}
               {!loading && filtered.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-3 py-10 text-center text-[#94A3B8]">

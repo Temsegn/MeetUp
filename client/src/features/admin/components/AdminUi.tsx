@@ -363,6 +363,184 @@ export function TableSkeleton({ rows = 6, cols = 5 }: { rows?: number; cols?: nu
   );
 }
 
+export function Bone({ className }: { className?: string }) {
+  return <span aria-hidden className={cn('inline-block animate-pulse rounded-md bg-[#E8ECF1]', className)} />;
+}
+
+export function TableRowSkeleton({ cols, rows = 8 }: { cols: number; rows?: number }) {
+  return (
+    <>
+      {Array.from({ length: rows }).map((_, i) => (
+        <tr key={i} className="border-t border-[#E2E7ED]/70" aria-hidden>
+          {Array.from({ length: cols }).map((__, j) => (
+            <td key={j} className="px-3 py-3 sm:px-4">
+              {j === 0 ? (
+                <span className="flex items-center gap-2.5">
+                  <Bone className="size-8 shrink-0 rounded-full" />
+                  <span className="min-w-0 flex-1 space-y-1.5">
+                    <Bone className="h-3 w-28" />
+                    <Bone className="h-2.5 w-20" />
+                  </span>
+                </span>
+              ) : (
+                <Bone className="h-3 w-16" />
+              )}
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
+
+export function KpiRowSkeleton({ count = 4 }: { count?: number }) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-busy="true" aria-label="Loading">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className={cn(SAAS_CARD, 'p-4')}>
+          <Bone className="h-3 w-20" />
+          <Bone className="mt-3 h-7 w-16" />
+          <Bone className="mt-2 h-2.5 w-24" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function DashboardSkeleton() {
+  return (
+    <div className="pb-6" aria-busy="true" aria-label="Loading dashboard">
+      <div className="mb-5">
+        <Bone className="h-7 w-40" />
+        <Bone className="mt-2 h-3.5 w-72 max-w-full" />
+      </div>
+      <KpiRowSkeleton count={5} />
+      <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+        <div className={cn(SAAS_CARD, 'p-4')}>
+          <Bone className="mb-4 h-4 w-36" />
+          <Bone className="h-[180px] w-full rounded-xl" />
+        </div>
+        <div className={cn(SAAS_CARD, 'space-y-3 p-4')}>
+          <Bone className="h-4 w-32" />
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <Bone className="size-8 shrink-0 rounded-full" />
+              <Bone className="h-3 min-w-0 flex-1" />
+              <Bone className="h-2.5 w-10" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className={cn(SAAS_CARD, 'mt-5 overflow-hidden')}>
+        <div className="border-b border-[#E2E7ED] px-4 py-3">
+          <Bone className="h-4 w-36" />
+        </div>
+        <TableSkeleton cols={5} rows={5} />
+      </div>
+    </div>
+  );
+}
+
+export function DetailSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Loading details">
+      <div className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <Bone className="h-3 w-40" />
+          <Bone className="mt-2 h-7 w-48" />
+          <Bone className="mt-2 h-3 w-56" />
+        </div>
+        <Bone className="h-9 w-24 rounded-[14px]" />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className={cn(SAAS_CARD, 'p-5')}>
+          <div className="flex items-center gap-3">
+            <Bone className="size-10 rounded-full" />
+            <div className="space-y-1.5">
+              <Bone className="h-4 w-32" />
+              <Bone className="h-3 w-40" />
+            </div>
+          </div>
+          <div className="mt-5 space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex justify-between">
+                <Bone className="h-3 w-20" />
+                <Bone className="h-3 w-24" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className={cn(SAAS_CARD, 'overflow-hidden')}>
+          <div className="border-b border-[#E2E7ED] px-4 py-3">
+            <Bone className="h-4 w-32" />
+          </div>
+          <TableSkeleton cols={3} rows={5} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function FormSkeleton() {
+  return (
+    <div className="mx-auto max-w-3xl" aria-busy="true" aria-label="Loading form">
+      <Bone className="h-7 w-40" />
+      <Bone className="mt-2 h-3.5 w-64 max-w-full" />
+      <div className={cn(SAAS_CARD, 'mt-5 space-y-4 p-5')}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="space-y-1.5">
+            <Bone className="h-3 w-24" />
+            <Bone className="h-11 w-full rounded-xl" />
+          </div>
+        ))}
+        <Bone className="h-9 w-28 rounded-[14px]" />
+      </div>
+    </div>
+  );
+}
+
+export function InvoiceDocSkeleton() {
+  return (
+    <div className={cn(SAAS_CARD, 'mx-auto max-w-3xl p-6')} aria-busy="true" aria-label="Loading invoice">
+      <div className="flex items-start justify-between">
+        <div className="space-y-2">
+          <Bone className="h-5 w-32" />
+          <Bone className="h-3 w-40" />
+        </div>
+        <Bone className="h-6 w-16 rounded-full" />
+      </div>
+      <div className="mt-8 grid gap-3 sm:grid-cols-2">
+        <Bone className="h-16 w-full rounded-xl" />
+        <Bone className="h-16 w-full rounded-xl" />
+      </div>
+      <div className="mt-6 space-y-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Bone key={i} className="h-8 w-full rounded-md" />
+        ))}
+      </div>
+      <Bone className="ml-auto mt-6 h-8 w-32" />
+    </div>
+  );
+}
+
+export function AdminShellSkeleton() {
+  return (
+    <div className="flex h-full min-h-0 w-full overflow-hidden bg-[#F5F7FA]" aria-busy="true" aria-label="Loading admin">
+      <div className="hidden h-full w-[240px] shrink-0 bg-[#016BE6] p-4 lg:block">
+        <Bone className="h-5 w-24 bg-white/30" />
+        <div className="mt-6 space-y-2">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Bone key={i} className="h-9 w-full rounded-xl bg-white/20" />
+          ))}
+        </div>
+      </div>
+      <div className="min-w-0 flex-1 overflow-hidden px-4 py-4 sm:px-6 lg:px-8">
+        <DashboardSkeleton />
+      </div>
+    </div>
+  );
+}
+
 export function PaginationBar({
   from,
   to,

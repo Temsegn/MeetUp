@@ -9,6 +9,7 @@ import {
   workspaceService,
   type WorkspaceDirectoryMember,
 } from '../../../services/workspace/workspace.service';
+import { Bone } from '../../admin/components/AdminUi';
 
 export function ContactsPage() {
   const navigate = useNavigate();
@@ -62,7 +63,18 @@ export function ContactsPage() {
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {error ? <p className="p-3 text-[12px] text-[#DC2626]">{error}</p> : null}
           {loading ? (
-            <p className="p-4 text-[12px] text-[#8A94A6]">Loading contacts…</p>
+            <div className="space-y-1 p-2" aria-busy="true" aria-label="Loading contacts">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-2">
+                  <Bone className="size-8 rounded-full" />
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <Bone className="h-3 w-32" />
+                    <Bone className="h-2.5 w-44" />
+                  </div>
+                  <Bone className="h-8 w-20 rounded-lg" />
+                </div>
+              ))}
+            </div>
           ) : filtered.length === 0 ? (
             <p className="p-4 text-[12px] text-[#8A94A6]">
               No teammates yet. Invite members from Workspace → Members, then start chatting.

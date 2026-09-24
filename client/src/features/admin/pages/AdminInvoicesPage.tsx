@@ -9,6 +9,7 @@ import {
   AlertBanner,
   EmptyState,
   FilterChips,
+  InvoiceDocSkeleton,
   SearchField,
   TableSkeleton,
   useDebouncedValue,
@@ -193,7 +194,7 @@ export function AdminInvoiceDetailPage() {
     );
   }
 
-  if (!invoice) return <p className="text-sm text-[#6F7B8C]">Loading invoice…</p>;
+  if (!invoice) return <InvoiceDocSkeleton />;
 
   return (
     <div>

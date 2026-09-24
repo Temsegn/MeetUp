@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { workspaceService } from '../../../services/workspace/workspace.service';
 import { SettingsCard, SettingsSectionHeader } from './SettingsUi';
+import { TableSkeleton } from '../../admin/components/AdminUi';
 
 type AuditRow = {
   id: string;
@@ -74,7 +75,7 @@ export function AuditLogsPanel() {
       />
       {error ? <p className="mb-3 text-[12px] text-[#DC2626]">{error}</p> : null}
       {loading ? (
-        <p className="text-[12px] text-[#6F7B8C]">Loading audit logs…</p>
+        <TableSkeleton cols={4} rows={6} />
       ) : logs.length === 0 ? (
         <p className="text-[12px] text-[#6F7B8C]">No audit events yet.</p>
       ) : (

@@ -9,6 +9,7 @@ import {
 } from '../../../services/workspace/workspace.service';
 import { InvoiceDocument } from '../components/InvoiceDocument';
 import { PlanCheckoutModal } from '../components/PlanCheckoutModal';
+import { InvoiceDocSkeleton } from '../../admin/components/AdminUi';
 
 export function InvoiceDetailPage() {
   const { invoiceId } = useParams<{ invoiceId: string }>();
@@ -65,7 +66,7 @@ export function InvoiceDetailPage() {
   }
 
   if (!invoice) {
-    return <p className="p-6 text-[13px] text-[#6F7B8C]">Loading invoice…</p>;
+    return <InvoiceDocSkeleton />;
   }
 
   return (

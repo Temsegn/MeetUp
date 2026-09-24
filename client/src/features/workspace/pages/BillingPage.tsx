@@ -14,6 +14,7 @@ import {
 } from '../../../services/workspace/workspace.service';
 import { fmtDate, InvoiceStatusPill, money } from '../components/InvoiceDocument';
 import { PlanCheckoutModal } from '../components/PlanCheckoutModal';
+import { Bone, KpiRowSkeleton, SAAS_CARD, TableSkeleton } from '../../admin/components/AdminUi';
 
 export function BillingPage() {
   const { activeWorkspace } = useAuth();
@@ -171,7 +172,34 @@ export function BillingPage() {
         </div>
 
         <div className="space-y-4 px-3.5 py-4 sm:px-5 md:px-6 lg:pr-6">
-          {loading ? <p className="text-[13px] text-[#6F7B8C]">Loading billing…</p> : null}
+          {loading ? (
+            <div className="space-y-4">
+              <div className={SAAS_CARD + ' p-4'}>
+                <Bone className="h-4 w-40" />
+                <div className="mt-4">
+                  <KpiRowSkeleton count={4} />
+                </div>
+                <Bone className="mt-4 h-2 w-full rounded-full" />
+              </div>
+              <div className="grid gap-3 lg:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className={SAAS_CARD + ' p-4'}>
+                    <Bone className="h-4 w-24" />
+                    <Bone className="mt-3 h-7 w-20" />
+                    <Bone className="mt-3 h-3 w-full" />
+                    <Bone className="mt-2 h-3 w-3/4" />
+                    <Bone className="mt-4 h-9 w-full rounded-[14px]" />
+                  </div>
+                ))}
+              </div>
+              <div className={SAAS_CARD}>
+                <div className="border-b border-[#E2E7ED] px-4 py-3">
+                  <Bone className="h-4 w-28" />
+                </div>
+                <TableSkeleton cols={4} rows={4} />
+              </div>
+            </div>
+          ) : null}
           {error && !checkout ? <p className="text-[12px] text-[#DC2626]">{error}</p> : null}
           {message ? <p className="text-[12px] text-[#059669]">{message}</p> : null}
 

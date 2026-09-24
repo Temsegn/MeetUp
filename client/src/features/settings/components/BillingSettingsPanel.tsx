@@ -7,6 +7,7 @@ import {
   type PlanInfo,
 } from '../../../services/workspace/workspace.service';
 import { SettingsCard, SettingsSectionHeader } from './SettingsUi';
+import { Bone } from '../../admin/components/AdminUi';
 
 export function BillingSettingsPanel() {
   const { activeWorkspace } = useAuth();
@@ -63,7 +64,17 @@ export function BillingSettingsPanel() {
           </Link>
         }
       />
-      {loading ? <p className="text-[12px] text-[#6F7B8C]">Loading billing…</p> : null}
+      {loading ? (
+        <div className="space-y-3" aria-busy="true" aria-label="Loading billing">
+          <Bone className="h-4 w-40" />
+          <div className="grid gap-2 sm:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Bone key={i} className="h-14 w-full rounded-xl" />
+            ))}
+          </div>
+          <Bone className="h-2 w-full rounded-full" />
+        </div>
+      ) : null}
       {error ? <p className="text-[12px] text-[#DC2626]">{error}</p> : null}
       {!loading && usage ? (
         <>

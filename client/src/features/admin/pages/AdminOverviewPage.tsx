@@ -16,7 +16,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
 import { cn } from '../../../lib/cn';
 import { adminApi, type AdminOverview } from '../api/admin.service';
-import { StatusBadge } from '../components/AdminUi';
+import { DashboardSkeleton, StatusBadge } from '../components/AdminUi';
 
 function relativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -174,11 +174,7 @@ export function AdminOverviewPage() {
     );
   }
   if (!data) {
-    return (
-      <div className="rounded-[14px] border border-[#E2E7ED] bg-white p-8 text-center text-[13px] text-[#6F7B8C]">
-        Loading dashboard…
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   const { kpis, growth, topActiveRooms, recentActivity, subscriptionOverview: sub } = data;

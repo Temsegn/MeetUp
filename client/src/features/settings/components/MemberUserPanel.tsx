@@ -17,6 +17,7 @@ import {
   workspaceService,
   type WorkspaceMember,
 } from '../../../services/workspace/workspace.service';
+import { ProfileSettingsSkeleton } from './SettingsSkeletons';
 
 type Mode = 'view' | 'edit';
 
@@ -191,11 +192,7 @@ export function MemberUserPanel({ userId, mode, onBack, onEdit, onSaved }: Props
   };
 
   if (loading) {
-    return (
-      <div className={CARD}>
-        <p className="text-[12px] text-[#6F7B8C]">Loading member…</p>
-      </div>
-    );
+    return <ProfileSettingsSkeleton />;
   }
 
   if (!member) {

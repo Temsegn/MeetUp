@@ -8,6 +8,7 @@ import {
   AdminTableShell,
   AdminTHead,
   AlertBanner,
+  DetailSkeleton,
   EmptyState,
   PersonCell,
   RoleChip,
@@ -48,7 +49,7 @@ export function AdminWorkspaceDetailPage() {
   }
 
   if (!data) {
-    return <p className="text-[13px] text-[#6F7B8C]">Loading organization…</p>;
+    return <DetailSkeleton />;
   }
 
   const members = (data.members as Array<Record<string, unknown>>) ?? [];

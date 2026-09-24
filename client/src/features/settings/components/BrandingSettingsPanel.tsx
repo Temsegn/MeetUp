@@ -4,6 +4,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { compressImageToDataUrl } from '../../../lib/compressImage';
 import { workspaceService } from '../../../services/workspace/workspace.service';
 import { SettingsCard, SettingsSectionHeader } from './SettingsUi';
+import { WorkspaceSettingsSkeleton } from './SettingsSkeletons';
 
 const INPUT =
   'h-9 w-full rounded-[10.13px] border border-[#E1E7EE] bg-white px-3 text-[12px] text-[#151D2B] outline-none transition focus:border-[#016BE6] focus:ring-2 focus:ring-[#016BE6]/15 disabled:cursor-not-allowed disabled:bg-[#F8FAFC] disabled:opacity-70';
@@ -92,11 +93,7 @@ export function BrandingSettingsPanel() {
   };
 
   if (loading) {
-    return (
-      <SettingsCard>
-        <p className="text-[12px] text-[#6F7B8C]">Loading branding…</p>
-      </SettingsCard>
-    );
+    return <WorkspaceSettingsSkeleton />;
   }
 
   return (

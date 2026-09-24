@@ -3,6 +3,7 @@ import { CreditCard, Film, Radio, Users, Video } from 'lucide-react';
 import { AppHeader } from '../components/AppHeader';
 import { useDashboardSummary } from '../hooks/useDashboardSummary';
 import { useAuth } from '../../../contexts/AuthContext';
+import { KpiRowSkeleton, SAAS_CARD, TableSkeleton, Bone } from '../../admin/components/AdminUi';
 
 export function AdminOverviewPage() {
   const { activeWorkspace } = useAuth();
@@ -32,7 +33,18 @@ export function AdminOverviewPage() {
             </p>
           ) : null}
 
-          {loading ? <p className="text-[13px] text-[#6F7B8C]">Loading overview…</p> : null}
+          {loading ? (
+            <div className="space-y-4">
+              <KpiRowSkeleton count={4} />
+              <div className={SAAS_CARD + ' p-4'}>
+                <Bone className="h-4 w-32" />
+                <Bone className="mt-3 h-2 w-full rounded-full" />
+              </div>
+              <div className={SAAS_CARD}>
+                <TableSkeleton cols={4} rows={4} />
+              </div>
+            </div>
+          ) : null}
 
           {!loading && isStaff ? (
             <>

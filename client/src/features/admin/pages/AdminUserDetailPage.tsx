@@ -9,6 +9,7 @@ import {
   AdminTableShell,
   AdminTHead,
   AlertBanner,
+  DetailSkeleton,
   EmptyState,
   RoleChip,
   SAAS_CARD,
@@ -49,7 +50,7 @@ export function AdminUserDetailPage() {
   }
 
   if (!data) {
-    return <p className="text-[13px] text-[#6F7B8C]">Loading user…</p>;
+    return <DetailSkeleton />;
   }
 
   const workspaces = (data.workspaces as Array<Record<string, unknown>>) ?? [];

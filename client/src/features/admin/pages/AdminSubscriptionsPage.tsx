@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '../../../lib/cn';
 import { adminApi } from '../api/admin.service';
-import { AdminPageHeader } from '../components/AdminUi';
+import { AdminPageHeader, TableRowSkeleton } from '../components/AdminUi';
 import { fmtDate, money } from '../../workspace/components/InvoiceDocument';
 
 import iconSearch from '../assets/subscriptions/search.svg';
@@ -307,7 +307,7 @@ export function AdminSubscriptionsPage() {
               </tr>
             </thead>
             <tbody>
-              {items.map((row) => {
+              {loading ? <TableRowSkeleton cols={6} rows={8} /> : items.map((row) => {
                 const active = row.id === selected?.id && panelOpen;
                 const letter = (row.organization[0] || '?').toUpperCase();
                 return (
@@ -345,13 +345,6 @@ export function AdminSubscriptionsPage() {
                   </tr>
                 );
               })}
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-3 py-10 text-center text-[#94A3B8]">
-                    Loading subscriptions…
-                  </td>
-                </tr>
-              ) : null}
               {!loading && items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-3 py-10 text-center text-[#94A3B8]">

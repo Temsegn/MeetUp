@@ -3,6 +3,7 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
 import { frontendUrl } from '../../../lib/frontendUrl';
 import { adminApi } from '../api/admin.service';
+import { AdminShellSkeleton } from '../components/AdminUi';
 
 function isPlatformAdmin(role?: string | null) {
   return role === 'admin' || role === 'super_admin';
@@ -55,11 +56,7 @@ export function AdminGuard() {
   }, [user, initializing, refreshUser, setUser]);
 
   if (initializing || checking) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#F5F7FA] text-sm text-[#6F7B8C]">
-        Loading admin…
-      </div>
-    );
+    return <AdminShellSkeleton />;
   }
   if (!user) return <Navigate to="/auth" replace />;
   if (!allowed && !isPlatformAdmin(user.platformRole)) {
