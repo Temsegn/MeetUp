@@ -1,6 +1,5 @@
 import { LP_BODY, LP_CARD, LP_EYEBROW, LP_H2, LP_SECTION } from '../landing-ui';
 import { useLandingCopy } from '../useLandingCopy';
-import { WorkspaceMembersPreview } from './WorkspaceMembersPreview';
 
 export function HowItWorks() {
   const copy = useLandingCopy();
@@ -34,22 +33,19 @@ export function OrganizationSection() {
   return (
     <section id="workspace" className={`${LP_SECTION} bg-[#F5F7FA]`}>
       <div className="mx-auto max-w-7xl px-5 sm:px-8">
-        <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <div>
-            <p className={LP_EYEBROW}>{copy.workspace.eyebrow}</p>
-            <h2 className={`mt-3 ${LP_H2}`}>{copy.workspace.title}</h2>
-            <p className={`mt-4 ${LP_BODY}`}>{copy.workspace.body}</p>
-            <ul className="mt-8 grid gap-3 sm:grid-cols-2">
-              {copy.workspace.items.map((item) => (
-                <li key={item.title} className={`${LP_CARD} p-5`}>
-                  <h3 className="text-[15px] font-semibold text-[#151D2B]">{item.title}</h3>
-                  <p className="mt-2 text-[13px] leading-relaxed text-[#6F7B8C]">{item.body}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <WorkspaceMembersPreview />
+        <div className="max-w-2xl">
+          <p className={LP_EYEBROW}>{copy.workspace.eyebrow}</p>
+          <h2 className={`mt-3 ${LP_H2}`}>{copy.workspace.title}</h2>
+          <p className={`mt-4 ${LP_BODY}`}>{copy.workspace.body}</p>
         </div>
+        <ul className="mt-10 grid gap-3 sm:grid-cols-2">
+          {copy.workspace.items.map((item) => (
+            <li key={item.title} className={`${LP_CARD} p-5`}>
+              <h3 className="text-[15px] font-semibold text-[#151D2B]">{item.title}</h3>
+              <p className="mt-2 text-[13px] leading-relaxed text-[#6F7B8C]">{item.body}</p>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );
