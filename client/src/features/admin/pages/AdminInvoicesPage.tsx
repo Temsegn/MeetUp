@@ -10,6 +10,8 @@ import {
   EmptyState,
   FilterChips,
   InvoiceDocSkeleton,
+  PaginationBar,
+  SAAS_PRIMARY,
   SearchField,
   TableSkeleton,
   useDebouncedValue,
@@ -54,6 +56,8 @@ export function AdminInvoicesPage() {
   const [items, setItems] = useState<BillingInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     setLoading(true);
@@ -63,6 +67,16 @@ export function AdminInvoicesPage() {
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load invoices.'))
       .finally(() => setLoading(false));
   }, [debouncedSearch, status]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, status]);
+
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = items.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const from = items.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const to = Math.min(items.length, safePage * pageSize);
 
   return (
     <div>
@@ -98,6 +112,24 @@ export function AdminInvoicesPage() {
             className="sm:w-[260px]"
           />
         }
+        footer={
+          loading ? undefined : (
+            <PaginationBar
+              from={from}
+              to={to}
+              total={items.length}
+              page={safePage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              onPage={setPage}
+              onPageSize={(n) => {
+                setPage(1);
+                setPageSize(n);
+              }}
+              noun="invoices"
+            />
+          )
+        }
       >
         {loading ? (
           <TableSkeleton cols={5} />
@@ -113,14 +145,14 @@ export function AdminInvoicesPage() {
               ]}
             />
             <tbody>
-              {items.length === 0 ? (
+              {pageRows.length === 0 ? (
                 <EmptyState
                   colSpan={5}
                   title="No invoices yet"
                   description="They appear after organizations have an active plan period."
                 />
               ) : (
-                items.map((inv) => (
+                pageRows.map((inv) => (
                   <tr key={inv.id} className="border-t border-[#E2E7ED]/70 text-[12px] text-[#151D2B]">
                     <td className="px-4 py-3">
                       <Link to={`/admin/invoices/${inv.id}`} className="font-semibold hover:text-[#016BE6]">
@@ -182,12 +214,11 @@ export function AdminInvoiceDetailPage() {
   if (error && !invoice) {
     return (
       <div>
-        <p className="text-sm text-rose-600">{error}</p>
-        <button
-          type="button"
-          className="mt-3 text-[12px] font-semibold text-[#016BE6]"
-          onClick={() => navigate('/admin/invoices')}
-        >
+        <AdminPageHeader title="Invoice" subtitle="Could not load this invoice." />
+        <div className="mb-4">
+          <AlertBanner tone="error">{error}</AlertBanner>
+        </div>
+        <button type="button" className={SAAS_PRIMARY} onClick={() => navigate('/admin/invoices')}>
           Back to invoices
         </button>
       </div>
@@ -198,7 +229,11 @@ export function AdminInvoiceDetailPage() {
 
   return (
     <div>
-      {error ? <p className="mb-3 text-sm text-rose-600">{error}</p> : null}
+      {error ? (
+        <div className="mb-3">
+          <AlertBanner tone="error">{error}</AlertBanner>
+        </div>
+      ) : null}
       <InvoiceDocument
         invoice={invoice}
         backTo="/admin/invoices"

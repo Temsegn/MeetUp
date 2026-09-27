@@ -1,17 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Check, Pencil } from 'lucide-react';
 import { cn } from '../../../lib/cn';
 import { adminApi } from '../api/admin.service';
-import { AdminPageHeader, TableRowSkeleton } from '../components/AdminUi';
+import {
+  AdminKpiCard,
+  AdminPageHeader,
+  AdminTable,
+  AdminTHead,
+  AlertBanner,
+  EmptyState,
+  RoleChip,
+  SAAS_CARD,
+  SAAS_GHOST,
+  SAAS_PRIMARY,
+  SAAS_TEXT_INPUT,
+  SearchField,
+  TableRowSkeleton,
+} from '../components/AdminUi';
 import { money } from '../../workspace/components/InvoiceDocument';
-
-import iconSearch from '../assets/plans/search.svg';
-import iconCheck from '../assets/plans/check.svg';
-import iconPencil from '../assets/plans/pencil.svg';
-import iconKpiDoc from '../assets/plans/kpi-doc.svg';
-import iconKpiCheck from '../assets/plans/kpi-check.svg';
-import iconKpiUsers from '../assets/plans/kpi-users.svg';
-import iconKpiDollar from '../assets/plans/kpi-dollar.svg';
-import iconKpiChart from '../assets/plans/kpi-chart.svg';
 
 type PlanKey = 'free' | 'pro' | 'enterprise';
 
@@ -35,42 +41,9 @@ type PlanRow = {
 
 const PLAN_STYLE: Record<PlanKey, { letter: string; iconBg: string; tagline: string }> = {
   free: { letter: 'F', iconBg: '#6F7B8C', tagline: 'For getting started' },
-  pro: { letter: 'P', iconBg: '#0067ee', tagline: 'For growing teams' },
-  enterprise: { letter: 'E', iconBg: '#0fa05c', tagline: 'For large organizations' },
+  pro: { letter: 'P', iconBg: '#016BE6', tagline: 'For growing teams' },
+  enterprise: { letter: 'E', iconBg: '#059669', tagline: 'For large organizations' },
 };
-
-function IconImg({ src, size = 16, className }: { src: string; size?: number; className?: string }) {
-  return (
-    <img src={src} alt="" width={size} height={size} className={cn('shrink-0', className)} style={{ width: size, height: size }} />
-  );
-}
-
-function Kpi({
-  label,
-  value,
-  meta,
-  iconSrc,
-  iconClass,
-}: {
-  label: string;
-  value: string | number;
-  meta: string;
-  iconSrc: string;
-  iconClass: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-[#E4E8ED] bg-white p-3.5 shadow-[0_1px_1px_rgba(21,30,53,0.04)]">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[12px] font-medium text-[#6F7B8C]">{label}</p>
-        <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-full', iconClass)}>
-          <IconImg src={iconSrc} size={16} />
-        </span>
-      </div>
-      <p className="mt-1.5 text-2xl font-bold tracking-tight text-[#151E35]">{value}</p>
-      <p className="mt-1 text-[11px] text-[#6F7B8C]">{meta}</p>
-    </div>
-  );
-}
 
 function asPlan(row: Record<string, unknown>): PlanRow | null {
   const key = String(row.key);
@@ -168,97 +141,93 @@ export function AdminPlansPage() {
   return (
     <div>
       <AdminPageHeader
-        title="Subscription Plans"
+        title="Plans"
         subtitle="Free, Pro, and Enterprise pricing from the live catalog."
       />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <Kpi label="Total Plans" value={plans.length} meta="Catalog plans" iconSrc={iconKpiDoc} iconClass="bg-[#E3EEFF]" />
-        <Kpi label="Active Plans" value={plans.length} meta="Currently offered" iconSrc={iconKpiCheck} iconClass="bg-[#DAF7E3]" />
-        <Kpi
-          label="Total Subscribers"
-          value={totalSubscribers.toLocaleString()}
-          meta="Active organizations"
-          iconSrc={iconKpiUsers}
-          iconClass="bg-[#EFEBFF]"
-        />
-        <Kpi label="MRR" value={money(mrr)} meta="From active paid plans" iconSrc={iconKpiDollar} iconClass="bg-[#FFEFCD]" />
-        <Kpi label="Annual Revenue" value={money(arr)} meta="MRR × 12" iconSrc={iconKpiChart} iconClass="bg-[#E3EEFF]" />
+        <AdminKpiCard label="Total plans" value={plans.length} meta="Catalog plans" />
+        <AdminKpiCard label="Active plans" value={plans.length} meta="Currently offered" />
+        <AdminKpiCard label="Subscribers" value={totalSubscribers.toLocaleString()} meta="Active organizations" />
+        <AdminKpiCard label="MRR" value={money(mrr)} meta="From active paid plans" />
+        <AdminKpiCard label="Annual revenue" value={money(arr)} meta="MRR × 12" />
       </div>
 
-      {error ? <p className="mb-3 text-sm text-rose-600">{error}</p> : null}
-      {message ? <p className="mb-3 text-sm text-emerald-600">{message}</p> : null}
+      {error ? (
+        <div className="mb-3">
+          <AlertBanner tone="error">{error}</AlertBanner>
+        </div>
+      ) : null}
+      {message ? (
+        <div className="mb-3">
+          <AlertBanner tone="success">{message}</AlertBanner>
+        </div>
+      ) : null}
 
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(260px,300px)]">
-        <div className="min-w-0 overflow-hidden rounded-2xl border border-[#E4E8ED] bg-white shadow-[0_1px_1px_rgba(21,30,53,0.04)]">
-          <div className="flex flex-wrap items-center gap-2 border-b border-[#E4E8ED] p-3">
-            <div className="relative min-w-0 flex-1 basis-[180px]">
-              <IconImg src={iconSearch} size={14} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search plans..."
-                className="h-9 w-full rounded-xl border border-[#E4E8ED] bg-white pr-3 pl-9 text-[13px] text-[#151E35] outline-none placeholder:text-[#6F7B8C] focus:border-[#0067EE]"
-              />
-            </div>
+        <div className="min-w-0 overflow-hidden rounded-[14px] border border-[#E1E7EE] bg-white">
+          <div className="flex flex-wrap items-center gap-2 border-b border-[#E1E7EE] p-3">
+            <SearchField value={search} onChange={setSearch} placeholder="Search plans..." className="sm:w-full" />
           </div>
-          <table className="w-full table-fixed text-left text-[13px]">
-            <thead>
-              <tr className="border-b border-[#E4E8ED] text-[12px] font-bold text-[#151E35]">
-                <th className="px-3 py-2.5">Plan Name</th>
-                <th className="px-2 py-2.5">Price</th>
-                <th className="px-2 py-2.5">Included minutes</th>
-                <th className="px-2 py-2.5">Subscribers</th>
-              </tr>
-            </thead>
+          <AdminTable>
+            <AdminTHead
+              columns={[
+                { label: 'Plan' },
+                { label: 'Price' },
+                { label: 'Included minutes' },
+                { label: 'Subscribers' },
+              ]}
+            />
             <tbody>
-              {loading ? <TableRowSkeleton cols={4} rows={3} /> : filtered.map((p) => {
-                const style = PLAN_STYLE[p.key];
-                const active = p.key === selected?.key;
-                return (
-                  <tr
-                    key={p.key}
-                    onClick={() => {
-                      setSelectedKey(p.key);
-                      setEditing(false);
-                    }}
-                    className={cn('cursor-pointer border-t border-[#E4E8ED]', active ? 'bg-[#F5F8FF]' : 'hover:bg-[#F8FAFC]')}
-                  >
-                    <td className="px-3 py-2.5">
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <span
-                          className="flex size-8 shrink-0 items-center justify-center rounded-xl text-[12px] font-bold text-white"
-                          style={{ background: style.iconBg }}
-                        >
-                          {style.letter}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate text-[13px] font-semibold text-[#151E35]">{p.name}</p>
-                          <p className="truncate text-[11px] text-[#6F7B8C]">{style.tagline}</p>
+              {loading ? (
+                <TableRowSkeleton cols={4} rows={3} />
+              ) : filtered.length === 0 ? (
+                <EmptyState colSpan={4} title="No plans" description="No plans match your search." />
+              ) : (
+                filtered.map((p) => {
+                  const style = PLAN_STYLE[p.key];
+                  const active = p.key === selected?.key;
+                  return (
+                    <tr
+                      key={p.key}
+                      onClick={() => {
+                        setSelectedKey(p.key);
+                        setEditing(false);
+                      }}
+                      className={cn(
+                        'cursor-pointer border-t border-[#E8ECF1]',
+                        active ? 'bg-[#F5F8FF]' : 'hover:bg-[#F8FAFC]',
+                      )}
+                    >
+                      <td className="px-3 py-2.5">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span
+                            className="flex size-8 shrink-0 items-center justify-center rounded-xl text-[12px] font-bold text-white"
+                            style={{ background: style.iconBg }}
+                          >
+                            {style.letter}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-semibold text-[#151D2B]">{p.name}</p>
+                            <p className="truncate text-[11px] text-[#6F7B8C]">{style.tagline}</p>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-2 py-2.5">
-                      <p className="font-bold text-[#151E35]">{p.monthlyPrice > 0 ? money(p.monthlyPrice) : 'Free'}</p>
-                      <p className="text-[11px] text-[#6F7B8C]">/ month</p>
-                    </td>
-                    <td className="px-2 py-2.5 text-[#6F7B8C]">{p.includedParticipantMinutes.toLocaleString()}</td>
-                    <td className="px-2 py-2.5 text-[#6F7B8C]">{p.subscribers.toLocaleString()}</td>
-                  </tr>
-                );
-              })}
-              {!loading && filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-3 py-10 text-center text-[#94A3B8]">
-                    No plans match your search
-                  </td>
-                </tr>
-              ) : null}
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <p className="font-bold text-[#151D2B]">{p.monthlyPrice > 0 ? money(p.monthlyPrice) : 'Free'}</p>
+                        <p className="text-[11px] text-[#6F7B8C]">/ month</p>
+                      </td>
+                      <td className="px-2 py-2.5 text-[#6F7B8C]">{p.includedParticipantMinutes.toLocaleString()}</td>
+                      <td className="px-2 py-2.5 text-[#6F7B8C]">{p.subscribers.toLocaleString()}</td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
-          </table>
+          </AdminTable>
         </div>
 
-        <aside className="min-w-0 rounded-2xl border border-[#E4E8ED] bg-white p-4 shadow-[0_1px_1px_rgba(21,30,53,0.04)] xl:self-start">
+        <aside className={`${SAAS_CARD} min-w-0 p-4 xl:self-start`}>
           {selected ? (
             <>
               <div className="flex flex-col items-center text-center">
@@ -268,15 +237,18 @@ export function AdminPlansPage() {
                 >
                   {PLAN_STYLE[selected.key].letter}
                 </span>
-                <h2 className="mt-3 text-[15px] font-bold text-[#151E35]">{selected.name} Plan</h2>
+                <h2 className="mt-3 text-[15px] font-bold text-[#151D2B]">{selected.name} plan</h2>
                 <p className="mt-2 text-[12px] leading-relaxed text-[#6F7B8C]">
-                  {PLAN_STYLE[selected.key].tagline}. {selected.subscribers} active organizations
+                  {PLAN_STYLE[selected.key].tagline}. {selected.subscribers} active organization
                   {selected.subscribers === 1 ? '' : 's'}.
                 </p>
+                <div className="mt-2">
+                  <RoleChip role={selected.key} />
+                </div>
               </div>
-              <dl className="mt-4 space-y-2.5 border-t border-[#E4E8ED] pt-4 text-[12px]">
+              <dl className="mt-4 space-y-2.5 border-t border-[#E8ECF1] pt-4 text-[12px]">
                 <div className="flex items-center justify-between gap-2">
-                  <dt className="font-semibold text-[#151E35]">Monthly price</dt>
+                  <dt className="font-semibold text-[#151D2B]">Monthly price</dt>
                   <dd>
                     {editing ? (
                       <input
@@ -284,17 +256,17 @@ export function AdminPlansPage() {
                         onChange={(e) => setDraftPrice(e.target.value)}
                         type="number"
                         min={0}
-                        className="h-8 w-24 rounded-lg border border-[#E4E8ED] px-2 text-right"
+                        className={`${SAAS_TEXT_INPUT} h-8 w-24 px-2 text-right`}
                       />
                     ) : (
-                      <span className="font-bold text-[#151E35]">
+                      <span className="font-bold text-[#151D2B]">
                         {selected.monthlyPrice > 0 ? money(selected.monthlyPrice) : 'Free'}
                       </span>
                     )}
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <dt className="font-semibold text-[#151E35]">Included minutes</dt>
+                  <dt className="font-semibold text-[#151D2B]">Included minutes</dt>
                   <dd>
                     {editing ? (
                       <input
@@ -302,7 +274,7 @@ export function AdminPlansPage() {
                         onChange={(e) => setDraftMinutes(e.target.value)}
                         type="number"
                         min={0}
-                        className="h-8 w-24 rounded-lg border border-[#E4E8ED] px-2 text-right"
+                        className={`${SAAS_TEXT_INPUT} h-8 w-24 px-2 text-right`}
                       />
                     ) : (
                       <span className="text-[#6F7B8C]">{selected.includedParticipantMinutes.toLocaleString()}</span>
@@ -310,24 +282,24 @@ export function AdminPlansPage() {
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <dt className="font-semibold text-[#151E35]">Overage</dt>
+                  <dt className="font-semibold text-[#151D2B]">Overage</dt>
                   <dd className="text-[#6F7B8C]">{money(selected.overageRatePerMinute)} / min</dd>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <dt className="font-semibold text-[#151E35]">Members</dt>
+                  <dt className="font-semibold text-[#151D2B]">Members</dt>
                   <dd className="text-[#6F7B8C]">{selected.maxMembers.toLocaleString()}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <dt className="font-semibold text-[#151E35]">Concurrent meetings</dt>
+                  <dt className="font-semibold text-[#151D2B]">Concurrent meetings</dt>
                   <dd className="text-[#6F7B8C]">{selected.maxConcurrentMeetings}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <dt className="font-semibold text-[#151E35]">Recording storage</dt>
+                  <dt className="font-semibold text-[#151D2B]">Recording storage</dt>
                   <dd className="text-[#6F7B8C]">{selected.recordingStorageGb} GB</dd>
                 </div>
               </dl>
-              <div className="mt-4 border-t border-[#E4E8ED] pt-4">
-                <h3 className="text-[12px] font-bold text-[#151E35]">Features</h3>
+              <div className="mt-4 border-t border-[#E8ECF1] pt-4">
+                <h3 className="text-[12px] font-bold text-[#151D2B]">Features</h3>
                 <ul className="mt-2.5 space-y-2">
                   {[
                     `Messages: ${selected.features.messages ? 'Yes' : 'No'}`,
@@ -336,7 +308,7 @@ export function AdminPlansPage() {
                     `Auto-record: ${selected.features.autoRecord ? 'Yes' : 'No'}`,
                   ].map((line) => (
                     <li key={line} className="flex items-start gap-2 text-[12px] text-[#6F7B8C]">
-                      <IconImg src={iconCheck} size={14} className="mt-0.5" />
+                      <Check className="mt-0.5 size-3.5 shrink-0 text-[#016BE6]" strokeWidth={2} />
                       <span>{line}</span>
                     </li>
                   ))}
@@ -345,29 +317,16 @@ export function AdminPlansPage() {
               <div className="mt-4 grid grid-cols-2 gap-2">
                 {editing ? (
                   <>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void saveEdit()}
-                      className="inline-flex h-9 items-center justify-center rounded-xl bg-[#0067EE] text-[12px] font-semibold text-white disabled:opacity-60"
-                    >
+                    <button type="button" disabled={busy} onClick={() => void saveEdit()} className={SAAS_PRIMARY}>
                       {busy ? 'Saving…' : 'Save'}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditing(false)}
-                      className="inline-flex h-9 items-center justify-center rounded-xl border border-[#E4E8ED] text-[12px] font-semibold text-[#151E35]"
-                    >
+                    <button type="button" onClick={() => setEditing(false)} className={SAAS_GHOST}>
                       Cancel
                     </button>
                   </>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={startEdit}
-                    className="col-span-2 inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-[#0067EE] text-[12px] font-semibold text-[#0067EE] hover:bg-[#F0F7FF]"
-                  >
-                    <IconImg src={iconPencil} size={14} /> Edit price & minutes
+                  <button type="button" onClick={startEdit} className={`${SAAS_GHOST} col-span-2 text-[#016BE6]`}>
+                    <Pencil className="size-3.5" /> Edit price & minutes
                   </button>
                 )}
               </div>

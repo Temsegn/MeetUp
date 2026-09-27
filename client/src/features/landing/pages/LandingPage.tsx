@@ -1,11 +1,10 @@
 import { useAuth } from '../../../contexts/AuthContext';
 import { EnterpriseBento } from '../components/EnterpriseBento';
-import { GlobalPresence } from '../components/GlobalPresence';
-import { HowItWorks } from '../components/HowItWorks';
+import { HowItWorks, OrganizationSection } from '../components/HowItWorks';
 import { LandingCta, LandingFooter } from '../components/LandingFooter';
 import { LandingHero } from '../components/LandingHero';
 import { PricingTeaser } from '../components/PricingTeaser';
-import { ProductModuleStrip } from '../components/ProductModuleStrip';
+import { CollaborationSection, ProductModuleStrip } from '../components/ProductModuleStrip';
 
 export function LandingPage() {
   const { user } = useAuth();
@@ -15,9 +14,10 @@ export function LandingPage() {
       <main>
         <LandingHero user={user} />
         <ProductModuleStrip />
+        <CollaborationSection />
         <HowItWorks />
+        <OrganizationSection />
         <EnterpriseBento />
-        <GlobalPresence />
         <PricingTeaser user={user} />
         <LandingCta user={user} />
       </main>

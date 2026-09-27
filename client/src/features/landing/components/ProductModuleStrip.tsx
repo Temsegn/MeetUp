@@ -1,7 +1,18 @@
 import { useState } from 'react';
+import { Calendar, Check, Film, MessageSquare, MonitorUp, MousePointer2, Pencil, Video } from 'lucide-react';
 import { cn } from '../../../lib/cn';
 import { PRODUCT_MODULES } from '../constants/landing.constants';
+import { LP_BODY, LP_CARD, LP_EYEBROW, LP_H2, LP_SECTION } from '../landing-ui';
 import { useLandingCopy } from '../useLandingCopy';
+import { MeetingRoomPreview } from './MeetingRoomPreview';
+import { ProductAppPreview } from './ProductAppPreview';
+
+const MODULE_ICONS = {
+  meetings: Video,
+  messages: MessageSquare,
+  calendar: Calendar,
+  recordings: Film,
+} as const;
 
 export function ProductModuleStrip() {
   const copy = useLandingCopy();
@@ -10,63 +21,87 @@ export function ProductModuleStrip() {
   const content = copy.product.modules[module.id];
 
   return (
-    <section id="product" className="bg-[#F6F8FB] py-20 sm:py-24">
+    <section id="product" className={`${LP_SECTION} bg-white`}>
       <div className="mx-auto max-w-7xl px-5 sm:px-8">
         <div className="max-w-2xl">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#016BE6]">
-            {copy.product.eyebrow}
-          </p>
-          <h2 className="mt-3 text-[clamp(1.65rem,3vw,2.35rem)] font-semibold tracking-[-0.03em] text-[#0B1220]">
-            {copy.product.title}
-          </h2>
-          <p className="mt-4 text-[15px] leading-relaxed text-[#5A6B7C]">{copy.product.body}</p>
+          <p className={LP_EYEBROW}>{copy.product.eyebrow}</p>
+          <h2 className={`mt-3 ${LP_H2}`}>{copy.product.title}</h2>
+          <p className={`mt-4 ${LP_BODY}`}>{copy.product.body}</p>
         </div>
 
-        <div className="mt-10 flex flex-wrap gap-2">
-          {PRODUCT_MODULES.map((m, i) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => setActive(i)}
-              className={cn(
-                'rounded-lg px-4 py-2 text-[13px] font-semibold transition-colors',
-                active === i
-                  ? 'bg-[#0B1220] text-white'
-                  : 'bg-white text-[#5A6B7C] ring-1 ring-[#E6EAF0] hover:text-[#0B1220]',
-              )}
-            >
-              {copy.product.modules[m.id].label}
-            </button>
-          ))}
+        <div className="mt-8 flex w-fit max-w-full flex-wrap gap-1.5">
+          {PRODUCT_MODULES.map((m, i) => {
+            const Icon = MODULE_ICONS[m.id];
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setActive(i)}
+                className={cn(
+                  'inline-flex h-8 items-center gap-1.5 rounded-xl border px-3.5 text-[12px] font-semibold transition-colors',
+                  active === i
+                    ? 'border-[#016BE6] bg-[#016BE6] text-white'
+                    : 'border-[#E1E7EE] bg-white text-[#6F7B8C] hover:border-[#CBD5E1] hover:text-[#334155]',
+                )}
+              >
+                <Icon className="size-3.5" strokeWidth={2} />
+                {copy.product.modules[m.id].label}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="mt-8 grid items-center gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="mt-8 grid min-w-0 items-center gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
           <div>
-            <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#016BE6]">
-              {content.label}
-            </p>
-            <h3 className="mt-2 text-[22px] font-semibold tracking-tight text-[#0B1220]">
-              {content.title}
-            </h3>
-            <p className="mt-3 text-[14px] leading-relaxed text-[#5A6B7C]">{content.body}</p>
+            <p className={LP_EYEBROW}>{content.label}</p>
+            <h3 className="mt-2 text-[22px] font-bold tracking-tight text-[#151D2B]">{content.title}</h3>
+            <p className="mt-3 text-[14px] leading-relaxed text-[#6F7B8C]">{content.body}</p>
             <ul className="mt-6 space-y-3">
               {content.points.map((item) => (
-                <li key={item} className="flex items-start gap-3 text-[14px] text-[#0B1220]">
-                  <span className="mt-2 h-px w-5 shrink-0 bg-[#016BE6]" />
+                <li key={item} className="flex items-start gap-2.5 text-[14px] text-[#151D2B]">
+                  <Check className="mt-0.5 size-4 shrink-0 text-[#016BE6]" strokeWidth={2.25} />
                   {item}
                 </li>
               ))}
             </ul>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-[#E6EAF0] bg-white p-2 shadow-[0_16px_48px_-28px_rgba(11,18,32,0.35)]">
-            <img
-              key={module.id}
-              src={module.image}
-              alt=""
-              className="block aspect-[16/10] w-full rounded-xl object-cover object-center"
-            />
-          </div>
+          <ProductAppPreview active={module.preview} alt={content.title} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const COLLAB_ICONS = [Video, MonitorUp, Pencil, MousePointer2] as const;
+
+export function CollaborationSection() {
+  const copy = useLandingCopy();
+
+  return (
+    <section className={`${LP_SECTION} bg-[#F5F7FA]`}>
+      <div className="mx-auto max-w-7xl px-5 sm:px-8">
+        <div className="max-w-2xl">
+          <p className={LP_EYEBROW}>{copy.collaboration.eyebrow}</p>
+          <h2 className={`mt-3 ${LP_H2}`}>{copy.collaboration.title}</h2>
+          <p className={`mt-4 ${LP_BODY}`}>{copy.collaboration.body}</p>
+        </div>
+        <div className="mt-10 grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <MeetingRoomPreview />
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            {copy.collaboration.items.map((item, i) => {
+              const Icon = COLLAB_ICONS[i] ?? Video;
+              return (
+                <li key={item.title} className={`${LP_CARD} p-5`}>
+                  <span className="inline-flex size-8 items-center justify-center rounded-full bg-[#E8F1FE] text-[#016BE6]">
+                    <Icon className="size-4" strokeWidth={2} />
+                  </span>
+                  <h3 className="mt-3 text-[15px] font-semibold text-[#151D2B]">{item.title}</h3>
+                  <p className="mt-2 text-[13px] leading-relaxed text-[#6F7B8C]">{item.body}</p>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       </div>
     </section>

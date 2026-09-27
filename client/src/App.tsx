@@ -82,7 +82,24 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, initializing } = useAuth();
-  if (initializing) return null;
+  if (initializing)
+    return (
+      <div className="flex h-full min-h-[24rem] flex-1 items-center justify-center bg-white text-[#64748b]">
+        <div className="flex flex-col items-center gap-3">
+          <svg className="h-6 w-6 animate-spin text-[#016BE6]" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+            />
+          </svg>
+          <span className="text-sm" style={{ fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' }}>
+            Loading...
+          </span>
+        </div>
+      </div>
+    );
   if (user) return <RedirectToApp />;
   return <>{children}</>;
 };

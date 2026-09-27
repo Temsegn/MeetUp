@@ -16,7 +16,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
 import { cn } from '../../../lib/cn';
 import { adminApi, type AdminOverview } from '../api/admin.service';
-import { DashboardSkeleton, StatusBadge } from '../components/AdminUi';
+import { DashboardSkeleton, StatusBadge, AlertBanner, AdminPageHeader } from '../components/AdminUi';
 
 function relativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -169,7 +169,8 @@ export function AdminOverviewPage() {
   if (error) {
     return (
       <div>
-        <p className="text-sm text-rose-600">{error}</p>
+        <AdminPageHeader title="Dashboard" subtitle="Platform health, organizations, and meeting activity" />
+        <AlertBanner tone="error">{error}</AlertBanner>
       </div>
     );
   }

@@ -13,6 +13,7 @@ import {
 import { compressImageToDataUrl } from '../../../lib/compressImage';
 import { cn } from '../../../lib/cn';
 import { adminApi } from '../api/admin.service';
+import { AlertBanner } from '../components/AdminUi';
 
 const INDUSTRIES = [
   'Technology',
@@ -453,7 +454,7 @@ export function AdminCreateWorkspacePage() {
             </label>
           </section>
 
-          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+          {error ? <AlertBanner tone="error">{error}</AlertBanner> : null}
 
           <div className="flex flex-wrap justify-end gap-2 border-t border-[#E8ECF1] pt-5">
             <button
