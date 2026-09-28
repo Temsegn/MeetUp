@@ -31,7 +31,7 @@ const envSchema = z.object({
   LOGIN_MAX_FAILED_ATTEMPTS: z.string().default('5').transform(Number),
   LOGIN_LOCKOUT_WINDOW_MS: z.string().default('900000').transform(Number), // 15 min
 
-  // Frontend base URL used to build verification / reset / OAuth return links.
+  // Frontend base URL used to build verification / reset links.
   FRONTEND_URL: z.string().default('http://46.246.120.148:8980').transform((val) => val.replace(/\/+$/, '')),
   // Optional cookie domain (e.g. '.example.com') for cross-subdomain auth.
   COOKIE_DOMAIN: z.string().optional(),
@@ -39,13 +39,6 @@ const envSchema = z.object({
   COOKIE_SECURE: z.enum(['true', 'false']).optional(),
   // Comma-separated emails auto-promoted to platform super_admin on login/me.
   PLATFORM_ADMIN_EMAILS: z.string().default(''),
-
-  // Google OAuth (optional — /auth/google returns 503 when unset).
-  // When GOOGLE_REDIRECT_URI is unset, it is derived as `${FRONTEND_URL}/auth/google/callback`
-  // (the public nginx origin proxies /auth/google* to this API).
-  GOOGLE_CLIENT_ID: z.string().optional(),
-  GOOGLE_CLIENT_SECRET: z.string().optional(),
-  GOOGLE_REDIRECT_URI: z.string().optional(),
 
   // ── Email (SMTP) — optional. When unset, emails are logged to the console
   //    (development mode) so flows remain testable without a mail server.
@@ -103,10 +96,6 @@ if (!parseResult.success) {
 const data = parseResult.data;
 
 const frontendUrl = data.FRONTEND_URL;
-const googleRedirectUri = (data.GOOGLE_REDIRECT_URI || `${frontendUrl}/auth/google/callback`).replace(
-  /\/+$/,
-  ''
-);
 const cookieSecure =
   data.COOKIE_SECURE === 'true'
     ? true
@@ -126,7 +115,6 @@ if (data.NODE_ENV === 'production') {
 export const env = {
   ...data,
   FRONTEND_URL: frontendUrl,
-  GOOGLE_REDIRECT_URI: googleRedirectUri,
   cookieSecure,
 };
 

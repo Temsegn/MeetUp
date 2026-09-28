@@ -10,8 +10,6 @@ export const AUTH_ASSETS = {
   promoDashboard: '/marketing/hero-workspace.png',
   promoDashboardAlt: '/marketing/meetings.png',
   promoSecureMail: '/marketing/messages.png',
-  google: '/auth/icon-google.svg',
-  microsoft: '/auth/icon-microsoft.svg',
   email: '/auth/icon-email.svg',
   lock: '/auth/icon-lock.svg',
   eye: '/auth/icon-eye.svg',

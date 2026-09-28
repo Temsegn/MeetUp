@@ -26,7 +26,6 @@ import { createChangePasswordController } from './controllers/change-password.co
 import { createVerifyEmailController } from './controllers/verify-email.controller';
 import { createSessionController } from './controllers/session.controller';
 import { createProfileController } from './controllers/profile.controller';
-import { createGoogleAuthController } from './controllers/google-auth.controller';
 
 const router = Router();
 
@@ -41,7 +40,6 @@ const changePasswordController = createChangePasswordController();
 const verifyEmailController = createVerifyEmailController();
 const sessionController = createSessionController();
 const profileController = createProfileController();
-const googleAuthController = createGoogleAuthController();
 
 // ── Security middleware ─────────────────────────────────────────────────────
 // Origin check on every auth request (defense-in-depth behind SameSite=Lax).
@@ -80,16 +78,6 @@ router.post(
 
 /** POST /auth/verify-email?token=... — consume verification token. */
 router.get('/verify-email', verifyEmailController.verifyEmail);
-
-/** GET /auth/google — start Google OAuth (sign-up + sign-in). */
-router.get('/google', authRateLimiter, (req, res, next) =>
-  googleAuthController.start(req, res, next)
-);
-
-/** GET /auth/google/callback — Google redirects here after consent. */
-router.get('/google/callback', authRateLimiter, (req, res, next) => {
-  void googleAuthController.callback(req, res, next);
-});
 
 // ── Authenticated endpoints ─────────────────────────────────────────────────
 
