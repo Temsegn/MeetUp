@@ -6,7 +6,7 @@ function stripTrailingSlash(value: string): string {
   return value.trim().replace(/\/+$/, '');
 }
 
-const CANONICAL_FRONTEND_URL = 'http://46.246.120.148:8980';
+const CANONICAL_FRONTEND_URL = 'https://meet.samtal.cc:8981';
 
 export const FRONTEND_URL = stripTrailingSlash(
   String(import.meta.env.VITE_FRONTEND_URL || CANONICAL_FRONTEND_URL),
@@ -78,7 +78,7 @@ export function assignFrontend(path: string): void {
 export function enterApp(): void {
   if (typeof window === 'undefined') return;
   // Stay on the current origin — absolute VITE_FRONTEND_URL jumps cause about:blank#blocked
-  // when the baked URL (e.g. http://IP:8980) does not match the live HTTPS host.
+  // when the baked URL does not match the live HTTPS host.
   window.location.assign('/app');
 }
 
