@@ -4,6 +4,7 @@ import { EmailField } from './EmailField';
 import { PasswordField } from './PasswordField';
 import { RememberMeRow } from './RememberMeRow';
 import { SignInButton } from './SignInButton';
+import { SocialLoginButtons } from './SocialLoginButtons';
 import { AUTH_COPY } from '../../constants/auth.constants';
 import type { SignInFormValues, FieldErrors } from '../../schemas/auth.schemas';
 
@@ -97,5 +98,6 @@ export const SignInForm: React.FC<Props> = ({
       onChange={(v) => setField('rememberMe', v)}
     />
     <SignInButton loading={loading} />
+    <SocialLoginButtons />
   </form>
 );

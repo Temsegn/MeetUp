@@ -1,5 +1,7 @@
 /** Public site origin for invitation, join, and share links — not the API. */
 
+import { API_URL } from './apiUrl';
+
 function stripTrailingSlash(value: string): string {
   return value.trim().replace(/\/+$/, '');
 }
@@ -55,6 +57,14 @@ export function enterApp(): void {
     return;
   }
   window.location.replace(frontendUrl('/app'));
+}
+
+/** Full-page Google OAuth start. Production always uses the public SPA origin (nginx proxies /auth/google). */
+export function googleAuthStartUrl(): string {
+  if (isLocalViteDev()) {
+    return `${API_URL || 'http://localhost:4001'}/auth/google`;
+  }
+  return frontendUrl('/auth/google');
 }
 
 export function workspaceInviteUrl(token: string): string {

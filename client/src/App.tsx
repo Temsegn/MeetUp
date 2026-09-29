@@ -10,6 +10,7 @@ import {
   ResetPasswordPage,
   VerifyEmailPage,
   SetInvitePasswordPage,
+  OAuthCallbackPage,
 } from './features/auth';
 import { SecuritySettingsPage } from './pages/SecuritySettingsPage';
 import { LandingPage, MarketingLayout } from './features/landing';
@@ -136,6 +137,7 @@ function App() {
             <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
             <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
             <Route path="/auth/set-password" element={<SetInvitePasswordPage />} />
+            <Route path="/auth/oauth/callback" element={<OAuthCallbackPage />} />
             <Route path="/auth/invite" element={<InviteJoinPage />} />
             <Route path="/settings/security" element={<ProtectedRoute><SecuritySettingsPage /></ProtectedRoute>} />
 

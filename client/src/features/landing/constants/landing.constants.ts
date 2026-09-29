@@ -44,7 +44,7 @@ const EN_COPY = {
     primary: 'Create an account',
     primaryAuthed: 'Open workspace',
     secondary: 'See the product',
-    proof: 'English and Arabic. Sign in with your work email and password.',
+    proof: 'English and Arabic. Sign in with email, or continue with Google when it is configured.',
   },
   capabilities: [
     { value: 'Waiting rooms', label: 'Host admit before anyone joins' },
@@ -236,7 +236,7 @@ const AR_COPY: LandingCopy = {
     primary: 'إنشاء حساب',
     primaryAuthed: 'فتح مساحة العمل',
     secondary: 'اطّلع على المنتج',
-    proof: 'العربية والإنجليزية. سجّل الدخول ببريد العمل وكلمة المرور.',
+    proof: 'العربية والإنجليزية. سجّل الدخول بالبريد، أو عبر Google عندما يكون مُعداً.',
   },
   capabilities: [
     { value: 'غرف انتظار', label: 'المضيف يوافق قبل الانضمام' },

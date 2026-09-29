@@ -74,8 +74,8 @@ export function createLoginService(deps: AuthDeps = authRepository) {
           metadata: { reason: 'google_only' },
         });
         throw new AuthError(
-          'This account has no password set. Use Forgot password to create one, or contact your admin.',
-          'PASSWORD_REQUIRED'
+          'This account uses Google sign-in. Please continue with Google.',
+          'GOOGLE_ONLY'
         );
       }
 

@@ -18,6 +18,7 @@ services:
       MEDIASOUP_LISTEN_IP: 0.0.0.0
       FRONTEND_URL: ${FRONTEND_URL:-http://46.246.120.148:8980}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://46.246.120.148:8980,http://localhost,http://localhost:80,http://127.0.0.1}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://46.246.120.148:8980/auth/google/callback}
     ports:
       - "40000-40199:40000-40199/udp"
     volumes:

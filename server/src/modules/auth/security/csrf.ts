@@ -19,6 +19,13 @@ import { logger } from '../../../infrastructure/logging/logger';
  * change-password, etc.).
  */
 export function csrfProtection(req: Request, res: Response, next: NextFunction): void {
+  // Google OAuth is a top-level browser redirect (not a cookie CSRF vector).
+  const path = req.path || '';
+  if (path === '/google' || path === '/google/callback' || path.startsWith('/google/')) {
+    next();
+    return;
+  }
+
   const origin = req.headers['origin'];
 
   if (origin && origin !== 'null' && !corsOrigins.includes(origin)) {
