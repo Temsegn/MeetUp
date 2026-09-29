@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   setAccessToken,
   refreshSession,
 } from '../../../services/auth/auth.service';
 import { useAuth } from '../../../contexts/AuthContext';
-import { assignFrontend, enterApp } from '../../../lib/frontendUrl';
 
 const OAUTH_HANDOFF_KEY = 'samtal_oauth_access_token';
 
@@ -38,6 +38,7 @@ function consumeOAuthAccessToken(): string | null {
  */
 export const OAuthCallbackPage: React.FC = () => {
   const { refreshUser } = useAuth();
+  const navigate = useNavigate();
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -63,7 +64,7 @@ export const OAuthCallbackPage: React.FC = () => {
 
         await refreshUser();
         sessionStorage.removeItem(OAUTH_HANDOFF_KEY);
-        if (!cancelled) enterApp();
+        if (!cancelled) navigate('/app', { replace: true });
       } catch (err) {
         sessionStorage.removeItem(OAUTH_HANDOFF_KEY);
         if (!cancelled) {
@@ -75,7 +76,7 @@ export const OAuthCallbackPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [refreshUser]);
+  }, [refreshUser, navigate]);
 
   if (error) {
     return (
@@ -84,7 +85,7 @@ export const OAuthCallbackPage: React.FC = () => {
         <button
           type="button"
           className="rounded-full bg-[#016BE6] px-5 py-2 text-sm font-semibold text-white"
-          onClick={() => assignFrontend('/auth')}
+          onClick={() => navigate('/auth', { replace: true })}
         >
           Back to sign in
         </button>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { enterApp, goToFrontend } from './lib/frontendUrl';
+import { goToFrontend } from './lib/frontendUrl';
 import { NotificationCenterProvider } from './contexts/NotificationCenterContext';
 import {
   SignInPage,
@@ -100,7 +100,7 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </div>
       </div>
     );
-  if (user) return <RedirectToApp />;
+  if (user) return <Navigate to="/app" replace />;
   return <>{children}</>;
 };
 
@@ -110,13 +110,6 @@ function CanonicalHost({ children }: { children: React.ReactNode }) {
     goToFrontend();
   }, []);
   return <>{children}</>;
-}
-
-function RedirectToApp() {
-  React.useEffect(() => {
-    enterApp();
-  }, []);
-  return null;
 }
 
 function App() {

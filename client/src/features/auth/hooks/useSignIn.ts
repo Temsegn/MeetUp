@@ -1,11 +1,12 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
-import { enterApp } from '../../../lib/frontendUrl';
 import { ApiError, authService } from '../../../services/auth/auth.service';
 import { validateSignIn, type SignInFormValues, type FieldErrors } from '../schemas/auth.schemas';
 
 export function useSignIn() {
   const { signIn } = useAuth();
+  const navigate = useNavigate();
   const [values, setValues] = useState<SignInFormValues>({
     email: '',
     password: '',
@@ -39,7 +40,8 @@ export function useSignIn() {
     setLoading(true);
     try {
       await signIn(values.email.trim(), values.password, values.rememberMe);
-      enterApp();
+      // Same-origin SPA nav (matches Open workspace) — avoid full-page assign blanking the tab.
+      navigate('/app', { replace: true });
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         if (err.code === 'EMAIL_NOT_VERIFIED') {
