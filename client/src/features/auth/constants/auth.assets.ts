@@ -1,8 +1,8 @@
 export const AUTH_ASSETS = {
   /** Sign-in / forgot logo */
-  logo: '/auth/samtal-logo.png?v=3',
+  logo: '/auth/samtal-logo.png?v=4',
   /** Signup-only logo (user-provided) */
-  signUpLogo: '/auth/signup-logo.png?v=2',
+  signUpLogo: '/auth/signup-logo.png?v=4',
   /** Figma right-panel showcase (node 16:754) — trimmed left padding */
   signInShowcase: '/marketing/auth-showcase.png',
   /** Figma signup dashboard mock (node 16:1001) */

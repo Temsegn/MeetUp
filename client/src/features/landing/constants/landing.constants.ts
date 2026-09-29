@@ -1,5 +1,5 @@
 export const LANDING_ASSETS = {
-  logo: '/auth/samtal-logo.png?v=1',
+  logo: '/auth/samtal-logo.png?v=4',
   logoBlue: '/samtal-logo-blue.png',
   logoSidebar: '/samtal-logo-sidebar.png',
   heroDashboard: '/marketing/hero-workspace.png',

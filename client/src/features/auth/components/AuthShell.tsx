@@ -63,7 +63,7 @@ export const AuthLogo: React.FC<{ to?: string; className?: string }> = ({
 }) => {
   const mark = (
     <img
-      src="/auth/samtal-logo.png?v=2"
+      src="/auth/samtal-logo.png?v=4"
       alt="Samtal — Connect with us"
       className={cn(
         'block h-[clamp(2.75rem,6vh,3.75rem)] w-auto max-w-[min(14rem,85%)] object-contain object-left',
