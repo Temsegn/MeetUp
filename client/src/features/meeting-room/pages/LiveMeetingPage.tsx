@@ -582,14 +582,17 @@ export function LiveMeetingPage() {
     };
     const remotes: LiveParticipant[] = peers.map((p) => {
       const remote = remoteStreams.get(p.id);
-      const showingScreen = Boolean(remote?.screen?.getVideoTracks().length);
+      const showingScreen = Boolean(remote?.screen?.getVideoTracks().some((t) => t.readyState !== 'ended'));
+      const cameraHasVideo = Boolean(
+        remote?.camera?.getVideoTracks().some((t) => t.readyState !== 'ended'),
+      );
       return {
         id: p.id,
         name: p.name,
-        stream: showingScreen ? remote!.screen : remote?.camera || null,
+        stream: showingScreen ? remote!.screen : cameraHasVideo ? remote!.camera : null,
         audioStream: remote?.audio || null,
         isMuted: p.isMuted,
-        isCameraOff: p.isCameraOff && !showingScreen,
+        isCameraOff: showingScreen ? false : p.isCameraOff || !cameraHasVideo,
         isHandRaised: raisedHands.has(p.id),
         avatarUrl: p.avatarUrl,
         avatarColor: p.avatarColor,

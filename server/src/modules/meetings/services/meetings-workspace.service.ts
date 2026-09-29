@@ -273,10 +273,28 @@ async function attachParticipantLists(meetings: MeetingJson[]): Promise<MeetingJ
       }
     }
 
-    const registeredCount = Math.max(roster.length, 1);
+    const guestPeople = (Array.isArray(m.guestEmails) ? m.guestEmails : [])
+      .map((email) => String(email || '').trim().toLowerCase())
+      .filter(Boolean)
+      .filter((email) => !roster.some((p) => p.email.toLowerCase() === email))
+      .map((email, i) => ({
+        id: `guest-${m.id}-${i}`,
+        meetingId: m.id,
+        userId: `guest:${email}`,
+        name: email.split('@')[0] || email,
+        email,
+        avatarUrl: null as string | null,
+        avatarColor: '#64748B' as string | null,
+        status: 'invited' as const,
+        registeredAt: m.createdAt,
+        joinedAt: null as string | null,
+      }));
+
+    const fullRoster = [...roster, ...guestPeople];
+    const registeredCount = Math.max(fullRoster.length, 1);
     return {
       ...m,
-      participantList: roster,
+      participantList: fullRoster,
       registeredParticipantCount: registeredCount,
       participantCount: Math.max(m.participantCount ?? 1, registeredCount),
       participants: Math.max(m.participants ?? 1, registeredCount),

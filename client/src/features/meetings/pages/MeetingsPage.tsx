@@ -61,27 +61,47 @@ function apiMeetingToListed(m: Meeting): ListedMeeting {
     timeKey,
     duration: durationMinutes > 0 ? `${durationMinutes}m` : '—',
     durationMinutes,
-    participants: Math.max(1, m.participants ?? m.peakParticipants ?? m.participantCount ?? 1),
+    participants: Math.max(
+      1,
+      m.participants ??
+        m.peakParticipants ??
+        m.participantCount ??
+        Math.max(1, (m.participantList?.length ?? 0) + (m.guestEmails?.length ?? 0)),
+    ),
     host: m.createdByName,
     hostUserId: m.createdBy,
     hostAvatarUrl: m.createdByAvatarUrl ?? null,
     hostAvatarColor: m.createdByAvatarColor ?? null,
     roomId: m.roomId,
     agenda: (m.agenda ?? []).map((a, i) => ({ id: String(i), title: a, duration: '' })),
-    people:
-      m.participantList && m.participantList.length > 0
-        ? m.participantList.map((p) => ({
-            name: p.name,
-            avatarUrl: p.avatarUrl ?? null,
-            avatarColor: p.avatarColor ?? null,
-          }))
-        : [
-            {
-              name: m.createdByName,
-              avatarUrl: m.createdByAvatarUrl ?? null,
-              avatarColor: m.createdByAvatarColor ?? null,
-            },
-          ],
+    people: (() => {
+      const fromRoster =
+        m.participantList?.map((p) => ({
+          name: p.name,
+          avatarUrl: p.avatarUrl ?? null,
+          avatarColor: p.avatarColor ?? null,
+        })) ?? [];
+      const rosterEmails = new Set(
+        (m.participantList ?? []).map((p) => String(p.email || '').toLowerCase()).filter(Boolean),
+      );
+      const fromGuests = (m.guestEmails ?? [])
+        .map((email) => String(email || '').trim().toLowerCase())
+        .filter((email) => email && !rosterEmails.has(email))
+        .map((email) => ({
+          name: email.split('@')[0] || email,
+          avatarUrl: null as string | null,
+          avatarColor: '#64748B' as string | null,
+        }));
+      const people = [...fromRoster, ...fromGuests];
+      if (people.length > 0) return people;
+      return [
+        {
+          name: m.createdByName,
+          avatarUrl: m.createdByAvatarUrl ?? null,
+          avatarColor: m.createdByAvatarColor ?? null,
+        },
+      ];
+    })(),
   };
 }
 

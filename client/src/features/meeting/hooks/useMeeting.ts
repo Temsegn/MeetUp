@@ -475,15 +475,21 @@ function _addTrackToStream(
     const next = new Map(prev);
     const existing = next.get(peerId) ?? emptyPeerStreams();
 
+    // Always build new MediaStream objects so React/VideoTile see a new
+    // reference when tracks arrive after mic-first produce (addTrack alone
+    // keeps the same stream identity and leaves a black video element).
+    const withTrack = (stream: MediaStream) => new MediaStream([...stream.getTracks(), track]);
+
+    let updated: PeerStreams;
     if (source === 'screen') {
-      existing.screen.addTrack(track);
+      updated = { ...existing, screen: withTrack(existing.screen) };
     } else if (source === 'microphone' || track.kind === 'audio') {
-      existing.audio.addTrack(track);
+      updated = { ...existing, audio: withTrack(existing.audio) };
     } else {
-      existing.camera.addTrack(track);
+      updated = { ...existing, camera: withTrack(existing.camera) };
     }
 
-    next.set(peerId, existing);
+    next.set(peerId, updated);
     return next;
   });
 }

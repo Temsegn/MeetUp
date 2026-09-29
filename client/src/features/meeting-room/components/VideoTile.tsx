@@ -29,23 +29,30 @@ type Props = {
 export function VideoTile({ participant, isScreenShare = false, className }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const videoTrackId =
+    participant.stream?.getVideoTracks().map((t) => t.id).join(',') ?? '';
+  const hasLiveVideo = Boolean(
+    participant.stream &&
+      participant.stream.getVideoTracks().some((t) => t.readyState !== 'ended') &&
+      !participant.isCameraOff,
+  );
 
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    if (participant.stream && !participant.isCameraOff) {
+    if (hasLiveVideo && participant.stream) {
       el.srcObject = participant.stream;
       void el.play().catch(() => {});
     } else {
       el.srcObject = null;
     }
-  }, [participant.stream, participant.isCameraOff]);
+  }, [participant.stream, participant.isCameraOff, videoTrackId, hasLiveVideo]);
 
   useEffect(() => {
     const el = audioRef.current;
     if (!el || participant.isYou) return;
     const audio = participant.audioStream || participant.stream;
-    if (audio) {
+    if (audio && audio.getAudioTracks().some((t) => t.readyState !== 'ended')) {
       el.srcObject = audio;
       void el.play().catch(() => {});
     } else {
@@ -53,7 +60,7 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
     }
   }, [participant.audioStream, participant.stream, participant.isYou]);
 
-  const showVideo = !!participant.stream && !participant.isCameraOff;
+  const showVideo = hasLiveVideo;
 
   return (
     <div
