@@ -46,7 +46,7 @@ export const SignInForm: React.FC<Props> = ({
   >
     {infoMessage ? (
       <div
-        className="mb-2 rounded-lg border border-[#C7E7D4] bg-[#ECFDF3] px-2.5 py-2 text-xs leading-snug text-[#027A48]"
+        className="mb-2 rounded-lg border border-[#FEC84B] bg-[#FFFAEB] px-2.5 py-2 text-xs leading-snug text-[#B54708]"
         role="status"
       >
         {infoMessage}

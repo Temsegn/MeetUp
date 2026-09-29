@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MeetingScreenRecorder } from './meeting-screen-recorder';
-import { getAccessToken, refreshSession } from '../../../services/auth/auth.service';
+import { getAccessToken, refreshSession, notifySessionExpired } from '../../../services/auth/auth.service';
 import { API_URL } from '../../../lib/apiUrl';
 
 
@@ -61,6 +61,9 @@ async function uploadRecording(
       } catch {
         throw new Error('Failed to upload recording after refreshing your session.');
       }
+    } else {
+      notifySessionExpired();
+      throw new Error('Your session has expired. Please sign in again.');
     }
   }
 

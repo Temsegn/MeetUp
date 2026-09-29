@@ -18,9 +18,40 @@ import { API_URL } from '../../lib/apiUrl';
 // ── In-memory access token (never persisted) ────────────────────────────────
 let accessToken: string | null = null;
 
+/** Fired once when refresh fails so AuthContext can clear user and leave /app. */
+type SessionExpiredListener = () => void;
+const sessionExpiredListeners = new Set<SessionExpiredListener>();
+let sessionExpiredNotified = false;
+
+/** Allow a new session-expired cycle after a successful sign-in. */
+export function resetSessionExpiredGuard(): void {
+  sessionExpiredNotified = false;
+}
+
+export function subscribeSessionExpired(listener: SessionExpiredListener): () => void {
+  sessionExpiredListeners.add(listener);
+  return () => {
+    sessionExpiredListeners.delete(listener);
+  };
+}
+
+export function notifySessionExpired(): void {
+  if (sessionExpiredNotified) return;
+  sessionExpiredNotified = true;
+  accessToken = null;
+  for (const listener of sessionExpiredListeners) {
+    try {
+      listener();
+    } catch {
+      /* ignore listener errors */
+    }
+  }
+}
+
 export const getAccessToken = (): string | null => accessToken;
 export const setAccessToken = (t: string | null): void => {
   accessToken = t;
+  if (t) resetSessionExpiredGuard();
 };
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -214,6 +245,7 @@ export async function apiFetch<T>(path: string, opts: FetchOptions = {}, allowRe
   if (res.status === 401 && auth && allowRetry) {
     const refreshed = await refreshSession();
     if (refreshed) return apiFetch<T>(path, opts, false);
+    notifySessionExpired();
     throw new ApiError('Your session has expired. Please sign in again.', 401, 'SESSION_EXPIRED');
   }
 
@@ -286,6 +318,7 @@ export const authService = {
       auth: false,
     });
     accessToken = extractAccessToken(data);
+    resetSessionExpiredGuard();
     return normalizeUser(data.user);
   },
 
@@ -311,6 +344,7 @@ export const authService = {
       }
     }
     accessToken = extractAccessToken(data);
+    resetSessionExpiredGuard();
     return normalizeUser(data.user);
   },
 

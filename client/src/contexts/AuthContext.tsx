@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   authService,
   setAccessToken,
   refreshSession,
   getAccessToken,
+  subscribeSessionExpired,
   User,
 } from '../services/auth/auth.service';
 import { workspaceService, WorkspaceMembership } from '../services/workspace/workspace.service';
@@ -45,10 +47,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+const SESSION_EXPIRED_MESSAGE = 'Session expired. Please sign in again.';
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [workspaces, setWorkspaces] = useState<WorkspaceMembership[]>([]);
+  const userRef = useRef<User | null>(null);
+  userRef.current = user;
 
   // Boot: restore the session from the refresh cookie.
   useEffect(() => {
@@ -71,6 +78,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       cancelled = true;
     };
   }, []);
+
+  // Refresh failure while logged in → clear auth and leave protected routes.
+  useEffect(() => {
+    return subscribeSessionExpired(() => {
+      if (!userRef.current) return;
+      setUser(null);
+      setWorkspaces([]);
+      void authService.signOut().catch(() => {});
+      navigate('/auth', { replace: true, state: { message: SESSION_EXPIRED_MESSAGE } });
+    });
+  }, [navigate]);
 
   const signIn = useCallback(async (email: string, password: string, rememberMe: boolean) => {
     const u = await authService.signIn({ email, password, rememberMe });
@@ -103,11 +121,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = useCallback(async () => {
     await authService.signOut();
     setUser(null);
+    setWorkspaces([]);
   }, []);
 
   const signOutAll = useCallback(async () => {
     await authService.signOutAll();
     setUser(null);
+    setWorkspaces([]);
   }, []);
 
   const refreshUser = useCallback(async () => {

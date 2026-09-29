@@ -73,7 +73,7 @@ export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
     user?.platformRole === 'admin' || user?.platformRole === 'super_admin';
   const [adminOpen, setAdminOpen] = useState(pathname.startsWith('/admin'));
   const adminRef = useRef<HTMLDivElement>(null);
-  const w = collapsed ? 'w-[100px]' : 'w-[228px]';
+  const w = collapsed ? 'w-[76px]' : 'w-[228px]';
 
   useEffect(() => {
     if (pathname.startsWith('/admin')) setAdminOpen(true);
@@ -93,15 +93,11 @@ export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
       className={cn(
         'relative flex h-full shrink-0 flex-col bg-[#016BE6] text-white transition-[width] duration-200',
         w,
-        collapsed ? 'items-center px-1.5 pb-2 pt-1.5' : 'px-3 pb-2 pt-1.5',
+        collapsed ? 'items-center px-1 pb-2 pt-1.5' : 'px-3 pb-2 pt-1.5',
       )}
     >
-      <div
-        className={cn(
-          'mb-3 flex h-[100px] w-full shrink-0 items-center pt-0.5',
-          collapsed ? 'justify-center gap-2' : 'gap-3',
-        )}
-      >
+      {/* Same header height + vertical centering so the logo stays mid-aligned when collapsing */}
+      <div className="relative mb-3 flex h-[100px] w-full shrink-0 items-center justify-center">
         <button
           type="button"
           onClick={() => {
@@ -109,13 +105,13 @@ export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
             onNavigate?.();
           }}
           className={cn(
-            'flex h-full items-center',
-            collapsed ? 'w-12 shrink-0 justify-center' : 'min-w-0 flex-1 justify-start',
+            'flex h-full items-center justify-center',
+            collapsed ? 'w-full' : 'min-w-0 flex-1 justify-start pr-8',
           )}
           aria-label="Samtal home"
         >
           {collapsed ? (
-            <img src="/samtal-mark.png" alt="Samtal" className="h-11 w-11 object-contain" />
+            <img src="/samtal-mark.png" alt="Samtal" className="h-10 w-10 object-contain" />
           ) : (
             <img
               src="/samtal-logo-sidebar.png?v=5"
@@ -128,7 +124,10 @@ export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
         <button
           type="button"
           onClick={onToggle}
-          className="hidden size-6 shrink-0 items-center justify-center self-center rounded-full border-[1.5px] border-white bg-transparent text-white transition-colors hover:bg-white/15 lg:flex"
+          className={cn(
+            'absolute top-1/2 z-10 hidden size-6 -translate-y-1/2 items-center justify-center rounded-full border-[1.5px] border-white bg-[#016BE6] text-white transition-colors hover:bg-white/15 lg:flex',
+            collapsed ? 'right-0 translate-x-1/2' : 'right-0',
+          )}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           <ChevronLeft
@@ -274,7 +273,7 @@ export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
 
       <div className="mt-auto flex w-full justify-center pb-1 pt-3">
         {collapsed ? (
-          <div className="mx-auto flex min-h-[88px] w-[92%] flex-col overflow-hidden rounded-lg bg-white/15 px-1.5 py-2 text-center">
+          <div className="mx-auto flex min-h-[72px] w-full max-w-[60px] flex-col overflow-hidden rounded-lg bg-white/15 px-1 py-1.5 text-center">
             <button
               type="button"
               title="Upgrade to Pro"
@@ -282,12 +281,12 @@ export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
                 navigate('/app/billing');
                 onNavigate?.();
               }}
-              className="flex min-h-[72px] w-full flex-1 flex-col items-center justify-center gap-1"
+              className="flex min-h-[64px] w-full flex-1 flex-col items-center justify-center gap-0.5"
             >
               <ArrowUpRight className="size-3 text-white" strokeWidth={2} />
               <span className="text-[8px] font-semibold leading-tight text-white">Pro</span>
               <span className="mt-0.5 flex h-5 w-full items-center justify-center rounded bg-white text-[7px] font-bold text-[#016BE6]">
-                Upgrade
+                Up
               </span>
             </button>
           </div>
