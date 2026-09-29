@@ -3,7 +3,7 @@ import { Meeting } from '../../database/models/Meeting.model';
 import { MeetingSession } from '../../database/models/MeetingSession.model';
 import { logger } from '../../infrastructure/logging/logger';
 
-const DEFAULT_DURATION_MINUTES = 30;
+export const DEFAULT_DURATION_MINUTES = 30;
 const SWEEP_MS = 15_000;
 
 type DurationFields = {

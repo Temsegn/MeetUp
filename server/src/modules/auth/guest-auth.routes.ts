@@ -4,7 +4,8 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { env } from '../../config/env';
 import { Meeting } from '../../database/models/Meeting.model';
-import { isMeetingJoinable } from '../meetings/services/meetings-workspace.service';
+import { getMeetingJoinBlock } from '../meetings/meeting-joinability';
+import { promoteDueMeetings } from '../meetings/services/meetings-workspace.service';
 import {
   assertCanAccessMeeting,
   requireGuestEmail,
@@ -46,15 +47,19 @@ export function createGuestAuthRouter(): Router {
       return res.status(400).json({ error: 'Invalid invitation email' });
     }
 
-    const meeting = await Meeting.findOne({ roomId }).lean();
+    await promoteDueMeetings();
+    const meeting = await Meeting.findOne({ roomId });
     if (!meeting) {
-      return res.status(404).json({ error: 'Meeting not found' });
+      return res.status(404).json({ error: 'Meeting not found', code: 'NOT_FOUND' });
     }
-    if (meeting.status === 'cancelled' || meeting.status === 'ended') {
-      return res.status(403).json({ error: 'Meeting is not available' });
+    const block = getMeetingJoinBlock(meeting);
+    if (block?.shouldMarkEnded && meeting.status !== 'ended') {
+      meeting.status = 'ended';
+      meeting.endedAt = new Date();
+      await meeting.save();
     }
-    if (!isMeetingJoinable(meeting)) {
-      return res.status(403).json({ error: 'Meeting has not started yet' });
+    if (block) {
+      return res.status(403).json({ error: block.message, code: block.code });
     }
 
     try {

@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import { Meeting, IMeeting } from '../../../database/models/Meeting.model';
 import { User } from '../../../database/models/User.model';
 import { ParticipantMinuteLog } from '../../../database/models/ParticipantMinuteLog.model';
-import { NotFoundError, ForbiddenError, ValidationError } from '../../../shared/errors/AppError';
+import { NotFoundError, ForbiddenError, ValidationError, AppError } from '../../../shared/errors/AppError';
 import type { WorkspaceRole } from '../../workspace/workspace.types';
 import { hasMinRole } from '../../workspace/workspace.types';
 import { workspaceRepository } from '../../workspace/workspace.repository';
@@ -20,8 +20,14 @@ import {
 import { assertCanAccessMeeting, buildMeetingVisibilityFilter, listTeammateUserIds } from './meeting-join-authz.service';
 import { emailService } from '../../auth/services/email.service';
 import { meetingInviteEmail } from '../../auth/templates/meeting-invite-email';
+import {
+  getMeetingJoinBlock,
+  isMeetingJoinable,
+  scheduleWindowEndsAt,
+} from '../meeting-joinability';
 
 export type MeetingStatusFilter = 'scheduled' | 'upcoming' | 'live' | 'ended' | 'cancelled' | 'all';
+export { isMeetingJoinable };
 
 export interface ListMeetingsOptions {
   workspaceId: string;
@@ -72,7 +78,7 @@ export interface CreateMeetingOptions {
 
 type MeetingDoc = IMeeting & { _id: Types.ObjectId; createdAt: Date };
 
-/** Flip scheduled meetings to live once their start time has arrived. Never throws. */
+/** Flip due scheduled meetings to live, or mark them ended if the time window passed. */
 export async function promoteDueMeetings(workspaceId?: string): Promise<void> {
   try {
     const now = new Date();
@@ -84,20 +90,23 @@ export async function promoteDueMeetings(workspaceId?: string): Promise<void> {
       filter.workspaceId = new Types.ObjectId(workspaceId);
     }
 
-    const due = await Meeting.find(filter).select('_id workspaceId title roomId').lean();
+    const due = await Meeting.find(filter);
     if (due.length === 0) return;
 
-    // Set startedAt only when missing (classic update — no aggregation pipeline).
-    await Meeting.updateMany(
-      { ...filter, $or: [{ startedAt: null }, { startedAt: { $exists: false } }] },
-      { $set: { status: 'live', startedAt: now } },
-    );
-    await Meeting.updateMany(
-      { ...filter, startedAt: { $ne: null } },
-      { $set: { status: 'live' } },
-    );
-
     for (const m of due) {
+      const windowEnd = scheduleWindowEndsAt(m);
+      if (windowEnd && windowEnd.getTime() <= now.getTime()) {
+        m.status = 'ended';
+        m.endedAt = now;
+        await m.save();
+        continue;
+      }
+
+      m.status = 'live';
+      // Count duration from the scheduled start when possible.
+      m.startedAt = m.startedAt ?? m.scheduledAt ?? now;
+      await m.save();
+
       if (!m.workspaceId) continue;
       await notifyMeetingParticipants({
         meetingId: String(m._id),
@@ -620,10 +629,12 @@ export async function createWorkspaceMeeting(opts: CreateMeetingOptions) {
       .map((u) => String(u.email || '').trim().toLowerCase())
       .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
     if (memberEmails.length > 0) {
+      const companyName = await workspaceCompanyName(opts.workspaceId);
       void sendGuestInviteEmails({
         emails: memberEmails,
         meetingTitle: title,
         hostName: opts.userName,
+        companyName,
         roomId: opts.roomId,
         scheduledAt: m.scheduledAt ?? m.startedAt ?? null,
         isLive: isInstant,
@@ -632,10 +643,12 @@ export async function createWorkspaceMeeting(opts: CreateMeetingOptions) {
   }
 
   if (guestEmails.length > 0) {
+    const companyName = await workspaceCompanyName(opts.workspaceId);
     void sendGuestInviteEmails({
       emails: guestEmails,
       meetingTitle: title,
       hostName: opts.userName,
+      companyName,
       roomId: opts.roomId,
       scheduledAt: opts.scheduledAt ?? (isInstant ? new Date() : null),
       isLive: isInstant,
@@ -717,12 +730,15 @@ export async function joinMeeting(
   await promoteDueMeetings();
   const m = await Meeting.findById(id);
   if (!m) throw new NotFoundError('Meeting');
-  if (m.status === 'cancelled') throw new ForbiddenError('Meeting is cancelled.');
-  if (m.status === 'ended') throw new ForbiddenError('Meeting has ended.');
-  // Scheduled meetings stay upcoming until date/time is reached
-  if (m.status === 'scheduled' && m.scheduledAt && m.scheduledAt.getTime() > Date.now()) {
-    throw new ForbiddenError('Meeting has not started yet. You can join at the scheduled time.');
+
+  const block = getMeetingJoinBlock(m);
+  if (block?.shouldMarkEnded && m.status !== 'ended') {
+    m.status = 'ended';
+    m.endedAt = new Date();
+    await m.save();
   }
+  if (block) throw new AppError(block.message, block.code, 403);
+
   await assertCanAccessMeeting({
     meeting: m,
     joinerUserId: userId,
@@ -747,8 +763,13 @@ export async function registerForMeeting(
   if (!Types.ObjectId.isValid(id)) throw new NotFoundError('Meeting');
   const m = await Meeting.findById(id);
   if (!m) throw new NotFoundError('Meeting');
-  if (m.status === 'cancelled') throw new ForbiddenError('Meeting is cancelled.');
-  if (m.status === 'ended') throw new ForbiddenError('Meeting has ended.');
+  const block = getMeetingJoinBlock(m);
+  if (block?.shouldMarkEnded && m.status !== 'ended') {
+    m.status = 'ended';
+    m.endedAt = new Date();
+    await m.save();
+  }
+  if (block) throw new AppError(block.message, block.code, 403);
   await assertCanAccessMeeting({
     meeting: m,
     joinerUserId: userId,
@@ -785,6 +806,7 @@ async function sendGuestInviteEmails(opts: {
   emails: string[];
   meetingTitle: string;
   hostName: string;
+  companyName: string;
   roomId: string;
   scheduledAt?: Date | string | null;
   isLive?: boolean;
@@ -796,6 +818,7 @@ async function sendGuestInviteEmails(opts: {
           inviteeEmail: email,
           meetingTitle: opts.meetingTitle,
           hostName: opts.hostName,
+          companyName: opts.companyName,
           roomId: opts.roomId,
           scheduledAt: opts.scheduledAt,
           isLive: opts.isLive,
@@ -810,6 +833,11 @@ async function sendGuestInviteEmails(opts: {
       }
     }),
   );
+}
+
+async function workspaceCompanyName(workspaceId: string): Promise<string> {
+  const ws = await workspaceRepository.findById(workspaceId);
+  return (ws?.name || '').trim() || 'a team';
 }
 
 export async function addMeetingInvites(
@@ -856,10 +884,12 @@ export async function addMeetingInvites(
       .map((u) => String(u.email || '').trim().toLowerCase())
       .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
     if (memberEmails.length > 0) {
+      const companyName = await workspaceCompanyName(workspaceId);
       void sendGuestInviteEmails({
         emails: memberEmails,
         meetingTitle: m.title || m.roomId,
         hostName: actor.name,
+        companyName,
         roomId: m.roomId,
         scheduledAt: m.scheduledAt ?? m.startedAt ?? null,
         isLive,
@@ -888,10 +918,12 @@ export async function addMeetingInvites(
   await m.save();
 
   if (freshlyAddedGuests.length > 0) {
+    const companyName = await workspaceCompanyName(workspaceId);
     void sendGuestInviteEmails({
       emails: freshlyAddedGuests,
       meetingTitle: m.title || m.roomId,
       hostName: actor.name,
+      companyName,
       roomId: m.roomId,
       scheduledAt: m.scheduledAt ?? m.startedAt ?? null,
       isLive: m.status === 'live',
@@ -940,15 +972,34 @@ export async function removeMeetingInvite(
   return withRoster(await attachHostAvatar(toJson(m as unknown as MeetingDoc)));
 }
 
-/** True when a scheduled meeting may go live / accept joins. */
-export function isMeetingJoinable(m: {
+export async function getPublicJoinStatus(roomId: string): Promise<{
+  roomId: string;
+  title: string;
   status: string;
-  scheduledAt?: Date | string | null;
-}): boolean {
-  if (m.status === 'cancelled' || m.status === 'ended') return false;
-  if (m.status === 'live') return true;
-  if (m.status === 'scheduled' && m.scheduledAt) {
-    return new Date(m.scheduledAt).getTime() <= Date.now();
+  joinable: boolean;
+  code: string | null;
+  message: string | null;
+  scheduledAt: string | null;
+}> {
+  await promoteDueMeetings();
+  const m = await Meeting.findOne({ roomId });
+  if (!m) throw new NotFoundError('Meeting');
+
+  const block = getMeetingJoinBlock(m);
+  if (block?.shouldMarkEnded && m.status !== 'ended') {
+    m.status = 'ended';
+    m.endedAt = new Date();
+    await m.save();
   }
-  return true;
+
+  return {
+    roomId: m.roomId,
+    title: m.title || 'Meeting',
+    status: m.status,
+    joinable: !block,
+    code: block?.code ?? null,
+    message: block?.message ?? null,
+    scheduledAt: m.scheduledAt ? m.scheduledAt.toISOString() : null,
+  };
 }
+

@@ -51,6 +51,13 @@ export function LiveMeetingPage() {
   >([]);
 
   const [meetingMeta, setMeetingMeta] = useState<Meeting | null>(null);
+  const [joinGate, setJoinGate] = useState<{
+    joinable: boolean;
+    title: string;
+    message: string | null;
+    code: string | null;
+    status: string;
+  } | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [isJoining, setIsJoining] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -80,6 +87,29 @@ export function LiveMeetingPage() {
   }, []);
 
   useEffect(() => {
+    if (!roomId) return;
+    let cancelled = false;
+    meetingsService
+      .getJoinStatus(roomId)
+      .then((s) => {
+        if (cancelled) return;
+        setJoinGate({
+          joinable: s.joinable,
+          title: s.title,
+          message: s.message,
+          code: s.code,
+          status: s.status,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setJoinGate(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [roomId]);
+
+  useEffect(() => {
     if (!activeWorkspace?.workspaceId || !roomId) return;
     meetingsService
       .getByRoomId(activeWorkspace.workspaceId, roomId)
@@ -96,6 +126,16 @@ export function LiveMeetingPage() {
           new Date(m.scheduledAt).getTime() > Date.now()
         ) {
           navigate(`/app/meetings/${m.id}`, { replace: true });
+          return;
+        }
+        if (m.status === 'ended') {
+          setJoinGate({
+            joinable: false,
+            title: m.title || 'Meeting',
+            message: 'This meeting has ended.',
+            code: 'MEETING_ENDED',
+            status: 'ended',
+          });
         }
       })
       .catch(() => setMeetingMeta(null));
@@ -202,7 +242,7 @@ export function LiveMeetingPage() {
     const onEnded = (payload?: { reason?: string }) => {
       addToast(
         payload?.reason === 'duration'
-          ? 'Meeting ended — scheduled duration reached'
+          ? 'This meeting has ended. The scheduled time has passed.'
           : 'Host ended the meeting',
       );
       allowLeaveRef.current = true;
@@ -677,7 +717,7 @@ export function LiveMeetingPage() {
   );
 
   const panelOpen = showParticipants || showChat;
-  const meetingTitle = meetingMeta?.title?.trim() || `Meeting ${roomId}`;
+  const meetingTitle = joinGate?.title?.trim() || meetingMeta?.title?.trim() || `Meeting ${roomId}`;
   const isGuestJoin = !user;
 
   const controllingRemote =
@@ -717,6 +757,28 @@ export function LiveMeetingPage() {
       })),
     [tiles, participantId, controllingRemote, controlledPeerId, controlledPeerName],
   );
+
+  if (!joined && joinGate && !joinGate.joinable) {
+    return (
+      <div className="flex min-h-full flex-col items-center justify-center bg-[#F5F7FA] px-6 py-16 text-center">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#94A3B8]">Samhal</p>
+        <h1 className="mt-3 text-xl font-semibold text-[#151D2B]">{meetingTitle}</h1>
+        <p className="mt-3 max-w-md text-sm leading-relaxed text-[#64748B]">
+          {joinGate.message ||
+            (joinGate.code === 'MEETING_CANCELLED'
+              ? 'This meeting was cancelled.'
+              : 'This meeting has ended. The scheduled time has passed.')}
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate(user ? '/app/meetings' : '/')}
+          className="mt-8 inline-flex h-10 items-center justify-center rounded-full bg-[#016BE6] px-5 text-sm font-semibold text-white hover:bg-[#0059C4]"
+        >
+          {user ? 'Back to meetings' : 'Back to home'}
+        </button>
+      </div>
+    );
+  }
 
   if (!joined) {
     return (

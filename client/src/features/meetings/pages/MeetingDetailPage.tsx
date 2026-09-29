@@ -114,14 +114,14 @@ export function MeetingDetailPage() {
   const derived = useMemo(() => {
     if (!meeting) return null;
     const start = new Date(meeting.scheduledAt ?? meeting.startedAt ?? meeting.createdAt);
-    const due =
-      meeting.status === 'scheduled' &&
+    const durationMs = Math.max(1, meeting.duration ?? 30) * 60_000;
+    const scheduleEnded =
       Boolean(meeting.scheduledAt) &&
-      new Date(meeting.scheduledAt).getTime() <= now;
+      new Date(meeting.scheduledAt as string).getTime() + durationMs <= now;
     const status =
-      meeting.status === 'live' || due
+      meeting.status === 'live'
         ? 'live'
-        : meeting.status === 'ended'
+        : meeting.status === 'ended' || (meeting.status === 'scheduled' && scheduleEnded)
           ? 'ended'
           : meeting.status === 'cancelled'
             ? 'cancelled'
@@ -170,7 +170,7 @@ export function MeetingDetailPage() {
     return <Navigate to="/app/meetings" replace />;
   }
 
-  if (derived.status === 'live') {
+  if (meeting.status === 'live' && derived.status === 'live') {
     return <Navigate to={`/app/meeting/${meeting.roomId ?? meeting.id}`} replace />;
   }
 

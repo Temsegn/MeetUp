@@ -11,6 +11,8 @@ export function meetingInviteEmail(input: {
   inviteeEmail: string;
   meetingTitle: string;
   hostName: string;
+  /** Workspace / company name shown as the inviting organization. */
+  companyName: string;
   roomId: string;
   scheduledAt?: Date | string | null;
   isLive?: boolean;
@@ -22,17 +24,21 @@ export function meetingInviteEmail(input: {
         timeStyle: 'short',
       })
     : null;
+  const company = input.companyName.trim() || 'a team';
   const subject = input.isLive
-    ? `Join “${input.meetingTitle}” on Samhal now`
-    : `You're invited to “${input.meetingTitle}” on Samhal`;
+    ? `${company} invited you to join “${input.meetingTitle}” on Samhal`
+    : `${company} invited you to “${input.meetingTitle}” on Samhal`;
 
   const text = [
     `Hi,`,
     '',
-    `${input.hostName} invited you to the meeting “${input.meetingTitle}” on Samhal.`,
+    `${company} invited you to a meeting on the Samhal platform.`,
+    '',
+    `Meeting: ${input.meetingTitle}`,
+    `Host: ${input.hostName}`,
     when ? `When: ${when}` : '',
     '',
-    `This invitation is for ${input.inviteeEmail}. Open the link, enter your name, and join.`,
+    `This invitation is for ${input.inviteeEmail}. Open the link below, enter your name, and join.`,
     joinUrl,
     '',
     '— The Samhal team',
@@ -43,13 +49,30 @@ export function meetingInviteEmail(input: {
   const html = `
     <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0f172a">
       <p style="color:#64748b;font-size:12px;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.06em">Samhal</p>
-      <h2 style="margin:0 0 8px">${input.isLive ? 'Join the meeting' : "You're invited"}</h2>
-      <p style="color:#475569">
-        <strong>${escapeHtml(input.hostName)}</strong> invited you to
-        <strong>${escapeHtml(input.meetingTitle)}</strong> on Samhal.
+      <h2 style="margin:0 0 8px">${input.isLive ? 'Join the meeting' : "You're invited to a meeting"}</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.55">
+        <strong>${escapeHtml(company)}</strong> invited you to a meeting on the
+        <strong>Samhal</strong> platform.
       </p>
-      ${when ? `<p style="color:#475569">When: <strong>${escapeHtml(when)}</strong></p>` : ''}
-      <p style="color:#475569">
+      <table style="width:100%;border-collapse:collapse;margin:20px 0;background:#F8FAFC;border-radius:12px;overflow:hidden">
+        <tr>
+          <td style="padding:14px 16px;color:#64748b;font-size:12px;width:88px;vertical-align:top">Meeting</td>
+          <td style="padding:14px 16px;color:#0f172a;font-size:14px;font-weight:600">${escapeHtml(input.meetingTitle)}</td>
+        </tr>
+        <tr>
+          <td style="padding:0 16px 14px;color:#64748b;font-size:12px;vertical-align:top">Host</td>
+          <td style="padding:0 16px 14px;color:#0f172a;font-size:14px">${escapeHtml(input.hostName)}</td>
+        </tr>
+        ${
+          when
+            ? `<tr>
+          <td style="padding:0 16px 14px;color:#64748b;font-size:12px;vertical-align:top">When</td>
+          <td style="padding:0 16px 14px;color:#0f172a;font-size:14px">${escapeHtml(when)}</td>
+        </tr>`
+            : ''
+        }
+      </table>
+      <p style="color:#475569;font-size:14px;line-height:1.55">
         This invitation is for <strong>${escapeHtml(input.inviteeEmail)}</strong>.
         Open the link, enter your name, and join — no account required.
       </p>

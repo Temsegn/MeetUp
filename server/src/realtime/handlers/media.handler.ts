@@ -17,9 +17,8 @@ import {
 } from '../../modules/meetings/meetings.metering';
 import {
   endMeetingIfDurationExpired,
-  isMeetingDurationExpired,
 } from '../../modules/meetings/meeting-duration.job';
-import { isMeetingJoinable } from '../../modules/meetings/services/meetings-workspace.service';
+import { getMeetingJoinBlock } from '../../modules/meetings/meeting-joinability';
 import { assertCanAccessMeeting } from '../../modules/meetings/services/meeting-join-authz.service';
 import { isAppError } from '../../shared/errors/AppError';
 import { workspaceRepository } from '../../modules/workspace/workspace.repository';
@@ -109,25 +108,20 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
       }
 
       const meeting = await meetingsService.findByRoomId(roomId);
-      const workspaceMeeting = await Meeting.findOne({ roomId }).lean();
-      if (workspaceMeeting?.status === 'cancelled') {
-        return callback({ error: 'Meeting is cancelled.', code: 'MEETING_CANCELLED' });
-      }
-      if (workspaceMeeting?.status === 'ended') {
-        return callback({ error: 'Meeting has ended.', code: 'MEETING_ENDED' });
-      }
-      if (workspaceMeeting?.status === 'live' && isMeetingDurationExpired(workspaceMeeting)) {
-        await endMeetingIfDurationExpired(io, roomId);
-        return callback({
-          error: 'Meeting ended — scheduled duration reached.',
-          code: 'MEETING_DURATION_ENDED',
-        });
-      }
-      if (workspaceMeeting && !isMeetingJoinable(workspaceMeeting)) {
-        return callback({
-          error: 'Meeting has not started yet. You can join at the scheduled time.',
-          code: 'MEETING_NOT_STARTED',
-        });
+      const workspaceMeeting = await Meeting.findOne({ roomId });
+      if (workspaceMeeting) {
+        const block = getMeetingJoinBlock(workspaceMeeting);
+        if (block?.shouldMarkEnded && workspaceMeeting.status !== 'ended') {
+          workspaceMeeting.status = 'ended';
+          workspaceMeeting.endedAt = new Date();
+          await workspaceMeeting.save();
+          if (block.code === 'MEETING_ENDED') {
+            await endMeetingIfDurationExpired(io, roomId).catch(() => false);
+          }
+        }
+        if (block) {
+          return callback({ error: block.message, code: block.code });
+        }
       }
 
       const creatorId = meeting?.createdBy ? String(meeting.createdBy) : null;

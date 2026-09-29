@@ -1,4 +1,5 @@
 import { apiFetch } from '../auth/auth.service';
+import { API_URL } from '../../lib/apiUrl';
 
 export interface MeetingParticipant {
   id: string;
@@ -102,6 +103,35 @@ export const meetingsService = {
     return apiFetch(`/workspace-meetings/by-room/${encodeURIComponent(roomId)}`, {
       headers: workspaceHeader(workspaceId),
     });
+  },
+
+  /** Public join gate (no workspace auth) — for /join/:roomId and invite links. */
+  async getJoinStatus(roomId: string): Promise<{
+    roomId: string;
+    title: string;
+    status: string;
+    joinable: boolean;
+    code: string | null;
+    message: string | null;
+    scheduledAt: string | null;
+  }> {
+    const res = await fetch(
+      `${API_URL}/workspace-meetings/join-status/${encodeURIComponent(roomId)}`,
+      { credentials: 'include' },
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error((data as { error?: string }).error || 'Meeting not found');
+    }
+    return data as {
+      roomId: string;
+      title: string;
+      status: string;
+      joinable: boolean;
+      code: string | null;
+      message: string | null;
+      scheduledAt: string | null;
+    };
   },
 
   async end(workspaceId: string | null | undefined, id: string): Promise<Meeting> {

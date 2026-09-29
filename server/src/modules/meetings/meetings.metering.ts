@@ -6,9 +6,9 @@ import { Meeting } from '../../database/models/Meeting.model';
 import { WorkspaceMember } from '../../database/models/WorkspaceMember.model';
 import { logger } from '../../infrastructure/logging/logger';
 import { ForbiddenError } from '../../shared/errors/AppError';
-import { isMeetingJoinable, promoteDueMeetings } from './services/meetings-workspace.service';
+import { getMeetingJoinBlock } from './meeting-joinability';
+import { promoteDueMeetings } from './services/meetings-workspace.service';
 import { markParticipantJoined } from './services/meeting-participants.service';
-import { isMeetingDurationExpired } from './meeting-duration.job';
 
 /**
  * Called when a participant joins a mediasoup room.
@@ -23,22 +23,14 @@ export async function onParticipantJoin(opts: {
   await promoteDueMeetings(opts.workspaceId ?? undefined);
   const meeting = await Meeting.findOne({ roomId: opts.roomId });
   if (meeting) {
-    if (meeting.status === 'cancelled') {
-      throw new ForbiddenError('Meeting is cancelled.');
-    }
-    if (meeting.status === 'ended') {
-      throw new ForbiddenError('Meeting has ended.');
-    }
-    if (meeting.status === 'live' && isMeetingDurationExpired(meeting)) {
+    const block = getMeetingJoinBlock(meeting);
+    if (block?.shouldMarkEnded && meeting.status !== 'ended') {
       meeting.status = 'ended';
       meeting.endedAt = new Date();
       await meeting.save();
-      throw new ForbiddenError('Meeting ended — scheduled duration reached.');
     }
-    if (!isMeetingJoinable(meeting)) {
-      throw new ForbiddenError(
-        'Meeting has not started yet. You can join at the scheduled time.',
-      );
+    if (block) {
+      throw new ForbiddenError(block.message);
     }
   }
 

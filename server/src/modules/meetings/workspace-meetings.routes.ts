@@ -15,13 +15,28 @@ import {
   registerForMeeting,
   addMeetingInvites,
   removeMeetingInvite,
+  getPublicJoinStatus,
 } from './services/meetings-workspace.service';
 import {
   listUserNotifications,
   markNotificationsRead,
 } from './services/meeting-participants.service';
+import { isAppError } from '../../shared/errors/AppError';
 
 const router = Router();
+
+// Public join gate for /join/:roomId (guests + invite links) — no auth.
+router.get('/join-status/:roomId', async (req, res) => {
+  try {
+    const data = await getPublicJoinStatus(String(req.params['roomId'] ?? ''));
+    res.json(data);
+  } catch (err) {
+    if (isAppError(err)) {
+      return res.status(err.statusCode).json({ error: err.message, code: err.code });
+    }
+    throw err;
+  }
+});
 
 // workspace-scoped meetings under /workspace-meetings
 // reuse requireWorkspace middleware for auth + role
