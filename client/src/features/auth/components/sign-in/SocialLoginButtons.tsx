@@ -1,16 +1,13 @@
 import React from 'react';
 import { SIGN_IN_COPY } from '../../constants/sign-in.constants';
 import { AUTH_ASSETS } from '../../constants/auth.assets';
-import { googleAuthStartUrl } from '../../../../lib/frontendUrl';
 
 const outlineBtn =
-  'inline-flex h-9 w-full shrink-0 cursor-pointer items-center justify-center gap-2 rounded-[10px] border border-[#E2E8F0] bg-white text-[0.8125rem] font-semibold text-[#1C2842] transition-colors hover:border-slate-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0056EF]';
+  'inline-flex h-9 w-full shrink-0 items-center justify-center gap-2 rounded-[10px] border border-[#E2E8F0] bg-white text-[0.8125rem] font-semibold text-[#1C2842] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0056EF]';
 
-function startGoogleAuth() {
-  window.location.assign(googleAuthStartUrl());
-}
+const disabledBtn = `${outlineBtn} cursor-not-allowed opacity-55`;
 
-/** Google OAuth via full-page redirect; Microsoft coming soon. */
+/** Social buttons shown; Google and Microsoft are disabled for now. Backend OAuth remains available. */
 export const SocialLoginButtons: React.FC = () => (
   <div className="flex shrink-0 flex-col gap-2">
     <div
@@ -19,16 +16,11 @@ export const SocialLoginButtons: React.FC = () => (
     >
       <span>{SIGN_IN_COPY.orContinue}</span>
     </div>
-    <button type="button" className={outlineBtn} onClick={startGoogleAuth}>
+    <button type="button" disabled title="Google sign-in is temporarily unavailable" className={disabledBtn}>
       <img src={AUTH_ASSETS.google} alt="" width={14} height={14} className="block size-3.5" />
       {SIGN_IN_COPY.google}
     </button>
-    <button
-      type="button"
-      disabled
-      title="Microsoft sign-in coming soon"
-      className={`${outlineBtn} cursor-not-allowed opacity-55`}
-    >
+    <button type="button" disabled title="Microsoft sign-in coming soon" className={disabledBtn}>
       <img src={AUTH_ASSETS.microsoft} alt="" width={14} height={14} className="block size-3.5" />
       {SIGN_IN_COPY.microsoft}
     </button>

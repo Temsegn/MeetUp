@@ -1,13 +1,8 @@
 import React from 'react';
 import { AUTH_ASSETS } from '../../constants/auth.assets';
 import { AUTH_COPY } from '../../constants/auth.constants';
-import { googleAuthStartUrl } from '../../../../lib/frontendUrl';
 
-function startGoogleAuth() {
-  window.location.assign(googleAuthStartUrl());
-}
-
-/** Google OAuth starts on the API; Microsoft remains unavailable. */
+/** Social buttons shown; Google and Microsoft are disabled for now. Backend OAuth remains available. */
 export const SignUpSocialButtons: React.FC = () => {
   const c = AUTH_COPY.signUp;
 
@@ -22,8 +17,9 @@ export const SignUpSocialButtons: React.FC = () => {
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <button
           type="button"
-          onClick={startGoogleAuth}
-          className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-[10px] border border-[#E2E8F0] bg-white px-3 text-[0.75rem] font-medium text-[#1C2842] transition-colors hover:bg-slate-50"
+          disabled
+          title="Google sign-up is temporarily unavailable"
+          className="inline-flex h-9 cursor-not-allowed items-center justify-center gap-2 rounded-[10px] border border-[#E2E8F0] bg-white px-3 text-[0.75rem] font-medium text-[#1C2842] opacity-55"
         >
           <img src={AUTH_ASSETS.google} alt="" width={14} height={14} className="block size-3.5" />
           {c.google}
