@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Link, Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
-import { frontendUrl } from '../../../lib/frontendUrl';
 import { adminApi } from '../api/admin.service';
 import { AdminShellSkeleton } from '../components/AdminUi';
 
@@ -67,9 +66,9 @@ export function AdminGuard() {
           Your account is not a platform admin. In development, the first signed-in user is promoted
           automatically when no admin exists. Otherwise set PLATFORM_ADMIN_EMAILS on the backend.
         </p>
-        <a href={frontendUrl('/app')} className="text-sm font-semibold text-[#016BE6] hover:underline">
+        <Link to="/app" className="text-sm font-semibold text-[#016BE6] hover:underline">
           Back to app
-        </a>
+        </Link>
       </div>
     );
   }

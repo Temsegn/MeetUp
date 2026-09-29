@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { enterApp, goToFrontend, isLocalViteDev, isOnFrontendOrigin } from './lib/frontendUrl';
+import { enterApp, goToFrontend } from './lib/frontendUrl';
 import { NotificationCenterProvider } from './contexts/NotificationCenterContext';
 import {
   SignInPage,
@@ -105,12 +105,10 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 function CanonicalHost({ children }: { children: React.ReactNode }) {
-  const offOrigin =
-    typeof window !== 'undefined' && !isLocalViteDev() && !isOnFrontendOrigin();
+  // goToFrontend only redirects local/docker hosts; alternate public hostnames stay put.
   React.useEffect(() => {
-    if (offOrigin) goToFrontend();
-  }, [offOrigin]);
-  if (offOrigin) return null;
+    goToFrontend();
+  }, []);
   return <>{children}</>;
 }
 

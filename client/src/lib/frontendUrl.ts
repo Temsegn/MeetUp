@@ -37,9 +37,28 @@ export function isOnFrontendOrigin(): boolean {
   return window.location.origin === frontendOrigin();
 }
 
-/** Leave docker/localhost:80 so the address bar and copied links use the public host. */
+/**
+ * Only pull users off local/docker hosts onto the public FRONTEND_URL.
+ * Never redirect an alternate public host (e.g. meet.samtal.cc) to a baked IP —
+ * that causes Chrome about:blank#blocked (especially https → http).
+ */
+function isLocalOrDockerHost(): boolean {
+  if (typeof window === 'undefined') return false;
+  const { hostname } = window.location;
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '0.0.0.0' ||
+    hostname.endsWith('.local') ||
+    hostname.endsWith('.internal')
+  );
+}
+
 export function goToFrontend(path?: string): void {
   if (typeof window === 'undefined' || isLocalViteDev() || isOnFrontendOrigin()) return;
+  if (!isLocalOrDockerHost()) return;
+  // Never downgrade HTTPS browsing to an HTTP canonical URL.
+  if (window.location.protocol === 'https:' && FRONTEND_URL.startsWith('http:')) return;
   const nextPath =
     path ?? `${window.location.pathname}${window.location.search}${window.location.hash}`;
   window.location.replace(frontendUrl(nextPath || '/app'));
@@ -47,16 +66,20 @@ export function goToFrontend(path?: string): void {
 
 export function assignFrontend(path: string): void {
   if (typeof window === 'undefined') return;
-  window.location.assign(frontendUrl(path));
+  const suffix = path.startsWith('/') ? path : `/${path}`;
+  // Prefer same-origin navigation so a wrong VITE_FRONTEND_URL cannot blank the tab.
+  if (isLocalViteDev() || isOnFrontendOrigin() || !isLocalOrDockerHost()) {
+    window.location.assign(suffix);
+    return;
+  }
+  window.location.assign(frontendUrl(suffix));
 }
 
 export function enterApp(): void {
   if (typeof window === 'undefined') return;
-  if (isLocalViteDev()) {
-    window.location.assign('/app');
-    return;
-  }
-  window.location.replace(frontendUrl('/app'));
+  // Stay on the current origin — absolute VITE_FRONTEND_URL jumps cause about:blank#blocked
+  // when the baked URL (e.g. http://IP:8980) does not match the live HTTPS host.
+  window.location.assign('/app');
 }
 
 /** Full-page Google OAuth start. Production always uses the public SPA origin (nginx proxies /auth/google). */

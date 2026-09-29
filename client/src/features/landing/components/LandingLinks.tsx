@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { frontendUrl } from '../../../lib/frontendUrl';
 
 /** In-SPA auth routes — never hardcode a host. */
 export function AuthLink({
@@ -21,7 +20,11 @@ export function AuthLink({
   );
 }
 
-/** Workspace entry uses the configured public frontend origin. */
+/**
+ * Workspace entry stays on the current origin (React Router).
+ * Absolute `frontendUrl('/app')` breaks when VITE_FRONTEND_URL ≠ the live
+ * host (Chrome shows about:blank#blocked for http→https / wrong-host jumps).
+ */
 export function AppEntryLink({
   className,
   children,
@@ -32,8 +35,8 @@ export function AppEntryLink({
   onClick?: () => void;
 }) {
   return (
-    <a href={frontendUrl('/app')} className={className} onClick={onClick}>
+    <Link to="/app" className={className} onClick={onClick}>
       {children}
-    </a>
+    </Link>
   );
 }
