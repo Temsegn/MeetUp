@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Samtal — Client User Guide</title>
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 16mm 20mm 16mm;
+    @bottom-left {
+      content: "samtal. Client User Guide";
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 8.5pt;
+      color: #9AA3B2;
+    }
+    @bottom-right {
+      content: "Page " counter(page);
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 8.5pt;
+      color: #9AA3B2;
+      font-weight: 600;
+    }
+  }
+  @page cover {
+    margin: 0;
+    @bottom-left { content: none; }
+    @bottom-right { content: none; }
+  }
+  @page toc {
+    margin: 18mm 16mm 20mm 16mm;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #151D2B;
+    font-size: 9.5pt;
+    line-height: 1.45;
+  }
+
+  /* —— Cover —— */
+  .cover {
+    page: cover;
+    width: 210mm;
+    height: 297mm;
+    position: relative;
+    overflow: hidden;
+    break-after: page;
+  }
+  .cover-hero {
+    height: 198mm;
+    background: linear-gradient(145deg, #0B3D91 0%, #016BE6 48%, #3B8EF0 100%);
+    position: relative;
+    padding: 22mm 18mm 0 18mm;
+    color: #fff;
+  }
+  .cover-hero::after {
+    content: "";
+    position: absolute;
+    left: -8%;
+    right: -8%;
+    bottom: -42mm;
+    height: 78mm;
+    background: #fff;
+    border-radius: 55% 55% 0 0 / 100% 100% 0 0;
+  }
+  .cover-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    position: relative;
+    z-index: 2;
+  }
+  .logo {
+    font-size: 18pt;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .logo .dot { color: #FF8A3D; }
+  .doc-label {
+    font-size: 8pt;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.72);
+    font-weight: 500;
+  }
+  .cover-body {
+    margin-top: 48mm;
+    max-width: 150mm;
+    position: relative;
+    z-index: 2;
+  }
+  .eyebrow {
+    font-size: 8.5pt;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.85);
+    margin-bottom: 8mm;
+  }
+  .cover-title {
+    font-size: 34pt;
+    font-weight: 700;
+    line-height: 1.1;
+    margin: 0 0 6mm 0;
+    letter-spacing: -0.02em;
+  }
+  .cover-lead {
+    font-size: 11pt;
+    line-height: 1.5;
+    color: rgba(255,255,255,0.92);
+    max-width: 135mm;
+    margin: 0;
+  }
+  .cover-meta {
+    position: absolute;
+    left: 18mm;
+    right: 18mm;
+    bottom: 18mm;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8mm;
+  }
+  .meta-col .meta-rule {
+    height: 1px;
+    background: #D5DCE6;
+    margin-bottom: 3.5mm;
+  }
+  .meta-col .k {
+    font-size: 7.5pt;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #8A94A6;
+    margin-bottom: 1.5mm;
+  }
+  .meta-col .v {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #151D2B;
+  }
+  .cover-foot {
+    position: absolute;
+    left: 18mm;
+    right: 18mm;
+    bottom: 8mm;
+    display: flex;
+    justify-content: space-between;
+    font-size: 7.5pt;
+    color: #9AA3B2;
+  }
+
+  /* —— Contents —— */
+  .toc { page: toc; break-after: page; }
+  .toc h1 {
+    font-size: 22pt;
+    color: #0E2A55;
+    margin: 4mm 0 8mm 0;
+    font-weight: 700;
+  }
+  .toc-row {
+    display: flex;
+    align-items: baseline;
+    gap: 3mm;
+    padding: 2.8mm 0;
+    border-bottom: 1px solid #EEF2F6;
+  }
+  .toc-num {
+    width: 10mm;
+    color: #016BE6;
+    font-weight: 700;
+    font-size: 10pt;
+  }
+  .toc-title { flex: 1; color: #151D2B; font-size: 10.5pt; }
+  .toc-page { color: #8A94A6; font-size: 10pt; font-weight: 600; }
+  .how-box {
+    margin-top: 10mm;
+    background: #F3F8FF;
+    border-left: 3.5px solid #016BE6;
+    padding: 4mm 5mm;
+    color: #3A4658;
+    font-size: 9pt;
+  }
+  .how-box strong { color: #0E2A55; }
+
+  /* —— Body —— */
+  h1.sec {
+    font-size: 16pt;
+    color: #0E2A55;
+    font-weight: 700;
+    margin: 0 0 4mm 0;
+    padding-bottom: 2.5mm;
+    border-bottom: 1px solid #D8DEE8;
+  }
+  h2.sub {
+    font-size: 11pt;
+    color: #0E2A55;
+    font-weight: 700;
+    margin: 5mm 0 2.5mm 0;
+    padding-left: 3.2mm;
+    border-left: 3.5px solid #E85A7A;
+  }
+  p { margin: 0 0 3mm 0; color: #3A4658; }
+  .muted { color: #6F7B8C; }
+
+  .ui {
+    display: inline-block;
+    background: #E8F1FE;
+    color: #016BE6;
+    font-weight: 700;
+    font-size: 8.5pt;
+    padding: 0.6mm 1.8mm;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .note {
+    background: #F3F8FF;
+    border-left: 3.5px solid #016BE6;
+    padding: 3.5mm 4.5mm;
+    margin: 3.5mm 0 4.5mm 0;
+    font-size: 9pt;
+    color: #3A4658;
+  }
+  .note strong { color: #0E2A55; }
+
+  .learn-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4mm;
+    margin: 4mm 0 6mm 0;
+  }
+  .learn-card {
+    background: #F7F9FC;
+    border: 1px solid #E1E7EE;
+    border-radius: 3mm;
+    padding: 4mm;
+  }
+  .learn-card h3 {
+    margin: 0 0 1.5mm 0;
+    font-size: 10pt;
+    color: #0E2A55;
+  }
+  .learn-card p { margin: 0; font-size: 8.5pt; }
+
+  .path {
+    background: #FFF8F0;
+    border: 1px solid #F0DCC4;
+    border-radius: 2.5mm;
+    padding: 3.5mm 4mm;
+    margin: 3mm 0 4mm 0;
+    font-size: 9pt;
+  }
+  .path .label {
+    font-size: 7.5pt;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #B06A2B;
+    font-weight: 700;
+    margin-bottom: 1.5mm;
+  }
+  .path ol {
+    margin: 0;
+    padding-left: 5mm;
+  }
+  .path li { margin-bottom: 1.2mm; color: #3A4658; }
+
+  .steps {
+    list-style: none;
+    padding: 0;
+    margin: 2mm 0 4mm 0;
+  }
+  .steps li {
+    display: flex;
+    gap: 3mm;
+    margin-bottom: 2.8mm;
+    align-items: flex-start;
+  }
+  .steps .n {
+    flex: 0 0 6mm;
+    width: 6mm;
+    height: 6mm;
+    border-radius: 50%;
+    background: #016BE6;
+    color: #fff;
+    font-size: 8pt;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 6mm;
+    text-align: center;
+  }
+  .steps .t { flex: 1; padding-top: 0.6mm; }
+
+  .pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2mm;
+    margin: 2mm 0 5mm 0;
+  }
+  .pill {
+    border: 1px solid #D0D8E4;
+    border-radius: 10mm;
+    padding: 1.4mm 3.2mm;
+    font-size: 8pt;
+    color: #016BE6;
+    font-weight: 600;
+    background: #fff;
+  }
+
+  /* Figures — NEVER crop: scale only with max-width / max-height */
+  .figure {
+    margin: 3mm 0 5mm 0;
+    text-align: center;
+    break-inside: avoid;
+  }
+  .figure img {
+    max-width: 100%;
+    max-height: 100mm;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    object-position: top center;
+    border-radius: 2.5mm;
+    box-shadow: 0 1.5mm 4mm rgba(15, 35, 70, 0.12);
+    border: 1px solid #E1E7EE;
+    background: #fff;
+  }
+  .figure.tall img { max-height: 115mm; }
+  .figure.wide img { max-height: 88mm; }
+  .caption {
+    margin-top: 2mm;
+    font-size: 8pt;
+    font-style: italic;
+    color: #8A94A6;
+  }
+
+  .two {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5mm;
+    margin: 2mm 0 4mm 0;
+  }
+  .two .col .figure img { max-height: 68mm; }
+  .two .col h2.sub { margin-top: 0; }
+
+  .feature-row {
+    display: grid;
+    grid-template-columns: 1fr 1.15fr;
+    gap: 5mm;
+    align-items: start;
+    margin: 3mm 0 6mm 0;
+    break-inside: avoid;
+  }
+  .feature-row .figure { margin: 0; }
+  .feature-row .figure img { max-height: 62mm; }
+
+  table.ref {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 3mm 0 5mm 0;
+    font-size: 9pt;
+  }
+  table.ref th, table.ref td {
+    border-bottom: 1px solid #E1E7EE;
+    padding: 2.4mm 2mm;
+    text-align: left;
+    vertical-align: top;
+  }
+  table.ref th {
+    color: #0E2A55;
+    font-weight: 700;
+    width: 32%;
+    background: #F7F9FC;
+  }
+  table.ref td { color: #3A4658; }
+
+  .faq dt {
+    font-weight: 700;
+    color: #0E2A55;
+    margin-top: 3mm;
+  }
+  .faq dd {
+    margin: 1mm 0 0 0;
+    color: #3A4658;
+  }
+
+  .support-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5mm;
+    margin-top: 4mm;
+  }
+  .support-card {
+    background: #F7F9FC;
+    border-radius: 3mm;
+    padding: 4mm;
+    border: 1px solid #E1E7EE;
+  }
+  .support-card h3 {
+    margin: 0 0 2mm 0;
+    font-size: 10pt;
+    color: #0E2A55;
+  }
+  .end-note {
+    text-align: center;
+    margin-top: 14mm;
+    color: #8A94A6;
+    font-size: 8.5pt;
+  }
+
+  .page-break { break-before: page; }
+  .avoid-break { break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<!-- ===================== COVER ===================== -->
+<section class="cover">
+  <div class="cover-hero">
+    <div class="cover-top">
+      <div class="logo">samtal<span class="dot">.</span></div>
+      <div class="doc-label">Client User Guide</div>
+    </div>
+    <div class="cover-body">
+      <div class="eyebrow">End-User Documentation</div>
+      <h1 class="cover-title">Client User<br/>Guide</h1>
+      <p class="cover-lead">
+        A professional international guide for first-time users — learn exact click paths
+        for meetings, invites, rooms, billing upgrades, and every workspace feature in the
+        Samtal web application.
+      </p>
+    </div>
+  </div>
+  <div class="cover-meta">
+    <div class="meta-col">
+      <div class="meta-rule"></div>
+      <div class="k">Document Type</div>
+      <div class="v">End-User Guide</div>
+    </div>
+    <div class="meta-col">
+      <div class="meta-rule"></div>
+      <div class="k">Audience</div>
+      <div class="v">Members &amp; Admins</div>
+    </div>
+    <div class="meta-col">
+      <div class="meta-rule"></div>
+      <div class="k">Application</div>
+      <div class="v">Samtal Web Client</div>
+    </div>
+  </div>
+  <div class="cover-foot">
+    <span>© Samtal. All rights reserved.</span>
+    <span>Confidential — For Workspace Use</span>
+  </div>
+</section>
+
+<!-- ===================== CONTENTS ===================== -->
+<section class="toc">
+  <h1>Contents</h1>
+  <div class="toc-row"><div class="toc-num">01</div><div class="toc-title">Introduction</div><div class="toc-page">3</div></div>
+  <div class="toc-row"><div class="toc-num">02</div><div class="toc-title">Getting Started</div><div class="toc-page">3</div></div>
+  <div class="toc-row"><div class="toc-num">03</div><div class="toc-title">Sign Up / Sign In</div><div class="toc-page">4</div></div>
+  <div class="toc-row"><div class="toc-num">04</div><div class="toc-title">Dashboard</div><div class="toc-page">5</div></div>
+  <div class="toc-row"><div class="toc-num">05</div><div class="toc-title">New Meeting — Instant &amp; Scheduled</div><div class="toc-page">6</div></div>
+  <div class="toc-row"><div class="toc-num">06</div><div class="toc-title">Main Features</div><div class="toc-page">8</div></div>
+  <div class="toc-row"><div class="toc-num">07</div><div class="toc-title">Invite &amp; Add Users</div><div class="toc-page">10</div></div>
+  <div class="toc-row"><div class="toc-num">08</div><div class="toc-title">Create Room</div><div class="toc-page">11</div></div>
+  <div class="toc-row"><div class="toc-num">09</div><div class="toc-title">Upgrade &amp; Payment</div><div class="toc-page">12</div></div>
+  <div class="toc-row"><div class="toc-num">10</div><div class="toc-title">Reports, AI Insights &amp; Settings</div><div class="toc-page">13</div></div>
+  <div class="toc-row"><div class="toc-num">11</div><div class="toc-title">Important Settings Reference</div><div class="toc-page">14</div></div>
+  <div class="toc-row"><div class="toc-num">12</div><div class="toc-title">Troubleshooting</div><div class="toc-page">14</div></div>
+  <div class="toc-row"><div class="toc-num">13</div><div class="toc-title">FAQ &amp; Support</div><div class="toc-page">15</div></div>
+
+  <div class="how-box">
+    <strong>How to use this guide.</strong>
+    Sections follow a typical first session — account setup, then the exact screens you click.
+    Labels in <span class="ui">blue chips</span> match the Samtal interface word-for-word.
+    Every screenshot shows the full viewport; images are scaled to fit, never cropped.
+  </div>
+</section>
+
+<!-- ===================== 01 / 02 ===================== -->
+<section>
+  <h1 class="sec">01 Introduction</h1>
+  <p>
+    Samtal is a conferencing workspace for organizations. After signing in, members work inside
+    one shared application that brings together meetings, calendar, contacts, messages,
+    recordings, templates, reports, rooms, billing, and workspace settings.
+  </p>
+  <p>
+    This guide explains essential workflows using the exact labels that appear in the product,
+    so you can follow along on screen as you read.
+  </p>
+
+  <h2 class="sub">What you will learn</h2>
+  <div class="learn-grid">
+    <div class="learn-card">
+      <h3>Account &amp; Navigation</h3>
+      <p>Create an account, sign in, and find your way around the Dashboard and sidebar.</p>
+    </div>
+    <div class="learn-card">
+      <h3>Meetings</h3>
+      <p>Start Instant or Scheduled meetings from <span class="ui">New Meeting</span>, then join the live room.</p>
+    </div>
+    <div class="learn-card">
+      <h3>Workspace Administration</h3>
+      <p>Invite users, create rooms, and manage Billing &amp; Plan upgrades with payment.</p>
+    </div>
+    <div class="learn-card">
+      <h3>Personal Settings</h3>
+      <p>Update profile, notifications, and account preferences from Settings.</p>
+    </div>
+  </div>
+
+  <h1 class="sec">02 Getting Started</h1>
+  <p>
+    You need a supported desktop browser, a valid email address, and network access to your
+    organization’s Samtal site. A workspace invitation may be required before you can join.
+  </p>
+
+  <h2 class="sub">Recommended first path</h2>
+  <ol class="steps">
+    <li><span class="n">1</span><span class="t">Create an account (<span class="ui">Sign up</span>) or accept an invite.</span></li>
+    <li><span class="n">2</span><span class="t">Sign in with your email and password.</span></li>
+    <li><span class="n">3</span><span class="t">Open the Dashboard and explore the sidebar.</span></li>
+    <li><span class="n">4</span><span class="t">Create a meeting with <span class="ui">New Meeting</span>.</span></li>
+  </ol>
+
+  <h2 class="sub">Primary navigation</h2>
+  <p>The left sidebar is used throughout the application to move between modules:</p>
+  <div class="pills">
+    <span class="pill">Dashboard</span>
+    <span class="pill">Meetings</span>
+    <span class="pill">Calendar</span>
+    <span class="pill">Contacts</span>
+    <span class="pill">Messages</span>
+    <span class="pill">Recordings</span>
+    <span class="pill">Workspace</span>
+    <span class="pill">Templates</span>
+    <span class="pill">Reports</span>
+    <span class="pill">AI Insights (Beta)</span>
+    <span class="pill">Settings</span>
+  </div>
+</section>
+
+<!-- ===================== 03 ===================== -->
+<section class="page-break">
+  <h1 class="sec">03 Sign Up / Sign In</h1>
+  <div class="two">
+    <div class="col">
+      <h2 class="sub">1. Create an account</h2>
+      <p>
+        Open <span class="ui">Get started</span> or go to <span class="ui">/auth/sign-up</span>.
+        Enter first name, last name, work email, and password. Optionally add a company name
+        and team size. Accept the Terms, then click <span class="ui">Create Account</span>.
+      </p>
+      <div class="figure">
+        <img src="{{shot:01-signup.png}}" alt="Sign up" />
+        <div class="caption">Figure 1 — Sign up</div>
+      </div>
+    </div>
+    <div class="col">
+      <h2 class="sub">2. Sign in to your workspace</h2>
+      <p>
+        Open <span class="ui">Sign in</span> or go to <span class="ui">/auth</span>. Enter your
+        email and password. Optionally keep <span class="ui">Remember me</span> selected, then
+        click <span class="ui">Sign in</span>. A successful sign-in takes you to the Dashboard.
+      </p>
+      <div class="figure">
+        <img src="{{shot:02-signin.png}}" alt="Sign in" />
+        <div class="caption">Figure 2 — Sign in</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">
+    <strong>Notes —</strong> Use <span class="ui">Forgot password?</span> on the sign-in page if you need a reset link.
+    Google sign-in appears when it is configured on the server; Microsoft sign-in may show as unavailable until configured.
+  </div>
+</section>
+
+<!-- ===================== 04 ===================== -->
+<section class="page-break">
+  <h1 class="sec">04 Dashboard</h1>
+  <p>
+    After signing in, the Dashboard opens automatically. From here you see a welcome message,
+    meeting summaries, insights, calendar, and quick actions. Use the sidebar to move between modules.
+  </p>
+  <div class="figure tall">
+    <img src="{{shot:03-dashboard.png}}" alt="Dashboard" />
+    <div class="caption">Figure 3 — Dashboard</div>
+  </div>
+  <div class="note">
+    <strong>New Meeting.</strong>
+    Use the header control <span class="ui">New Meeting</span> to start an
+    <span class="ui">Instant meeting</span> or create a <span class="ui">Scheduled meeting</span>.
+    Choose <span class="ui">Create &amp; join</span> for an instant room, or
+    <span class="ui">Create meeting</span> for a scheduled one. Full click paths are in the next section.
+  </div>
+</section>
+
+<!-- ===================== 05 Meeting workflows ===================== -->
+<section class="page-break">
+  <h1 class="sec">05 New Meeting — Instant &amp; Scheduled</h1>
+  <p>
+    Meetings start from the blue <span class="ui">New Meeting</span> button in the top header.
+    It is available from almost every signed-in page.
+  </p>
+
+  <div class="path">
+    <div class="label">Exact click path</div>
+    <ol>
+      <li>Click <span class="ui">New Meeting</span> in the header.</li>
+      <li>The menu opens with two choices: <span class="ui">Instant meeting</span> and <span class="ui">Scheduled meeting</span>.</li>
+      <li>Pick one — each opens its own dialog with the fields shown below.</li>
+      <li>Fill the form, then confirm with <span class="ui">Create &amp; join</span> or <span class="ui">Create meeting</span>.</li>
+    </ol>
+  </div>
+
+  <h2 class="sub">Step A — Open the New Meeting menu</h2>
+  <p>
+    Click <span class="ui">New Meeting</span>. The dropdown shows:
+  </p>
+  <ul>
+    <li><span class="ui">Instant meeting</span> — “Add a title, then jump into the live room.”</li>
+    <li><span class="ui">Scheduled meeting</span> — “Choose title, date, and participants.”</li>
+  </ul>
+  <div class="figure wide">
+    <img src="{{shot:04-new-meeting-menu.png}}" alt="New Meeting menu" />
+    <div class="caption">Figure 4 — New Meeting menu: Instant meeting and Scheduled meeting</div>
+  </div>
+</section>
+
+<section class="page-break">
+  <h2 class="sub">Step B — Instant meeting</h2>
+  <p>
+    Choose <span class="ui">Instant meeting</span>. The dialog title is
+    <strong>Start instant meeting</strong>.
+  </p>
+  <ol class="steps">
+    <li><span class="n">1</span><span class="t">Enter a <span class="ui">Title</span> (required).</span></li>
+    <li><span class="n">2</span><span class="t">Set <span class="ui">Duration (minutes)</span> if needed (default 30).</span></li>
+    <li><span class="n">3</span><span class="t">Optionally add agenda items with <span class="ui">+ Add item</span>.</span></li>
+    <li><span class="n">4</span><span class="t">Optionally invite guests under <span class="ui">Invite by email (guests)</span>, then <span class="ui">Add</span>.</span></li>
+    <li><span class="n">5</span><span class="t">Click <span class="ui">Create &amp; join</span> to enter the live room immediately (or <span class="ui">Cancel</span>).</span></li>
+  </ol>
+  <div class="figure tall">
+    <img src="{{shot:05-instant-meeting-dialog.png}}" alt="Start instant meeting" />
+    <div class="caption">Figure 5 — Start instant meeting dialog (Create &amp; join)</div>
+  </div>
+  <div class="note">
+    <strong>Teammates.</strong> Workspace members on your teams are added automatically.
+    Use guest email invites only for people outside your teams.
+  </div>
+</section>
+
+<section class="page-break">
+  <h2 class="sub">Step C — Scheduled meeting</h2>
+  <p>
+    Choose <span class="ui">Scheduled meeting</span>. The dialog title is
+    <strong>Schedule a meeting</strong>.
+  </p>
+  <ol class="steps">
+    <li><span class="n">1</span><span class="t">Enter a <span class="ui">Title</span>.</span></li>
+    <li><span class="n">2</span><span class="t">Pick <span class="ui">Date &amp; time</span>.</span></li>
+    <li><span class="n">3</span><span class="t">Set <span class="ui">Duration (minutes)</span>.</span></li>
+    <li><span class="n">4</span><span class="t">Optionally add agenda topics and guest emails.</span></li>
+    <li><span class="n">5</span><span class="t">Click <span class="ui">Create meeting</span> (not Create &amp; join) to save it on the calendar.</span></li>
+  </ol>
+  <div class="figure tall">
+    <img src="{{shot:06-scheduled-meeting-dialog.png}}" alt="Schedule a meeting" />
+    <div class="caption">Figure 6 — Schedule a meeting dialog (Create meeting)</div>
+  </div>
+
+  <h2 class="sub">Inside the live room</h2>
+  <p>
+    Use the control bar for Mic, Camera, Raise Hand, Screen, Participants, Chat, Whiteboard, and Leave.
+    Guests may wait in a waiting room until a host admits them. Optional recording depends on plan permissions.
+  </p>
+</section>
+
+<!-- ===================== 06 Main features ===================== -->
+<section class="page-break">
+  <h1 class="sec">06 Main Features</h1>
+
+  <div class="feature-row">
+    <div>
+      <h2 class="sub">1. Meetings</h2>
+      <p>
+        Open <span class="ui">Meetings</span> in the sidebar. Review upcoming and past meetings,
+        join a room, or create a new one with <span class="ui">New Meeting</span>.
+        Filter by All, Live, Upcoming, Ended, or Cancelled.
+      </p>
+    </div>
+    <div class="figure">
+      <img src="{{shot:04-meetings.png}}" alt="Meetings" />
+      <div class="caption">Figure 7 — Meetings</div>
+    </div>
+  </div>
+
+  <div class="feature-row">
+    <div>
+      <h2 class="sub">2. Calendar</h2>
+      <p>
+        Open <span class="ui">Calendar</span>. Switch between month, week, and day views.
+        Open a scheduled item to join the related meeting without leaving the workspace.
+      </p>
+    </div>
+    <div class="figure">
+      <img src="{{shot:05-calendar.png}}" alt="Calendar" />
+      <div class="caption">Figure 8 — Calendar</div>
+    </div>
+  </div>
+
+  <div class="feature-row">
+    <div>
+      <h2 class="sub">3. Contacts</h2>
+      <p>
+        Open <span class="ui">Contacts</span> to find people in your organization.
+        Use contacts when starting conversations or inviting participants to meetings.
+      </p>
+    </div>
+    <div class="figure">
+      <img src="{{shot:06-contacts.png}}" alt="Contacts" />
+      <div class="caption">Figure 9 — Contacts</div>
+    </div>
+  </div>
+</section>
+
+<section class="page-break">
+  <div class="feature-row">
+    <div>
+      <h2 class="sub">4. Messages</h2>
+      <p>
+        Open <span class="ui">Messages</span> for direct and team conversations.
+        Select a thread, send messages, and keep chat next to the people you meet with.
+      </p>
+    </div>
+    <div class="figure">
+      <img src="{{shot:07-messages.png}}" alt="Messages" />
+      <div class="caption">Figure 10 — Messages</div>
+    </div>
+  </div>
+
+  <div class="feature-row">
+    <div>
+      <h2 class="sub">5. Recordings</h2>
+      <p>
+        Open <span class="ui">Recordings</span> to browse sessions stored on the workspace.
+        Play, share, or download recordings when your plan and permissions allow it.
+      </p>
+    </div>
+    <div class="figure">
+      <img src="{{shot:08-recordings.png}}" alt="Recordings" />
+      <div class="caption">Figure 11 — Recordings</div>
+    </div>
+  </div>
+
+  <div class="feature-row">
+    <div>
+      <h2 class="sub">6. Templates</h2>
+      <p>
+        Open <span class="ui">Templates</span> to reuse meeting templates and start recurring agendas faster.
+      </p>
+    </div>
+    <div class="figure">
+      <img src="{{shot:10-templates.png}}" alt="Templates" />
+      <div class="caption">Figure 12 — Templates</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 07 Invite ===================== -->
+<section class="page-break">
+  <h1 class="sec">07 Invite &amp; Add Users</h1>
+  <p>
+    Workspace owners and admins add people from <span class="ui">Settings</span> →
+    <span class="ui">Members</span> (also reachable via <span class="ui">Workspace</span>).
+  </p>
+
+  <div class="path">
+    <div class="label">Exact click path — add a new user</div>
+    <ol>
+      <li>Open the sidebar → <span class="ui">Settings</span> (or Workspace → Members).</li>
+      <li>In the settings sections list, click <span class="ui">Members</span>.</li>
+      <li>Click <span class="ui">Invite Members</span> (header also shows <span class="ui">Create Member</span>).</li>
+      <li>You land on the <strong>Create User</strong> screen.</li>
+      <li>Fill the form and click <span class="ui">Create User</span>.</li>
+    </ol>
+  </div>
+
+  <h2 class="sub">Members list</h2>
+  <p>
+    Search members, filter by role (Owner, Admin, Member), and manage existing people from the table.
+  </p>
+  <div class="figure wide">
+    <img src="{{shot:07-members.png}}" alt="Members" />
+    <div class="caption">Figure 13 — Members list with Invite Members</div>
+  </div>
+</section>
+
+<section class="page-break">
+  <h2 class="sub">Create User screen (what you fill in)</h2>
+  <p>After clicking <span class="ui">Invite Members</span>, the Create User page shows:</p>
+  <ul>
+    <li><strong>User Information</strong> — <span class="ui">Full Name *</span>, <span class="ui">Work Email *</span>, optional phone, department, job title.</li>
+    <li><strong>Role &amp; Access</strong> — Role <span class="ui">Member</span> or <span class="ui">Admin</span>, optional Reports To, Default or Custom Access.</li>
+    <li><span class="ui">Send Invitation</span> switch (on by default) — user receives an email invitation.</li>
+    <li>Right side: <strong>User Preview</strong> and <strong>Role &amp; Permissions</strong> checklist.</li>
+    <li>Footer actions: <span class="ui">Cancel</span> or <span class="ui">Create User</span>.</li>
+  </ul>
+  <div class="figure tall">
+    <img src="{{shot:09-create-user.png}}" alt="Create User" />
+    <div class="caption">Figure 14 — Create User / invite form (exact fields you click)</div>
+  </div>
+</section>
+
+<!-- ===================== 08 Create Room ===================== -->
+<section class="page-break">
+  <h1 class="sec">08 Create Room</h1>
+  <p>
+    Dedicated rooms are managed under Settings → <span class="ui">Rooms</span>.
+    Use them for recurring spaces with their own capacity and permissions.
+  </p>
+
+  <div class="path">
+    <div class="label">Exact click path — create a room</div>
+    <ol>
+      <li>Open <span class="ui">Settings</span> → <span class="ui">Rooms</span>.</li>
+      <li>Click <span class="ui">Create Room</span> (page header or empty-state button).</li>
+      <li>Fill Room Information, optional members, and Room Settings toggles.</li>
+      <li>Click <span class="ui">Create Room</span> at the bottom (or top) of the form.</li>
+    </ol>
+  </div>
+
+  <h2 class="sub">Rooms list</h2>
+  <div class="figure wide">
+    <img src="{{shot:08-rooms-full.png}}" alt="Rooms list" />
+    <div class="caption">Figure 15 — Rooms list (Create Room)</div>
+  </div>
+
+  <h2 class="sub">Create Room form (fields you use)</h2>
+  <ul>
+    <li><span class="ui">Room Name *</span>, <span class="ui">Room ID *</span>, Description, <span class="ui">Capacity *</span>, Room Type, Department, Tags, optional image.</li>
+    <li><strong>Room Members</strong> — search and <span class="ui">Add Member</span>.</li>
+    <li><strong>Room Settings</strong> toggles — Allow recording, Allow chat, Screen sharing, File sharing, Waiting room, Room approval.</li>
+    <li>Right side shows a live <strong>Room Preview</strong>.</li>
+  </ul>
+  <div class="figure tall">
+    <img src="{{shot:10-create-room.png}}" alt="Create Room form" />
+    <div class="caption">Figure 16 — Create Room form (full fields and settings)</div>
+  </div>
+</section>
+
+<!-- ===================== 09 Billing ===================== -->
+<section class="page-break">
+  <h1 class="sec">09 Upgrade &amp; Payment</h1>
+  <p>
+    Plans control participant minutes, members, concurrent meetings, and recording storage.
+    Free, Pro, and Enterprise are compared on Billing &amp; Plan.
+  </p>
+
+  <div class="path">
+    <div class="label">Exact click path — upgrade with payment</div>
+    <ol>
+      <li>Click sidebar <span class="ui">Upgrade</span>, or open <span class="ui">Settings</span> → <span class="ui">Billing &amp; Plan</span>.</li>
+      <li>On the summary, click <span class="ui">Open full billing</span> (or go to <span class="ui">/app/billing</span>).</li>
+      <li>Compare Free / Pro / Enterprise cards.</li>
+      <li>Click <span class="ui">Pay $49.00 · Upgrade to Pro</span> (or Enterprise).</li>
+      <li>In the checkout dialog, enter card details and click <span class="ui">Pay $49.00</span>.</li>
+    </ol>
+  </div>
+
+  <h2 class="sub">Billing summary (Settings)</h2>
+  <div class="figure wide">
+    <img src="{{shot:11-billing-summary.png}}" alt="Billing summary" />
+    <div class="caption">Figure 17 — Billing &amp; Plan summary with Open full billing</div>
+  </div>
+</section>
+
+<section class="page-break">
+  <h2 class="sub">Full billing — plans</h2>
+  <p>
+    The full Billing page shows usage (Used / Included / Remaining / Overage), plan cards,
+    <span class="ui">Payment method</span> (<span class="ui">Add card</span>), and invoices.
+  </p>
+  <div class="figure tall">
+    <img src="{{shot:12-billing-plans.png}}" alt="Billing plans" />
+    <div class="caption">Figure 18 — Full billing with Pay · Upgrade buttons</div>
+  </div>
+
+  <h2 class="sub">Payment checkout dialog</h2>
+  <p>
+    After clicking an upgrade button, the <strong>Upgrade to Pro</strong> dialog asks for
+    <span class="ui">Name on card</span>, <span class="ui">Card number</span>,
+    <span class="ui">Expiry</span>, and <span class="ui">CVC</span>. Confirm with
+    <span class="ui">Pay $49.00</span> or dismiss with <span class="ui">Cancel</span> / <span class="ui">Close</span>.
+  </p>
+  <div class="figure wide">
+    <img src="{{shot:13-upgrade-payment.png}}" alt="Upgrade payment" />
+    <div class="caption">Figure 19 — Upgrade payment checkout dialog</div>
+  </div>
+  <div class="note">
+    <strong>Demo checkout.</strong> In demo deployments, payment may be simulated with no real charge.
+    Only brand, last 4 digits, and expiry are stored for the payment method on file.
+  </div>
+</section>
+
+<!-- ===================== 10 Reports / AI / Settings ===================== -->
+<section class="page-break">
+  <h1 class="sec">10 Reports, AI Insights &amp; Settings</h1>
+
+  <div class="feature-row">
+    <div>
+      <h2 class="sub">Reports</h2>
+      <p>
+        Open <span class="ui">Reports</span> to review meeting and usage information.
+        Advanced reporting depends on the workspace plan.
+      </p>
+    </div>
+    <div class="figure">
+      <img src="{{shot:11-reports.png}}" alt="Reports" />
+      <div class="caption">Figure 20 — Reports</div>
+    </div>
+  </div>
+
+  <div class="feature-row">
+    <div>
+      <h2 class="sub">AI Insights <span class="ui">BETA</span></h2>
+      <p>
+        Open <span class="ui">AI Insights</span> for beta insights related to workspace activity.
+        Availability and content may change as the product evolves.
+      </p>
+    </div>
+    <div class="figure">
+      <img src="{{shot:12-ai-insights.png}}" alt="AI Insights" />
+      <div class="caption">Figure 21 — AI Insights</div>
+    </div>
+  </div>
+
+  <div class="feature-row">
+    <div>
+      <h2 class="sub">Settings &amp; profile</h2>
+      <p>
+        Select <span class="ui">Settings</span> in the sidebar (or open your profile menu).
+        Update profile details, notification preferences, and account options.
+        Sign out from the profile menu when you finish on a shared device.
+      </p>
+    </div>
+    <div class="figure">
+      <img src="{{shot:13-settings.png}}" alt="Settings" />
+      <div class="caption">Figure 22 — Settings</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 11 / 12 ===================== -->
+<section class="page-break">
+  <h1 class="sec">11 Important Settings Reference</h1>
+  <p>A quick reference for where each personal and organizational setting lives.</p>
+  <table class="ref">
+    <tr><th>Setting</th><td>Description</td></tr>
+    <tr><th>Profile</th><td>Name, avatar, and personal details.</td></tr>
+    <tr><th>Account</th><td>Sign-in related account options.</td></tr>
+    <tr><th>Workspace</th><td>Organization name and workspace configuration.</td></tr>
+    <tr><th>Members</th><td>Invitations, Create User, and roles.</td></tr>
+    <tr><th>Rooms</th><td>Dedicated meeting rooms and Create Room.</td></tr>
+    <tr><th>Billing &amp; Plan</th><td>Plan limits, Open full billing, and upgrades.</td></tr>
+    <tr><th>Branding / Security</th><td>Organization appearance and security controls (admin).</td></tr>
+  </table>
+  <div class="note">
+    Only owners and admins can change organization-level settings. Members retain access to
+    meetings, messages, and personal settings.
+  </div>
+
+  <h1 class="sec">12 Troubleshooting</h1>
+  <table class="ref">
+    <tr><th>Issue</th><td>What to try</td></tr>
+    <tr><th>Cannot sign in</th><td>Confirm email and password. Use <span class="ui">Forgot password?</span>. Check Caps Lock.</td></tr>
+    <tr><th>Blank page after sign-in</th><td>Refresh the browser. Use the same site origin configured for the workspace (prefer localhost over 127.0.0.1 when testing locally).</td></tr>
+    <tr><th>Cannot join a meeting</th><td>Ask the host to admit you from the waiting room. Confirm you used the invited email.</td></tr>
+    <tr><th>No camera or microphone</th><td>Allow browser permissions, then re-open the meeting room.</td></tr>
+    <tr><th>Missing Reports features</th><td>Reports and auto-record scale with the plan. Check Billing &amp; Plan.</td></tr>
+    <tr><th>Invite not received</th><td>Ask an admin to resend the invite and check spam.</td></tr>
+  </table>
+</section>
+
+<!-- ===================== 13 FAQ ===================== -->
+<section class="page-break">
+  <h1 class="sec">13 Frequently Asked Questions</h1>
+  <dl class="faq">
+    <dt>Where do I create a meeting?</dt>
+    <dd>Use <span class="ui">New Meeting</span> in the header from almost any signed-in page, or open Meetings in the sidebar. Choose Instant or Scheduled.</dd>
+
+    <dt>What is the difference between Create &amp; join and Create meeting?</dt>
+    <dd><span class="ui">Create &amp; join</span> starts an Instant meeting and opens the live room now. <span class="ui">Create meeting</span> saves a Scheduled meeting for later.</dd>
+
+    <dt>How do I add a new user?</dt>
+    <dd>Settings → Members → <span class="ui">Invite Members</span> → fill Create User → <span class="ui">Create User</span>.</dd>
+
+    <dt>How do I create a room?</dt>
+    <dd>Settings → Rooms → <span class="ui">Create Room</span> → fill the form → <span class="ui">Create Room</span>.</dd>
+
+    <dt>How do I upgrade and pay?</dt>
+    <dd>Billing &amp; Plan → Open full billing → <span class="ui">Pay · Upgrade to Pro</span> (or Enterprise) → enter card → Pay.</dd>
+
+    <dt>What is the waiting room?</dt>
+    <dd>Guests can wait until a host admits them. Hosts control admission from the live meeting.</dd>
+
+    <dt>Can I share my screen?</dt>
+    <dd>Yes. In the live room, use Screen on the control bar. Rooms can also require Screen sharing in Room Settings.</dd>
+
+    <dt>Where are recordings stored?</dt>
+    <dd>Open Recordings. Storage limits follow the organization plan under Billing &amp; Plan.</dd>
+
+    <dt>What does AI Insights (Beta) mean?</dt>
+    <dd>It is an early feature. Availability and content may change as the product evolves.</dd>
+  </dl>
+
+  <h2 class="sub">Support &amp; Contact</h2>
+  <div class="support-grid">
+    <div class="support-card">
+      <h3>Workspace access issues</h3>
+      <p class="muted">Contact your organization owner or admin first. They control invitations, roles, and plan upgrades.</p>
+    </div>
+    <div class="support-card">
+      <h3>Product or deployment support</h3>
+      <p class="muted">Contact your Samtal administrator or the team that provided your site URL.</p>
+    </div>
+  </div>
+
+  <div class="end-note">
+    © Samtal. All rights reserved.<br/>
+    This guide documents the Samtal web client as deployed for your organization.
+  </div>
+</section>
+
+</body>
+</html>

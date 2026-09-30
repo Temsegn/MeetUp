@@ -391,11 +391,12 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
 
       const producers = mediaEngine
         .getAllProducersInRoom(roomId)
-        .map(({ producerId, participantId, kind, source }) => ({
+        .map(({ producerId, participantId, kind, source, paused }) => ({
           producerId,
           participantId,
           kind,
           appData: { source },
+          paused: paused ?? false,
         }));
 
       callback({ peers, producers });

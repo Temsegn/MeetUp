@@ -42,10 +42,14 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
     if (!el) return;
     if (hasLiveVideo && participant.stream) {
       el.srcObject = participant.stream;
-      void el.play().catch(() => {});
-    } else {
-      el.srcObject = null;
+      const tryPlay = () => {
+        void el.play().catch(() => {});
+      };
+      tryPlay();
+      el.addEventListener('loadedmetadata', tryPlay);
+      return () => el.removeEventListener('loadedmetadata', tryPlay);
     }
+    el.srcObject = null;
   }, [participant.stream, participant.isCameraOff, videoTrackId, hasLiveVideo]);
 
   useEffect(() => {

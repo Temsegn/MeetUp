@@ -112,20 +112,50 @@ export const useMeeting = (
       await new Promise<void>((resolve) => {
         sock.emit('get-room-state', { roomId }, async (res: any) => {
           if (!res?.error && res?.peers) {
+            // Derive initial mute/camera state from paused producers so PeerInfo
+            // is correct from the first render — prevents the "stuck avatar" race.
+            const producersByPeer = new Map<string, Array<{ source: string; kind: string; paused: boolean }>>();
+            for (const prod of (res.producers ?? [])) {
+              if (prod.participantId === pid) continue;
+              const list = producersByPeer.get(prod.participantId) ?? [];
+              list.push({
+                source: prod.appData?.source ?? (prod.kind === 'audio' ? 'microphone' : 'camera'),
+                kind: prod.kind,
+                paused: prod.paused ?? false,
+              });
+              producersByPeer.set(prod.participantId, list);
+            }
+
             const existingPeers: PeerInfo[] = res.peers
               .filter((p: any) => p.id !== pid)
-              .map((p: any) => ({
-                id:     p.id,
-                name:   p.name,
-                userId: p.userId,
-                avatarUrl: p.avatarUrl ?? null,
-                avatarColor: p.avatarColor ?? null,
-                isHost: p.userId === joinRes.creatorId,
-              }));
+              .map((p: any) => {
+                const prods = producersByPeer.get(p.id) ?? [];
+                const audioProds  = prods.filter((pr) => pr.source === 'microphone' || pr.kind === 'audio');
+                const videoProds  = prods.filter((pr) => pr.source === 'camera'     || (pr.kind === 'video' && pr.source !== 'screen'));
+                // Muted if no audio producer, or all audio producers are paused
+                const isMuted = audioProds.length === 0 || audioProds.every((pr) => pr.paused);
+                // Camera off if no camera producer, or all camera producers are paused
+                const isCameraOff = videoProds.length === 0 || videoProds.every((pr) => pr.paused);
+                return {
+                  id:           p.id,
+                  name:         p.name,
+                  userId:       p.userId,
+                  avatarUrl:    p.avatarUrl ?? null,
+                  avatarColor:  p.avatarColor ?? null,
+                  isHost:       p.userId === joinRes.creatorId,
+                  isMuted,
+                  isCameraOff,
+                };
+              });
             setPeers(existingPeers);
 
             for (const prod of (res.producers ?? [])) {
               if (prod.participantId === pid) continue;
+              // Skip paused producers — we will get a 'producer-resumed' event
+              // when they turn their camera/mic back on, which triggers consume
+              // via 'new-producer'. Consuming a paused video producer now would
+              // deliver a frozen/black track and leave isCameraOff stuck at true.
+              if (prod.paused) continue;
               try {
                 const consumer = await session.consume(prod.producerId);
                 const source = prod.appData?.source ?? (prod.kind === 'audio' ? 'microphone' : 'camera');
@@ -471,25 +501,44 @@ function _addTrackToStream(
   track: MediaStreamTrack,
   setStreams: React.Dispatch<React.SetStateAction<Map<string, PeerStreams>>>,
 ) {
-  setStreams((prev) => {
-    const next = new Map(prev);
-    const existing = next.get(peerId) ?? emptyPeerStreams();
+  const apply = () => {
+    setStreams((prev) => {
+      const next = new Map(prev);
+      const existing = next.get(peerId) ?? emptyPeerStreams();
 
-    // Always build new MediaStream objects so React/VideoTile see a new
-    // reference when tracks arrive after mic-first produce (addTrack alone
-    // keeps the same stream identity and leaves a black video element).
-    const withTrack = (stream: MediaStream) => new MediaStream([...stream.getTracks(), track]);
+      // Always build new MediaStream objects so React/VideoTile see a new
+      // reference when tracks arrive after mic-first produce (addTrack alone
+      // keeps the same stream identity and leaves a black video element).
+      const withTrack = (stream: MediaStream) => {
+        const tracks = stream.getTracks().filter((t) => t.id !== track.id && t.readyState !== 'ended');
+        return new MediaStream([...tracks, track]);
+      };
 
-    let updated: PeerStreams;
-    if (source === 'screen') {
-      updated = { ...existing, screen: withTrack(existing.screen) };
-    } else if (source === 'microphone' || track.kind === 'audio') {
-      updated = { ...existing, audio: withTrack(existing.audio) };
-    } else {
-      updated = { ...existing, camera: withTrack(existing.camera) };
-    }
+      let updated: PeerStreams;
+      if (source === 'screen') {
+        updated = { ...existing, screen: withTrack(existing.screen) };
+      } else if (source === 'microphone' || track.kind === 'audio') {
+        updated = { ...existing, audio: withTrack(existing.audio) };
+      } else {
+        updated = { ...existing, camera: withTrack(existing.camera) };
+      }
 
-    next.set(peerId, updated);
-    return next;
-  });
+      next.set(peerId, updated);
+      return next;
+    });
+  };
+
+  apply();
+
+  // Remote MediaStreamTracks often stay muted until the first RTP packet.
+  // Force a second bind when they unmute so <video> actually paints.
+  if (track.kind === 'video') {
+    const onUnmute = () => apply();
+    track.addEventListener('unmute', onUnmute);
+    track.addEventListener(
+      'ended',
+      () => track.removeEventListener('unmute', onUnmute),
+      { once: true },
+    );
+  }
 }

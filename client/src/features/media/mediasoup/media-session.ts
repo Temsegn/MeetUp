@@ -207,23 +207,58 @@ export class MediaSession {
         async (res: any) => {
           if (res?.error) return reject(new Error(res.error));
 
-          const consumer = await this.recvTransport!.consume(res.params);
-          this.consumers.set(consumer.id, consumer);
-          this.consumedProducerIds.add(producerId);
+          try {
+            const consumer = await this.recvTransport!.consume({
+              id: res.params.id,
+              producerId: res.params.producerId,
+              kind: res.params.kind,
+              rtpParameters: res.params.rtpParameters,
+              // Keep local consumer paused until the server consumer is resumed.
+              paused: true,
+            });
+            this.consumers.set(consumer.id, consumer);
+            this.consumedProducerIds.add(producerId);
 
-          consumer.on('transportclose', () => {
-            this.consumers.delete(consumer.id);
-            this.consumedProducerIds.delete(producerId);
-          });
+            consumer.on('transportclose', () => {
+              this.consumers.delete(consumer.id);
+              this.consumedProducerIds.delete(producerId);
+            });
 
-          this.socket.emit(
-            'resume-consumer',
-            { roomId: this.roomId, consumerId: consumer.id },
-            (resumeRes: any) => {
-              if (resumeRes?.error) return reject(new Error(resumeRes.error));
-              resolve(consumer);
-            },
-          );
+            await new Promise<void>((resAck, rejAck) => {
+              this.socket.emit(
+                'resume-consumer',
+                { roomId: this.roomId, consumerId: consumer.id },
+                (resumeRes: any) => {
+                  if (resumeRes?.error) return rejAck(new Error(resumeRes.error));
+                  resAck();
+                },
+              );
+            });
+
+            // Always resume locally after the server ack — the server consumer is
+            // now forwarding RTP and the local consumer must be un-paused to receive
+            // it. The `if (consumer.paused)` guard was unreliable: mediasoup-client
+            // may have already cleared the flag internally, causing the resume to be
+            // skipped and leaving the video track frozen/black.
+            await consumer.resume();
+
+            // Prefer highest simulcast layer so remote camera is not stuck on empty layer 0.
+            if (consumer.kind === 'video' && typeof (consumer as any).setPreferredLayers === 'function') {
+              try {
+                await (consumer as any).setPreferredLayers({ spatialLayer: 2, temporalLayer: 2 });
+              } catch {
+                /* non-simulcast consumers ignore this */
+              }
+            }
+
+            if (consumer.track && !consumer.track.enabled) {
+              consumer.track.enabled = true;
+            }
+
+            resolve(consumer);
+          } catch (err) {
+            reject(err instanceof Error ? err : new Error(String(err)));
+          }
         },
       );
     });

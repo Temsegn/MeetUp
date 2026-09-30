@@ -586,13 +586,25 @@ export function LiveMeetingPage() {
       const cameraHasVideo = Boolean(
         remote?.camera?.getVideoTracks().some((t) => t.readyState !== 'ended'),
       );
+      // Trust p.isCameraOff (set from server paused state) as the source of truth.
+      // Only fall back to !cameraHasVideo when p.isCameraOff is not yet defined
+      // (undefined means no server signal has arrived yet, so stream absence is
+      // used as a proxy). Once isCameraOff is explicitly false, never override it
+      // with a missing stream — the stream is just still loading.
+      const resolvedCameraOff = showingScreen
+        ? false
+        : p.isCameraOff === true
+          ? true
+          : p.isCameraOff === false
+            ? false
+            : !cameraHasVideo; // isCameraOff is undefined — stream not yet arrived
       return {
         id: p.id,
         name: p.name,
         stream: showingScreen ? remote!.screen : cameraHasVideo ? remote!.camera : null,
         audioStream: remote?.audio || null,
         isMuted: p.isMuted,
-        isCameraOff: showingScreen ? false : p.isCameraOff || !cameraHasVideo,
+        isCameraOff: resolvedCameraOff,
         isHandRaised: raisedHands.has(p.id),
         avatarUrl: p.avatarUrl,
         avatarColor: p.avatarColor,

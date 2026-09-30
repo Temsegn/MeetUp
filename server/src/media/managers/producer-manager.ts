@@ -303,12 +303,13 @@ export class ProducerManager {
 
   public getAllProducersInRoom(
     roomId: string,
-  ): Array<{ producerId: string; participantId: string; kind: MediaKind; source: MediaSource | string }> {
+  ): Array<{ producerId: string; participantId: string; kind: MediaKind; source: MediaSource | string; paused: boolean }> {
     const result: Array<{
       producerId: string;
       participantId: string;
       kind: MediaKind;
       source: MediaSource | string;
+      paused: boolean;
     }> = [];
 
     for (const peer of participantManager.getPeersInRoom(roomId)) {
@@ -318,6 +319,7 @@ export class ProducerManager {
           participantId: peer.id,
           kind:          producer.kind,
           source:        (producer.appData as ProducerAppData).source ?? 'camera',
+          paused:        producer.paused,
         });
       }
     }
