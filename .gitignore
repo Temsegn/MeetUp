@@ -24,3 +24,9 @@ Thumbs.db
 
 # Local QA Google Sheets workbooks (import only — do not commit)
 docs/qa/
+
+# User-guide screenshots and QA images (generated assets — do not commit)
+docs/user-guide/screenshots/
+docs/user-guide/_prepared/
+docs/user-guide/_qa/
+docs/user-guide/_sample_qa/
