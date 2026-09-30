@@ -940,7 +940,7 @@ export function LiveMeetingPage() {
                               <VideoTile
                                 participant={p}
                                 isScreenShare={p.isScreenShare}
-                                className="h-24 w-36 sm:h-28 sm:w-44"
+                                className="h-28 w-40 sm:h-28 sm:w-44"
                               />
                             </button>
                           ))}
@@ -956,7 +956,7 @@ export function LiveMeetingPage() {
                   'grid h-full gap-2 sm:gap-[18px]',
                   labeledTiles.length <= 1 && 'grid-cols-1',
                   labeledTiles.length === 2 && 'grid-cols-1 sm:grid-cols-2',
-                  labeledTiles.length >= 3 && labeledTiles.length <= 4 && 'grid-cols-2 grid-rows-2',
+                  labeledTiles.length >= 3 && labeledTiles.length <= 4 && 'grid-cols-1 sm:grid-cols-2 sm:grid-rows-2',
                   labeledTiles.length > 4 && 'grid-cols-2 md:grid-cols-3',
                 )}
               >
@@ -965,7 +965,7 @@ export function LiveMeetingPage() {
                     key={p.id}
                     participant={p}
                     isScreenShare={p.isScreenShare}
-                    className="min-h-[110px] h-full w-full sm:min-h-[140px]"
+                    className="min-h-[140px] h-full w-full sm:min-h-[180px]"
                   />
                 ))}
               </div>

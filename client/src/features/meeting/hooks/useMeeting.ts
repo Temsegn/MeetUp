@@ -151,11 +151,6 @@ export const useMeeting = (
 
             for (const prod of (res.producers ?? [])) {
               if (prod.participantId === pid) continue;
-              // Skip paused producers — we will get a 'producer-resumed' event
-              // when they turn their camera/mic back on, which triggers consume
-              // via 'new-producer'. Consuming a paused video producer now would
-              // deliver a frozen/black track and leave isCameraOff stuck at true.
-              if (prod.paused) continue;
               try {
                 const consumer = await session.consume(prod.producerId);
                 const source = prod.appData?.source ?? (prod.kind === 'audio' ? 'microphone' : 'camera');
@@ -465,7 +460,8 @@ function _attachMediaListeners(
     );
   });
 
-  socket.on('producer-resumed', ({ participantId: remotePid, source, kind }: any) => {
+  socket.on('producer-resumed', async ({ participantId: remotePid, producerId, source, kind }: any) => {
+    // Update peer UI state first
     setPeers((prev) =>
       prev.map((p) => {
         if (p.id !== remotePid) return p;
@@ -474,6 +470,19 @@ function _attachMediaListeners(
         return p;
       }),
     );
+
+    // If we don't already have a consumer for this producer, create one now.
+    // This covers the case where the producer was paused when we joined (and
+    // therefore skipped in get-room-state) and has just been resumed.
+    if (!producerId) return;
+    try {
+      const consumer = await session.consume(producerId);
+      const resolvedSource = source ?? (kind === 'audio' ? 'microphone' : 'camera');
+      _addTrackToStream(remotePid, resolvedSource, consumer.track, setRemoteStreams);
+    } catch (e) {
+      // "already consumed" is fine — consume() deduplicates by producerId
+      console.warn('producer-resumed consume skipped or failed', e);
+    }
   });
 
   socket.on('transport-failed', ({ reason }: any) => {
