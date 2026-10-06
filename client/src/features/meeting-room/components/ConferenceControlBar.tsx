@@ -182,8 +182,6 @@ export function ConferenceControlBar(props: Props) {
     });
   }
 
-  const endLabel = props.canEndMeeting ? 'End Call' : 'Leave';
-  const endAction = props.canEndMeeting ? props.onEndCall : props.onLeave;
 
   return (
     <div className="mx-auto flex w-full max-w-[830px] items-center justify-between gap-1 overflow-x-auto scrollbar-none rounded-[18px] border border-[#E0E7EE] bg-white p-2 shadow-[0_1px_2px_rgba(55,72,99,0.04)] sm:gap-3 sm:overflow-visible sm:rounded-[22px] sm:p-3.5">
@@ -256,16 +254,33 @@ export function ConferenceControlBar(props: Props) {
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={endAction}
-        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-[16px] bg-[#DF1E39] px-3 text-[13px] font-semibold text-white hover:bg-[#C91830] sm:h-12 sm:rounded-[18px] sm:px-6 sm:text-[14px] md:h-[52px] md:px-7"
-        aria-label={endLabel}
-        title={props.canEndMeeting ? 'End meeting for everyone' : 'Leave meeting'}
-      >
-        <PhoneOff className="size-[18px]" strokeWidth={2} />
-        <span className="hidden sm:inline">{endLabel}</span>
-      </button>
+      <div className="flex shrink-0 items-center gap-2">
+        {/* Leave button — always visible for everyone */}
+        <button
+          type="button"
+          onClick={props.onLeave}
+          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-[16px] border border-[#E0E7EE] bg-white px-3 text-[13px] font-semibold text-[#334155] hover:bg-[#F8FAFC] sm:h-12 sm:rounded-[18px] sm:px-5 sm:text-[14px] md:h-[52px] md:px-6"
+          aria-label="Leave meeting"
+          title="Leave meeting"
+        >
+          <PhoneOff className="size-[18px]" strokeWidth={2} />
+          <span className="hidden sm:inline">Leave</span>
+        </button>
+
+        {/* End Call — host only */}
+        {props.canEndMeeting ? (
+          <button
+            type="button"
+            onClick={props.onEndCall}
+            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-[16px] bg-[#DF1E39] px-3 text-[13px] font-semibold text-white hover:bg-[#C91830] sm:h-12 sm:rounded-[18px] sm:px-6 sm:text-[14px] md:h-[52px] md:px-7"
+            aria-label="End meeting for everyone"
+            title="End meeting for everyone"
+          >
+            <PhoneOff className="size-[18px]" strokeWidth={2} />
+            <span className="hidden sm:inline">End Call</span>
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
