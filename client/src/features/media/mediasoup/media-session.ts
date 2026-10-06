@@ -92,15 +92,26 @@ export class MediaSession {
           if (res?.error) return reject(new Error(res.error));
 
           const params = res.params;
+          // When TURN is configured, force relay-only mode so the browser
+          // uses TURN instead of attempting direct UDP (which may be blocked
+          // by firewalls on the mediasoup port range 40000-40199).
+          const hasTurn = Array.isArray(params.iceServers) &&
+            params.iceServers.some((s: any) =>
+              typeof s.urls === 'string'
+                ? s.urls.startsWith('turn:') || s.urls.startsWith('turns:')
+                : Array.isArray(s.urls) && s.urls.some((u: string) => u.startsWith('turn:') || u.startsWith('turns:')),
+            );
           const transport =
             direction === 'send'
               ? this.device.createSendTransport({
                   ...params,
                   iceServers: params.iceServers,
+                  iceTransportPolicy: hasTurn ? 'relay' : 'all',
                 })
               : this.device.createRecvTransport({
                   ...params,
                   iceServers: params.iceServers,
+                  iceTransportPolicy: hasTurn ? 'relay' : 'all',
                 });
 
           transport.on('connect', ({ dtlsParameters }, callback, errback) => {
@@ -138,8 +149,23 @@ export class MediaSession {
           }
 
           transport.on('connectionstatechange', (state) => {
+            console.log(`[MediaSession] ${direction} transport state: ${state}`);
             if (state === 'failed') {
-              console.warn(`[MediaSession] ${direction} transport connection failed`, transport.id);
+              console.warn(`[MediaSession] ${direction} transport failed — requesting ICE restart`);
+              // Emit ICE restart request to server so it generates new ICE parameters
+              this.socket.emit(
+                'restart-ice',
+                { roomId: this.roomId, transportId: transport.id },
+                (res: any) => {
+                  if (res?.error) {
+                    console.error('[MediaSession] ICE restart failed', res.error);
+                    return;
+                  }
+                  transport.restartIce({ iceParameters: res.iceParameters }).catch((err) => {
+                    console.error('[MediaSession] restartIce failed', err);
+                  });
+                },
+              );
             }
           });
 
