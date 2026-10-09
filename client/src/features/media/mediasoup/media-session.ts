@@ -92,26 +92,21 @@ export class MediaSession {
           if (res?.error) return reject(new Error(res.error));
 
           const params = res.params;
-          // When TURN is configured, force relay-only mode so the browser
-          // uses TURN instead of attempting direct UDP (which may be blocked
-          // by firewalls on the mediasoup port range 40000-40199).
-          const hasTurn = Array.isArray(params.iceServers) &&
-            params.iceServers.some((s: any) =>
-              typeof s.urls === 'string'
-                ? s.urls.startsWith('turn:') || s.urls.startsWith('turns:')
-                : Array.isArray(s.urls) && s.urls.some((u: string) => u.startsWith('turn:') || u.startsWith('turns:')),
-            );
+          // Prefer TURN when configured, but do NOT force relay-only.
+          // relay-only makes meetings fail entirely when coturn/TLS is flaky;
+          // 'all' still uses TURN when available and falls back to direct UDP
+          // via MEDIASOUP_ANNOUNCED_IP (ports 40000-40199).
           const transport =
             direction === 'send'
               ? this.device.createSendTransport({
                   ...params,
                   iceServers: params.iceServers,
-                  iceTransportPolicy: hasTurn ? 'relay' : 'all',
+                  iceTransportPolicy: 'all',
                 })
               : this.device.createRecvTransport({
                   ...params,
                   iceServers: params.iceServers,
-                  iceTransportPolicy: hasTurn ? 'relay' : 'all',
+                  iceTransportPolicy: 'all',
                 });
 
           transport.on('connect', ({ dtlsParameters }, callback, errback) => {
