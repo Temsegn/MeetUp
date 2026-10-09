@@ -240,6 +240,33 @@ export class ConsumerManager {
   ): Promise<void> {
     const consumer = this._getConsumer(roomId, participantId, consumerId);
     if (consumer.paused) await consumer.resume();
+
+    // Simulcast/SVC video sends nothing until preferred layers are set.
+    // Without this, remote cameras stay black even when ICE/TURN is fine.
+    if (
+      consumer.kind === 'video' &&
+      (consumer.type === 'simulcast' || consumer.type === 'svc') &&
+      !consumer.preferredLayers
+    ) {
+      try {
+        await consumer.setPreferredLayers({ spatialLayer: 2, temporalLayer: 2 });
+        logger.debug('Consumer preferred layers set on resume', {
+          consumerId,
+          participantId,
+          roomId,
+          type: consumer.type,
+        });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.warn('Failed to set preferred layers on resume', {
+          consumerId,
+          participantId,
+          roomId,
+          err: msg,
+        });
+      }
+    }
+
     logger.debug('Consumer resumed', { consumerId, participantId, roomId });
   }
 

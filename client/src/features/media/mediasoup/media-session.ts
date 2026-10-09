@@ -257,19 +257,26 @@ export class MediaSession {
             });
 
             // Always resume locally after the server ack — the server consumer is
-            // now forwarding RTP and the local consumer must be un-paused to receive
-            // it. The `if (consumer.paused)` guard was unreliable: mediasoup-client
-            // may have already cleared the flag internally, causing the resume to be
-            // skipped and leaving the video track frozen/black.
+            // now forwarding RTP and the local consumer must be un-paused to receive it.
             await consumer.resume();
 
-            // Prefer highest simulcast layer so remote camera is not stuck on empty layer 0.
-            if (consumer.kind === 'video' && typeof (consumer as any).setPreferredLayers === 'function') {
-              try {
-                await (consumer as any).setPreferredLayers({ spatialLayer: 2, temporalLayer: 2 });
-              } catch {
-                /* non-simulcast consumers ignore this */
-              }
+            // Ask the server to select a simulcast layer. Server-side
+            // setPreferredLayers is what actually starts video RTP for simulcast.
+            if (consumer.kind === 'video') {
+              await new Promise<void>((resLayers) => {
+                this.socket.emit(
+                  'set-preferred-layers',
+                  {
+                    roomId: this.roomId,
+                    consumerId: consumer.id,
+                    spatialLayer: 2,
+                    temporalLayer: 2,
+                  },
+                  () => resLayers(),
+                );
+                // Don't block forever if the ack is dropped.
+                window.setTimeout(() => resLayers(), 1500);
+              });
             }
 
             if (consumer.track && !consumer.track.enabled) {
