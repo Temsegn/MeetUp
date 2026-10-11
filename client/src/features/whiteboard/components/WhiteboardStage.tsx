@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useRef } from 'react';
 import type { Socket } from 'socket.io-client';
-import { Excalidraw } from '@excalidraw/excalidraw';
+import { CaptureUpdateAction, Excalidraw } from '@excalidraw/excalidraw';
 import { Maximize2, X } from 'lucide-react';
 import '@excalidraw/excalidraw/index.css';
 import './whiteboard.css';
@@ -65,6 +65,7 @@ export const WhiteboardStage: React.FC<WhiteboardStageProps> = ({
             zenModeEnabled: false,
             gridSize: null,
           } as never,
+          captureUpdate: CaptureUpdateAction.NEVER,
         } as never);
       } catch {
         /* ignore */
@@ -95,6 +96,7 @@ export const WhiteboardStage: React.FC<WhiteboardStageProps> = ({
     if (!api) return;
     api.updateScene({
       collaborators: excalidrawCollaborators as never,
+      captureUpdate: CaptureUpdateAction.NEVER,
     });
   }, [excalidrawCollaborators]);
 

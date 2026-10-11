@@ -81,6 +81,9 @@ export type WhiteboardUpdateAck = {
   success?: boolean;
   revision?: number;
   applied?: number;
+  /** Server-authoritative elements for ids in the update (applied or rejected). */
+  elements?: WhiteboardElement[];
+  files?: WhiteboardFiles;
   error?: string;
   code?: string;
 };

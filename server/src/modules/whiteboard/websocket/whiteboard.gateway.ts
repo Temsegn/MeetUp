@@ -170,8 +170,19 @@ export function registerWhiteboardHandlers(io: Server, socket: Socket): void {
       return callback?.({ error: 'Whiteboard not found', code: 'NOT_FOUND' });
     }
 
+    // Authoritative copies of every element id the client touched (applied or not).
+    // Lets the sender keep serverSceneRef honest when versions are rejected.
+    const touchedIds = new Set(v.data.elements.map((el) => el.id));
+    const snapshot = whiteboardRoomService.getSnapshot(binding.roomId);
+    const authoritative = (snapshot?.elements ?? []).filter((el) => touchedIds.has(el.id));
+
     if (result.applied.length === 0 && !result.files) {
-      return callback?.({ success: true, revision: result.revision, applied: 0 });
+      return callback?.({
+        success: true,
+        revision: result.revision,
+        applied: 0,
+        elements: authoritative,
+      });
     }
 
     const syncPayload = {
@@ -187,6 +198,8 @@ export function registerWhiteboardHandlers(io: Server, socket: Socket): void {
       success: true,
       revision: result.revision,
       applied: result.applied.length,
+      elements: authoritative,
+      files: result.files,
     });
   });
 

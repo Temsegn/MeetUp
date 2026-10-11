@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
+import { CaptureUpdateAction, reconcileElements } from '@excalidraw/excalidraw';
 import { createWhiteboardSocketAdapter } from '../adapters/whiteboardSocketAdapter';
 import {
   chunkElements,
@@ -44,7 +45,7 @@ type CollabHandlers = {
 
 /**
  * Collaboration layer: joins whiteboard room, applies remote sync, batches local diffs.
- * Server-authoritative scene tracking + retry so strokes are never silently dropped.
+ * Uses CaptureUpdateAction.NEVER + server-authoritative acks so strokes/shapes/images sync fully.
  */
 export function useWhiteboardCollaboration(opts: {
   socket: Socket;
@@ -57,7 +58,7 @@ export function useWhiteboardCollaboration(opts: {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const clientIdRef = useRef(makeClientId(participantId));
   const revisionRef = useRef(0);
-  /** Last scene known to be on the server (join + sync + our successful acks). */
+  /** Last scene known to be on the server (join + sync + authoritative acks). */
   const serverSceneRef = useRef<WhiteboardElement[]>([]);
   const filesRef = useRef<WhiteboardFiles>({});
   const applyingRemoteRef = useRef(0);
@@ -78,6 +79,19 @@ export function useWhiteboardCollaboration(opts: {
     files: WhiteboardFiles;
   } | null>(null);
   const [collaborators, setCollaborators] = useState<Record<string, CollaboratorCursor>>({});
+
+  const beginRemoteApply = useCallback(() => {
+    applyingRemoteRef.current += 1;
+  }, []);
+
+  const endRemoteApply = useCallback(() => {
+    // Hold the gate through React/Excalidraw's onChange echo (microtask + frame).
+    queueMicrotask(() => {
+      requestAnimationFrame(() => {
+        applyingRemoteRef.current = Math.max(0, applyingRemoteRef.current - 1);
+      });
+    });
+  }, []);
 
   const ensureVisible = useCallback((elements: readonly WhiteboardElement[], forceFit = false) => {
     const api = apiRef.current;
@@ -122,38 +136,49 @@ export function useWhiteboardCollaboration(opts: {
         return;
       }
 
-      applyingRemoteRef.current += 1;
+      beginRemoteApply();
       try {
-        const current = payload.cleared
+        const local = payload.cleared
           ? []
           : (api.getSceneElementsIncludingDeleted() as unknown as WhiteboardElement[]);
-        const merged = mergeElements(current, payload.elements);
-        api.updateScene({ elements: merged as never });
+        const appState = (api.getAppState?.() ?? {}) as Record<string, unknown>;
+        const reconciled = payload.cleared
+          ? (payload.elements as never[])
+          : (reconcileElements(
+              local as never[],
+              payload.elements as never[],
+              appState as never,
+            ) as unknown as WhiteboardElement[]);
+
+        api.updateScene({
+          elements: reconciled as never,
+          captureUpdate: CaptureUpdateAction.NEVER,
+        });
         if (payload.files) {
           api.addFiles(Object.values(payload.files) as never);
         }
 
-        const newIds: WhiteboardElement[] = [];
+        const touched: WhiteboardElement[] = [];
         for (const el of payload.elements) {
           if (el.isDeleted) continue;
-          if (!knownRemoteIdsRef.current.has(el.id)) {
-            knownRemoteIdsRef.current.add(el.id);
-            newIds.push(el);
+          const isNew = !knownRemoteIdsRef.current.has(el.id);
+          knownRemoteIdsRef.current.add(el.id);
+          touched.push(el);
+          if (isNew) {
+            /* tracked via touched */
           }
         }
         if (payload.cleared) {
           knownRemoteIdsRef.current.clear();
-        } else if (newIds.length > 0) {
-          // Bring newly created remote content into view (PC → mobile case).
-          queueMicrotask(() => ensureVisible(newIds));
+        } else if (touched.length > 0) {
+          // Keep strokes/shapes/images in view as they grow, not only on first id.
+          queueMicrotask(() => ensureVisible(touched));
         }
       } finally {
-        queueMicrotask(() => {
-          applyingRemoteRef.current = Math.max(0, applyingRemoteRef.current - 1);
-        });
+        endRemoteApply();
       }
     },
-    [ensureVisible],
+    [beginRemoteApply, endRemoteApply, ensureVisible],
   );
 
   const setApi = useCallback(
@@ -161,33 +186,32 @@ export function useWhiteboardCollaboration(opts: {
       apiRef.current = api;
       if (!api) return;
 
-      // Apply any sync that arrived between join and Excalidraw mount.
       const queued = pendingRemoteRef.current.splice(0);
       if (queued.length > 0) {
         for (const payload of queued) {
           applyRemotePayload(payload);
         }
       } else if (serverSceneRef.current.length > 0) {
-        applyingRemoteRef.current += 1;
+        beginRemoteApply();
         try {
-          api.updateScene({ elements: serverSceneRef.current as never });
+          api.updateScene({
+            elements: serverSceneRef.current as never,
+            captureUpdate: CaptureUpdateAction.NEVER,
+          });
           if (Object.keys(filesRef.current).length > 0) {
             api.addFiles(Object.values(filesRef.current) as never);
           }
         } finally {
-          queueMicrotask(() => {
-            applyingRemoteRef.current = Math.max(0, applyingRemoteRef.current - 1);
-          });
+          endRemoteApply();
         }
       }
 
-      // Shared world coords — fit the current scene on first paint (mobile/PC).
       requestAnimationFrame(() => {
         ensureVisible(serverSceneRef.current, true);
         api.refresh?.();
       });
     },
-    [applyRemotePayload, ensureVisible],
+    [applyRemotePayload, beginRemoteApply, endRemoteApply, ensureVisible],
   );
 
   useEffect(() => {
@@ -203,6 +227,13 @@ export function useWhiteboardCollaboration(opts: {
     const offSync = adapter.onSync((payload) => {
       if (payload.clientId === clientIdRef.current) {
         revisionRef.current = payload.revision;
+        // Still absorb authoritative file/element echoes for our own broadcasts.
+        if (payload.files) {
+          filesRef.current = mergeFiles(filesRef.current, payload.files);
+        }
+        if (payload.elements?.length) {
+          serverSceneRef.current = mergeElements(serverSceneRef.current, payload.elements);
+        }
         return;
       }
       applyRemotePayload(payload);
@@ -225,6 +256,17 @@ export function useWhiteboardCollaboration(opts: {
       addToast?.(payload.message || 'Whiteboard error');
     });
 
+    const scheduleFlush = (immediate = false) => {
+      if (flushTimerRef.current) {
+        if (!immediate) return;
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+      flushTimerRef.current = setTimeout(() => {
+        void flush();
+      }, immediate ? 0 : 32);
+    };
+
     const flush = async () => {
       flushTimerRef.current = null;
       if (flushInFlightRef.current) {
@@ -242,6 +284,7 @@ export function useWhiteboardCollaboration(opts: {
       if (changed.length === 0 && !files) return;
 
       flushInFlightRef.current = true;
+      let failed = false;
       try {
         const batches = changed.length > 0 ? chunkElements(changed, 200) : [[] as WhiteboardElement[]];
         let filesToSend = files;
@@ -251,7 +294,8 @@ export function useWhiteboardCollaboration(opts: {
           if (batch.length === 0 && !filesToSend) continue;
 
           let attempts = 0;
-          while (attempts < 6) {
+          let sent = false;
+          while (attempts < 8) {
             const ack = await adapter.sendUpdate({
               elements: batch,
               files: i === 0 ? filesToSend : undefined,
@@ -260,42 +304,66 @@ export function useWhiteboardCollaboration(opts: {
 
             if (ack?.code === 'RATE_LIMITED' || ack?.error === 'Rate limited') {
               attempts += 1;
-              await sleep(60 * attempts);
+              await sleep(50 * attempts);
               continue;
             }
 
-            if (ack?.error) {
-              addToast?.(ack.error);
-              // Keep unsent local state — do not advance serverSceneRef.
-              needsReflushRef.current = true;
+            if (ack?.error || ack?.code === 'PAYLOAD_TOO_LARGE' || ack?.code === 'VALIDATION_ERROR') {
+              addToast?.(ack.error || 'Whiteboard update failed');
+              failed = true;
               break;
             }
 
             if (ack?.revision != null) revisionRef.current = ack.revision;
-            if (batch.length > 0) {
+
+            // Prefer server-authoritative element copies for touched ids.
+            if (ack?.elements && ack.elements.length > 0) {
+              serverSceneRef.current = mergeElements(serverSceneRef.current, ack.elements);
+              for (const el of ack.elements) {
+                if (!el.isDeleted) knownRemoteIdsRef.current.add(el.id);
+              }
+            } else if (batch.length > 0 && (ack?.applied == null || ack.applied > 0)) {
               serverSceneRef.current = mergeElements(serverSceneRef.current, batch);
               for (const el of batch) {
                 if (!el.isDeleted) knownRemoteIdsRef.current.add(el.id);
               }
             }
+
+            if (ack?.files) {
+              filesRef.current = mergeFiles(filesRef.current, ack.files);
+            }
+
             if (i === 0) filesToSend = undefined;
+            sent = true;
+            break;
+          }
+
+          if (!sent) {
+            failed = true;
             break;
           }
         }
       } finally {
         flushInFlightRef.current = false;
+        if (failed) {
+          // Re-queue the latest local scene so strokes are not dropped.
+          const api = apiRef.current;
+          if (api) {
+            pendingElementsRef.current =
+              api.getSceneElementsIncludingDeleted() as unknown as WhiteboardElement[];
+          } else if (elements) {
+            pendingElementsRef.current = elements;
+          }
+          if (files) {
+            pendingFilesRef.current = { ...(pendingFilesRef.current ?? {}), ...files };
+          }
+          needsReflushRef.current = true;
+        }
         if (needsReflushRef.current || pendingElementsRef.current) {
           needsReflushRef.current = false;
           scheduleFlush();
         }
       }
-    };
-
-    const scheduleFlush = () => {
-      if (flushTimerRef.current) return;
-      flushTimerRef.current = setTimeout(() => {
-        void flush();
-      }, 50);
     };
 
     handlersRef.current = {
@@ -319,6 +387,15 @@ export function useWhiteboardCollaboration(opts: {
       },
       sendCursor: throttle((x: number, y: number, button?: 'up' | 'down') => {
         adapter.sendCursor({ x, y, pointer: 'mouse', button });
+        // Commit the finished stroke/shape as soon as the pointer lifts.
+        if (button === 'up') {
+          const api = apiRef.current;
+          if (api && applyingRemoteRef.current === 0) {
+            pendingElementsRef.current =
+              api.getSceneElementsIncludingDeleted() as unknown as WhiteboardElement[];
+            scheduleFlush(true);
+          }
+        }
       }, 40),
       fitContent: () => {
         const api = apiRef.current;
@@ -364,14 +441,15 @@ export function useWhiteboardCollaboration(opts: {
 
           const api = apiRef.current;
           if (api) {
-            applyingRemoteRef.current += 1;
+            beginRemoteApply();
             try {
-              api.updateScene({ elements: ack.elements as never });
+              api.updateScene({
+                elements: ack.elements as never,
+                captureUpdate: CaptureUpdateAction.NEVER,
+              });
               if (ack.files) api.addFiles(Object.values(ack.files) as never);
             } finally {
-              queueMicrotask(() => {
-                applyingRemoteRef.current = Math.max(0, applyingRemoteRef.current - 1);
-              });
+              endRemoteApply();
             }
             ensureVisible(ack.elements, true);
           } else {
@@ -379,11 +457,10 @@ export function useWhiteboardCollaboration(opts: {
           }
           setReady(true);
           setError(null);
-          // Re-send any local edits that never reached the server.
           if (api) {
             pendingElementsRef.current =
               api.getSceneElementsIncludingDeleted() as unknown as WhiteboardElement[];
-            scheduleFlush();
+            scheduleFlush(true);
           }
         } catch {
           /* join retry on next connect */
@@ -403,7 +480,7 @@ export function useWhiteboardCollaboration(opts: {
       adapterRef.current = null;
       adapter.destroy();
     };
-  }, [socket, roomId, participantId, addToast, applyRemotePayload, ensureVisible]);
+  }, [socket, roomId, participantId, addToast, applyRemotePayload, beginRemoteApply, endRemoteApply, ensureVisible]);
 
   const onChange = useCallback(
     (elements: readonly WhiteboardElement[], files?: WhiteboardFiles) => {

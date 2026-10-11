@@ -84,7 +84,7 @@ export function mergeWhiteboardUpdate(opts: {
   if (opts.incomingFiles) {
     for (const [id, file] of Object.entries(opts.incomingFiles)) {
       if (!id || !file || typeof file.dataURL !== 'string') continue;
-      if (file.dataURL.length > 1_500_000) continue; // ~1.5MB dataURL cap per file
+      if (file.dataURL.length > 5_500_000) continue; // dataURL cap per file
       files[id] = file;
     }
   }

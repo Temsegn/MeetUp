@@ -7,6 +7,8 @@ export type ExcalidrawImperativeAPI = {
     elements?: unknown[];
     collaborators?: Map<string, unknown>;
     appState?: Record<string, unknown>;
+    /** Use CaptureUpdateAction.NEVER for remote / init updates. */
+    captureUpdate?: 'IMMEDIATELY' | 'NEVER' | 'EVENTUALLY' | string;
   }) => void;
   getSceneElementsIncludingDeleted: () => readonly unknown[];
   getAppState?: () => {

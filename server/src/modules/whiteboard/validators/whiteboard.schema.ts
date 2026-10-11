@@ -16,7 +16,7 @@ const binaryFileSchema = z
   .object({
     mimeType: z.string().min(1).max(128),
     id: z.string().min(1).max(128),
-    dataURL: z.string().min(1).max(2_000_000),
+    dataURL: z.string().min(1).max(5_500_000),
     created: z.number(),
     lastRetrieved: z.number().optional(),
   })

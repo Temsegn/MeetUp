@@ -15,11 +15,11 @@ export const WB_EVENTS = {
   GET_VISIBILITY: 'whiteboard:get-visibility',
 } as const;
 
-/** Max serialized update payload size (bytes). */
-export const WB_MAX_UPDATE_BYTES = 1_048_576;
+/** Max serialized update payload size (bytes). Images + long strokes need headroom. */
+export const WB_MAX_UPDATE_BYTES = 6_000_000;
 
 /** Soft rate limit for inbound updates per socket (freehand strokes are chatty). */
-export const WB_UPDATE_RATE_LIMIT = 80;
+export const WB_UPDATE_RATE_LIMIT = 120;
 export const WB_UPDATE_RATE_WINDOW_MS = 1_000;
 
 /** Soft rate limit for cursor events per socket. */

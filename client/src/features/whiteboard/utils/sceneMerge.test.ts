@@ -33,6 +33,14 @@ describe('sceneMerge', () => {
     assert.equal(changed[0].id, 'a');
   });
 
+  it('diffs geometry even when version fields match', () => {
+    const prev = [el('stroke', 3, 1, { points: [[0, 0]] })];
+    const next = [el('stroke', 3, 1, { points: [[0, 0], [10, 12], [20, 8]] })];
+    const changed = diffElements(prev, next);
+    assert.equal(changed.length, 1);
+    assert.equal(changed[0].id, 'stroke');
+  });
+
   it('merges without dropping peers elements', () => {
     const merged = mergeElements([el('a', 1, 1)], [el('b', 1, 1)]);
     assert.equal(merged.length, 2);

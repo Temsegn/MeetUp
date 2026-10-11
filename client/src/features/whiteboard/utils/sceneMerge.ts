@@ -49,6 +49,20 @@ export function mergeFiles(
 /**
  * Diff local scene against last acknowledged scene — only changed elements.
  */
+function geometryChanged(a: WhiteboardElement, b: WhiteboardElement): boolean {
+  if (a.x !== b.x || a.y !== b.y || a.width !== b.width || a.height !== b.height) return true;
+  if (a.angle !== b.angle || a.text !== b.text || a.fileId !== b.fileId) return true;
+  // Freedraw / line / arrow point lists — stringify is cheap for typical strokes.
+  if (a.points !== b.points) {
+    try {
+      if (JSON.stringify(a.points) !== JSON.stringify(b.points)) return true;
+    } catch {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function diffElements(
   previous: readonly WhiteboardElement[],
   next: readonly WhiteboardElement[],
@@ -62,7 +76,12 @@ export function diffElements(
       changed.push(el);
       continue;
     }
-    if (el.version !== old.version || el.versionNonce !== old.versionNonce || el.isDeleted !== old.isDeleted) {
+    if (
+      el.version !== old.version ||
+      el.versionNonce !== old.versionNonce ||
+      el.isDeleted !== old.isDeleted ||
+      geometryChanged(el, old)
+    ) {
       changed.push(el);
     }
   }
