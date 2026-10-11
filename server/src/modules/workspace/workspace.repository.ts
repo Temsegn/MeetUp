@@ -179,7 +179,7 @@ export const workspaceRepository = {
     email: string;
     name?: string;
     phone?: string;
-    role: Exclude<WorkspaceRole, 'owner'>;
+    role: WorkspaceRole;
     tokenHash: string;
     invitedBy: string;
     expiresAt: Date;

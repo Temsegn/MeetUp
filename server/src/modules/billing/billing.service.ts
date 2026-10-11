@@ -287,8 +287,8 @@ export function createBillingService() {
       actorRole: WorkspaceRole,
       cardRaw?: unknown,
     ) {
-      if (actorRole !== 'owner' && actorRole !== 'admin') {
-        throw new ForbiddenError('Only an owner or admin can pay an invoice.');
+      if (actorRole !== 'admin') {
+        throw new ForbiddenError('Only an admin can pay an invoice.');
       }
       const inv = await getInvoiceForWorkspace(workspaceId, invoiceId);
       if (inv.status === 'paid') return toInvoiceDto(inv);
@@ -307,8 +307,8 @@ export function createBillingService() {
     },
 
     async addPaymentMethod(workspaceId: string, actorRole: WorkspaceRole, cardRaw: unknown) {
-      if (actorRole !== 'owner' && actorRole !== 'admin') {
-        throw new ForbiddenError('Only an owner or admin can add a payment method.');
+      if (actorRole !== 'admin') {
+        throw new ForbiddenError('Only an admin can add a payment method.');
       }
       const charged = chargeCard(parseCardInput(cardRaw), 0);
       await savePaymentMethod(workspaceId, charged);

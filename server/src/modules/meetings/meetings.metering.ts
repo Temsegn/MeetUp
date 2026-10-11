@@ -170,7 +170,7 @@ export async function endLiveMeeting(opts: {
       workspaceId: meeting.workspaceId,
       userId: new Types.ObjectId(opts.userId),
       status: 'active',
-      role: { $in: ['owner', 'admin'] },
+      role: 'admin',
     }).lean();
     if (!member) return { ended: false };
   }

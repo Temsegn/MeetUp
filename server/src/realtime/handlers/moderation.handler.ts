@@ -28,7 +28,7 @@ async function canModerateRoom(userId: string, roomId: string): Promise<boolean>
     workspaceId: meeting.workspaceId,
     userId: new Types.ObjectId(userId),
     status: 'active',
-    role: { $in: ['owner', 'admin'] },
+    role: 'admin',
   }).lean();
   return Boolean(member);
 }

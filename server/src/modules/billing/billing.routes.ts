@@ -33,7 +33,7 @@ router.patch('/plan', requireWorkspace('admin'), async (req: AuthRequest, res) =
 });
 
 /** Pay with a card to move onto a paid plan. Card number is never stored. */
-router.post('/upgrade', requireWorkspace('owner'), async (req: AuthRequest, res) => {
+router.post('/upgrade', requireWorkspace('admin'), async (req: AuthRequest, res) => {
   const body = req.body as { planKey?: PlanKey; card?: unknown };
   const planKey = body.planKey ?? 'pro';
   const data = await billingService.upgradePlan(

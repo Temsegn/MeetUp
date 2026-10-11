@@ -404,9 +404,6 @@ export function createWorkspaceService() {
       if (!invite) throw new NotFoundError('Invite');
 
       const role = input.role ?? invite.role;
-      if (role === 'admin' && actor.role !== 'owner') {
-        throw new ForbiddenError('Only the owner can assign admin role.');
-      }
 
       const name = input.name !== undefined ? input.name.trim() : invite.name;
       const email =
@@ -750,11 +747,12 @@ export function createWorkspaceService() {
       targetUserId: string,
       role: WorkspaceRole,
     ) {
-      if (actorRole !== 'owner') throw new ForbiddenError('Only the owner can change roles.');
-      if (role === 'owner') throw new ValidationError('Transfer ownership is not supported yet.');
+      if (!hasMinRole(actorRole, 'admin')) throw new ForbiddenError('Admins only.');
+      if (role !== 'admin' && role !== 'member') {
+        throw new ValidationError('Role must be admin or member.');
+      }
       const member = await workspaceRepository.findManagedMember(workspaceId, targetUserId);
       if (!member) throw new NotFoundError('Member');
-      if (member.role === 'owner') throw new ForbiddenError('Cannot change the owner role.');
       return workspaceRepository.updateMemberRole(workspaceId, targetUserId, role);
     },
 
@@ -773,12 +771,8 @@ export function createWorkspaceService() {
       if (!hasMinRole(actor.role, 'admin')) throw new ForbiddenError('Admins only.');
       const member = await workspaceRepository.findManagedMember(workspaceId, targetUserId);
       if (!member) throw new NotFoundError('Member');
-      if (member.role === 'owner') throw new ForbiddenError('Cannot edit the owner this way.');
       if (targetUserId === actor.id && patch.role !== undefined) {
         throw new ValidationError('You cannot change your own role.');
-      }
-      if (member.role === 'admin' && actor.role !== 'owner' && patch.role !== undefined) {
-        throw new ForbiddenError('Only the owner can change admin roles.');
       }
 
       const profilePatch: {
@@ -811,7 +805,6 @@ export function createWorkspaceService() {
       }
 
       if (patch.role !== undefined && patch.role !== member.role) {
-        if (actor.role !== 'owner') throw new ForbiddenError('Only the owner can change roles.');
         await workspaceRepository.updateMemberRole(workspaceId, targetUserId, patch.role);
       }
 
@@ -832,23 +825,27 @@ export function createWorkspaceService() {
 
     async setMemberStatus(
       workspaceId: string,
+      actor: { id: string; role: WorkspaceRole },
+      targetUserId: string,
+      status: 'active' | 'inactive',
+    ) {
+      if (!hasMinRole(actor.role, 'admin')) throw new ForbiddenError('Admins only.');
+      const target = await workspaceRepository.findManagedMember(workspaceId, targetUserId);
+      if (!target) throw new NotFoundError('Member');
       if (targetUserId === actor.id) throw new ValidationError('You cannot deactivate yourself.');
       const updated = await workspaceRepository.updateMemberStatus(workspaceId, targetUserId, status);
       if (!updated) throw new NotFoundError('Member');
       return updated;
     },
 
-    async removeMember(workspaceId: string, actor: { id: string; role: WorkspaceRole }, targetUserId: string) {
+    async removeMember(
+      workspaceId: string,
+      actor: { id: string; role: WorkspaceRole },
+      targetUserId: string,
+    ) {
       if (!hasMinRole(actor.role, 'admin')) throw new ForbiddenError('Admins only.');
       const target = await workspaceRepository.findManagedMember(workspaceId, targetUserId);
       if (!target) throw new NotFoundError('Member');
-      if (!hasMinRole(actor.role, 'admin')) throw new ForbiddenError('Admins only.');
-      const target = await workspaceRepository.findManagedMember(workspaceId, targetUserId);
-      if (!target) throw new NotFoundError('Member');
-      if (target.role === 'owner') throw new ForbiddenError('Cannot remove the owner.');
-      if (target.role === 'admin' && actor.role !== 'owner') {
-        throw new ForbiddenError('Only the owner can remove admins.');
-      }
       if (targetUserId === actor.id) throw new ValidationError('You cannot remove yourself.');
       await workspaceRepository.removeMember(workspaceId, targetUserId);
       return { success: true };

@@ -8,7 +8,7 @@ import { logger } from '../../infrastructure/logging/logger';
 
 /** Idempotent: former Owner membership becomes Admin. */
 export async function migrateOwnerRolesToAdmin(): Promise<number> {
-  const result = await WorkspaceMember.updateMany(
+  const result = await WorkspaceMember.collection.updateMany(
     { role: 'owner' },
     { $set: { role: 'admin' } },
   );
@@ -67,7 +67,7 @@ export async function ensureWorkspaceForUser(user: {
   await WorkspaceMember.create({
     workspaceId: workspace._id,
     userId: new Types.ObjectId(user.id),
-    role: 'owner',
+    role: 'admin',
     status: 'active',
   });
 
