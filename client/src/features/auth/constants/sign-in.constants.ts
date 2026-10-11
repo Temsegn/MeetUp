@@ -30,12 +30,8 @@ export const SIGN_IN_COPY = {
   forgotPassword: 'Forgot password?',
   submit: 'Sign In',
   submitting: 'Signing in…',
-  orContinue: 'or',
-  google: 'Continue with Google',
-  microsoft: 'Continue with Microsoft',
   noAccount: "Don't have an account?",
   signUp: 'Sign up',
-  oauthSoon: 'Social sign-in is not available yet.',
   promo: {
     titleLine1: 'Smarter Meetings.',
     titleLine2: 'Better Collaboration.',
