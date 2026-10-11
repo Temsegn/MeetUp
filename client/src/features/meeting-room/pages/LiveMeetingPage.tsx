@@ -77,6 +77,7 @@ export function LiveMeetingPage() {
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [recordingTick, setRecordingTick] = useState(Date.now());
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const publishedTrackIdsRef = useRef<Set<string>>(new Set());
   /** When true, navigation/leave is intentional (Leave / End / host ended). */
   const allowLeaveRef = useRef(false);
 
@@ -300,16 +301,37 @@ export function LiveMeetingPage() {
     }
   };
 
-  // After admitted / host join — publish local media
+  // After admitted / host join — publish local media (once per track id)
   useEffect(() => {
-    if (!joined) return;
+    if (!joined) {
+      publishedTrackIdsRef.current.clear();
+      return;
+    }
     const sess = session.current;
     const stream = localStream;
     if (!sess || !stream) return;
     void (async () => {
       try {
-        for (const track of stream.getAudioTracks()) await sess.produce(track, 'microphone');
-        for (const track of stream.getVideoTracks()) await sess.produce(track, 'camera', true);
+        for (const track of stream.getAudioTracks()) {
+          if (publishedTrackIdsRef.current.has(track.id)) continue;
+          publishedTrackIdsRef.current.add(track.id);
+          try {
+            await sess.produce(track, 'microphone');
+          } catch (err) {
+            publishedTrackIdsRef.current.delete(track.id);
+            throw err;
+          }
+        }
+        for (const track of stream.getVideoTracks()) {
+          if (publishedTrackIdsRef.current.has(track.id)) continue;
+          publishedTrackIdsRef.current.add(track.id);
+          try {
+            await sess.produce(track, 'camera', true);
+          } catch (err) {
+            publishedTrackIdsRef.current.delete(track.id);
+            throw err;
+          }
+        }
       } catch {
         addToast('Could not publish camera/microphone');
       }
@@ -586,24 +608,20 @@ export function LiveMeetingPage() {
       const cameraHasVideo = Boolean(
         remote?.camera?.getVideoTracks().some((t) => t.readyState !== 'ended'),
       );
-      // Trust p.isCameraOff (set from server paused state) as the source of truth.
-      // Only fall back to !cameraHasVideo when p.isCameraOff is not yet defined
-      // (undefined means no server signal has arrived yet, so stream absence is
-      // used as a proxy). Once isCameraOff is explicitly false, never override it
-      // with a missing stream — the stream is just still loading.
+      // Prefer live tracks over stale join-time flags. Explicit pause
+      // (isCameraOff === true) still hides the camera when there is no
+      // screen share; once tracks arrive with isCameraOff cleared/undefined, show them.
       const resolvedCameraOff = showingScreen
         ? false
-        : p.isCameraOff === true
-          ? true
-          : p.isCameraOff === false
-            ? false
-            : !cameraHasVideo; // isCameraOff is undefined — stream not yet arrived
+        : cameraHasVideo
+          ? p.isCameraOff === true
+          : p.isCameraOff !== false;
       return {
         id: p.id,
         name: p.name,
         stream: showingScreen ? remote!.screen : cameraHasVideo ? remote!.camera : null,
         audioStream: remote?.audio || null,
-        isMuted: p.isMuted,
+        isMuted: p.isMuted === true,
         isCameraOff: resolvedCameraOff,
         isHandRaised: raisedHands.has(p.id),
         avatarUrl: p.avatarUrl,

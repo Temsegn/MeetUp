@@ -23,6 +23,7 @@ export class MediaSession {
   private producers: Map<string, Producer> = new Map();
   private consumers: Map<string, Consumer> = new Map();
   private consumedProducerIds = new Set<string>();
+  private consumeInFlight = new Map<string, Promise<Consumer>>();
   private simulcastEncodings?: object[];
   private screenShareEncodings?: object[];
   private iceHandlerAttached = false;
@@ -145,9 +146,13 @@ export class MediaSession {
 
           transport.on('connectionstatechange', (state) => {
             console.log(`[MediaSession] ${direction} transport state: ${state}`);
+            if (state === 'failed' || state === 'disconnected') {
+              console.warn(
+                `[MediaSession] ${direction} transport ${state} — ICE/TURN may be broken ` +
+                  '(check MEDIASOUP_ANNOUNCED_IP is the public IP, not 127.0.0.1)',
+              );
+            }
             if (state === 'failed') {
-              console.warn(`[MediaSession] ${direction} transport failed — requesting ICE restart`);
-              // Emit ICE restart request to server so it generates new ICE parameters
               this.socket.emit(
                 'restart-ice',
                 { roomId: this.roomId, transportId: transport.id },
@@ -211,12 +216,16 @@ export class MediaSession {
 
   public async consume(producerId: string): Promise<Consumer> {
     if (!this.recvTransport) throw new Error('Recv transport not initialized');
-    if (this.consumedProducerIds.has(producerId)) {
-      const existing = Array.from(this.consumers.values()).find((c) => c.producerId === producerId);
-      if (existing && !existing.closed) return existing;
-    }
 
-    return new Promise((resolve, reject) => {
+    const existing = Array.from(this.consumers.values()).find(
+      (c) => c.producerId === producerId && !c.closed,
+    );
+    if (existing) return existing;
+
+    const inFlight = this.consumeInFlight.get(producerId);
+    if (inFlight) return inFlight;
+
+    const promise = new Promise<Consumer>((resolve, reject) => {
       this.socket.emit(
         'consume',
         {
@@ -277,6 +286,12 @@ export class MediaSession {
                 // Don't block forever if the ack is dropped.
                 window.setTimeout(() => resLayers(), 1500);
               });
+              // Kick a keyframe so the first frame paints quickly after layer select.
+              try {
+                await (consumer as any).requestKeyFrame?.();
+              } catch {
+                /* optional */
+              }
             }
 
             if (consumer.track && !consumer.track.enabled) {
@@ -289,7 +304,12 @@ export class MediaSession {
           }
         },
       );
+    }).finally(() => {
+      this.consumeInFlight.delete(producerId);
     });
+
+    this.consumeInFlight.set(producerId, promise);
+    return promise;
   }
 
   public getConsumerByProducerId(producerId: string): Consumer | undefined {
@@ -374,6 +394,7 @@ export class MediaSession {
     }
     this.consumers.clear();
     this.consumedProducerIds.clear();
+    this.consumeInFlight.clear();
 
     if (this.sendTransport && !this.sendTransport.closed) this.sendTransport.close();
     if (this.recvTransport && !this.recvTransport.closed) this.recvTransport.close();

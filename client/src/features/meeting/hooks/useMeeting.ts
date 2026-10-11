@@ -55,6 +55,7 @@ export const useMeeting = (
   const displayNameRef = useRef(displayName);
   displayNameRef.current = displayName;
   const joinMeetingRef = useRef<() => Promise<void>>(async () => {});
+  const leaveMeetingRef = useRef<() => Promise<void>>(async () => {});
 
   const leaveMeeting = useCallback(async () => {
     const sock = socketRef.current;
@@ -78,6 +79,7 @@ export const useMeeting = (
     creatorIdRef.current = null;
     joiningRef.current = false;
   }, [roomId]);
+  leaveMeetingRef.current = leaveMeeting;
 
   const enterMediaSession = useCallback(
     async (
@@ -107,7 +109,18 @@ export const useMeeting = (
       await session.createSendTransport();
       await session.createRecvTransport();
 
-      _attachMediaListeners(sock, session, addToast, setPeers, setRemoteStreams, setIsRecording);
+      _attachMediaListeners(
+        sock,
+        session,
+        addToast,
+        setPeers,
+        setRemoteStreams,
+        setIsRecording,
+        async () => {
+          await leaveMeetingRef.current();
+          await joinMeetingRef.current();
+        },
+      );
 
       await new Promise<void>((resolve) => {
         sock.emit('get-room-state', { roomId }, async (res: any) => {
@@ -132,10 +145,13 @@ export const useMeeting = (
                 const prods = producersByPeer.get(p.id) ?? [];
                 const audioProds  = prods.filter((pr) => pr.source === 'microphone' || pr.kind === 'audio');
                 const videoProds  = prods.filter((pr) => pr.source === 'camera'     || (pr.kind === 'video' && pr.source !== 'screen'));
-                // Muted if no audio producer, or all audio producers are paused
-                const isMuted = audioProds.length === 0 || audioProds.every((pr) => pr.paused);
-                // Camera off if no camera producer, or all camera producers are paused
-                const isCameraOff = videoProds.length === 0 || videoProds.every((pr) => pr.paused);
+                // Only derive mute/camera-off from producers that already exist.
+                // Missing producers mean "not published yet" (common on simultaneous
+                // join) — leave undefined so VideoTile can show tracks when they arrive.
+                const isMuted =
+                  audioProds.length === 0 ? undefined : audioProds.every((pr) => pr.paused);
+                const isCameraOff =
+                  videoProds.length === 0 ? undefined : videoProds.every((pr) => pr.paused);
                 return {
                   id:           p.id,
                   name:         p.name,
@@ -155,6 +171,18 @@ export const useMeeting = (
                 const consumer = await session.consume(prod.producerId);
                 const source = prod.appData?.source ?? (prod.kind === 'audio' ? 'microphone' : 'camera');
                 _addTrackToStream(prod.participantId, source, consumer.track, setRemoteStreams);
+                if (!prod.paused) {
+                  setPeers((prev) =>
+                    prev.map((p) => {
+                      if (p.id !== prod.participantId) return p;
+                      if (source === 'microphone' || prod.kind === 'audio') {
+                        return { ...p, isMuted: false };
+                      }
+                      if (source === 'camera') return { ...p, isCameraOff: false };
+                      return p;
+                    }),
+                  );
+                }
               } catch (e) {
                 console.error('Failed to consume existing producer', e);
               }
@@ -337,6 +365,7 @@ function _attachMediaListeners(
   setPeers: React.Dispatch<React.SetStateAction<PeerInfo[]>>,
   setRemoteStreams: React.Dispatch<React.SetStateAction<Map<string, PeerStreams>>>,
   setIsRecording: React.Dispatch<React.SetStateAction<boolean>>,
+  recoverMedia: () => Promise<void>,
 ) {
   // Avoid duplicate handlers if join is retried
   socket.off('new-producer');
@@ -356,6 +385,16 @@ function _attachMediaListeners(
       const consumer = await session.consume(producerId);
       const source = appData?.source ?? (kind === 'audio' ? 'microphone' : 'camera');
       _addTrackToStream(remotePid, source, consumer.track, setRemoteStreams);
+
+      // Clear stale join-time "off" flags now that media is actually publishing.
+      setPeers((prev) =>
+        prev.map((p) => {
+          if (p.id !== remotePid) return p;
+          if (source === 'microphone' || kind === 'audio') return { ...p, isMuted: false };
+          if (source === 'camera') return { ...p, isCameraOff: false };
+          return p;
+        }),
+      );
     } catch (e) {
       console.error('Failed to consume new producer', e);
     }
@@ -454,7 +493,8 @@ function _attachMediaListeners(
       prev.map((p) => {
         if (p.id !== remotePid) return p;
         if (source === 'microphone' || kind === 'audio') return { ...p, isMuted: true };
-        if (source === 'camera' || kind === 'video') return { ...p, isCameraOff: true };
+        // Screen share is also kind=video — only treat camera as camera-off.
+        if (source === 'camera') return { ...p, isCameraOff: true };
         return p;
       }),
     );
@@ -466,7 +506,7 @@ function _attachMediaListeners(
       prev.map((p) => {
         if (p.id !== remotePid) return p;
         if (source === 'microphone' || kind === 'audio') return { ...p, isMuted: false };
-        if (source === 'camera' || kind === 'video') return { ...p, isCameraOff: false };
+        if (source === 'camera') return { ...p, isCameraOff: false };
         return p;
       }),
     );
@@ -486,7 +526,10 @@ function _attachMediaListeners(
   });
 
   socket.on('transport-failed', ({ reason }: any) => {
-    addToast?.(`Connection issue (${reason}) — attempting recovery...`);
+    addToast?.(`Connection issue (${reason}) — rejoining...`);
+    void recoverMedia().catch(() => {
+      addToast?.('Failed to recover media — please refresh.');
+    });
   });
 
   socket.on('worker-died', ({ message }: any) => {

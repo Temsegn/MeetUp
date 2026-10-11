@@ -4,15 +4,21 @@ import { logger } from '../infrastructure/logging/logger';
 import os from 'os';
 
 // ── Production startup guard ───────────────────────────────────────────────
-// If MEDIASOUP_ANNOUNCED_IP is not set in production, mediasoup will
-// announce 0.0.0.0 in ICE candidates, which is unreachable for external
-// clients. Fail fast rather than silently serving a broken conference.
-if (env.NODE_ENV === 'production' && !env.MEDIASOUP_ANNOUNCED_IP) {
-  // Use console.error here because the logger may not be fully initialised yet
+// If MEDIASOUP_ANNOUNCED_IP is missing or loopback, browsers receive ICE
+// candidates pointing at 127.0.0.1 / 0.0.0.0 — signaling works, A/V never does.
+const announced = env.MEDIASOUP_ANNOUNCED_IP?.trim();
+const announcedIsLoopback =
+  !announced ||
+  announced === '127.0.0.1' ||
+  announced === '0.0.0.0' ||
+  announced === '::1' ||
+  announced === 'localhost';
+
+if (env.NODE_ENV === 'production' && announcedIsLoopback) {
   console.error(
-    '[FATAL] MEDIASOUP_ANNOUNCED_IP is not set in production. ' +
-    'External WebRTC clients will not be able to connect. ' +
-    'Set MEDIASOUP_ANNOUNCED_IP to your server\'s public IPv4 address.',
+    '[FATAL] MEDIASOUP_ANNOUNCED_IP must be the server public IPv4 in production. ' +
+    `Got "${announced ?? ''}". Remote clients will join the room but video/audio ` +
+    'will not work. Example: MEDIASOUP_ANNOUNCED_IP=46.246.120.148',
   );
   process.exit(1);
 }

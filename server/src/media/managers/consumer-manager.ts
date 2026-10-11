@@ -165,26 +165,9 @@ export class ConsumerManager {
       });
     });
 
-    // ── Producer paused/resumed — mirror to consumer ─────────────────────────
-    consumer.on('producerpause', () => {
-      if (!consumer.closed) {
-        consumer.pause().catch((err: Error) =>
-          logger.error('Consumer.pause() failed on producerpause', {
-            consumerId: consumer.id, err: err.message,
-          }),
-        );
-      }
-    });
-
-    consumer.on('producerresume', () => {
-      if (!consumer.closed && consumer.paused) {
-        consumer.resume().catch((err: Error) =>
-          logger.error('Consumer.resume() failed on producerresume', {
-            consumerId: consumer.id, err: err.message,
-          }),
-        );
-      }
-    });
+    // Do NOT mirror producerpause → consumer.pause(). mediasoup already stops
+    // RTP when producerPaused is true; an extra consumer.pause() races with the
+    // client's resume-consumer and can leave the consumer stuck paused.
 
     // ── Score — simulcast quality indicator ──────────────────────────────────
     consumer.observer.on('score', (score: unknown) => {
@@ -250,6 +233,11 @@ export class ConsumerManager {
     ) {
       try {
         await consumer.setPreferredLayers({ spatialLayer: 2, temporalLayer: 2 });
+        try {
+          await consumer.requestKeyFrame();
+        } catch {
+          /* optional — speeds first frame after layer select */
+        }
         logger.debug('Consumer preferred layers set on resume', {
           consumerId,
           participantId,
