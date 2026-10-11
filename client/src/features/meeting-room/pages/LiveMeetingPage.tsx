@@ -5,6 +5,7 @@ import { MonitorUp } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getAccessToken } from '../../../services/auth/auth.service';
 import { meetingsService, type Meeting } from '../../../services/meetings/meetings.service';
+import { useLiveMeetingShell } from '../../dashboard/layouts/LiveMeetingShellContext';
 import { useMeeting } from '../../meeting/hooks/useMeeting';
 import { useLocalMedia } from '../../media/hooks/useLocalMedia';
 import { useReactions } from '../../collaboration/hooks/useReactions';
@@ -37,6 +38,7 @@ export function LiveMeetingPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, activeWorkspace } = useAuth();
+  const meetingShell = useLiveMeetingShell();
   const [displayName, setDisplayName] = useState(user?.name ?? '');
   const [guestEmail, setGuestEmail] = useState(() => {
     const fromQuery = searchParams.get('email')?.trim().toLowerCase() ?? '';
@@ -446,7 +448,7 @@ export function LiveMeetingPage() {
   };
 
   /** Leave only yourself — does not end the live meeting. */
-  const handleLeave = async () => {
+  const handleLeave = async (destination?: string) => {
     allowLeaveRef.current = true;
     if (isRecording) {
       try { await stopRecording(); } catch { /* ignore */ }
@@ -454,7 +456,7 @@ export function LiveMeetingPage() {
     localStream?.getTracks().forEach((t) => t.stop());
     screenStream?.getTracks().forEach((t) => t.stop());
     await leaveMeeting();
-    navigate('/app/meetings');
+    navigate(destination ?? (user ? '/app/meetings' : '/'));
   };
 
   /** Host ends live for everyone. */
@@ -484,6 +486,19 @@ export function LiveMeetingPage() {
   const cancelBlockedLeave = () => {
     setLeavePromptOpen(false);
   };
+
+  // Sidebar / shell asked to leave the live call before navigating away.
+  useEffect(() => {
+    if (!joined) return;
+    const onRequestLeave = (event: Event) => {
+      const to = (event as CustomEvent<{ to?: string }>).detail?.to;
+      void handleLeave(to);
+    };
+    window.addEventListener('samtal:request-leave-meeting', onRequestLeave);
+    return () => window.removeEventListener('samtal:request-leave-meeting', onRequestLeave);
+    // handleLeave identity changes often; listen while joined.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [joined, user]);
 
   const remoteHandlers: CommandHandlerMap = {
     OPEN_CHAT: () => {
@@ -863,8 +878,12 @@ export function LiveMeetingPage() {
             userName={effectiveName}
             avatarUrl={user?.avatarUrl}
             avatarColor={user?.avatarColor}
-            onLeave={() => void handleLeave()}
-            onOpenParticipants={() => setShowParticipants(true)}
+            onLeave={() => setLeavePromptOpen(true)}
+            onOpenAppMenu={meetingShell?.openMobileNav}
+            onOpenParticipants={() => {
+              setShowChat(false);
+              setShowParticipants(true);
+            }}
             onInviteByEmail={
               isHost
                 ? () => {
@@ -1163,7 +1182,7 @@ export function LiveMeetingPage() {
               ? (emoji) => void remoteControl.sendAction('SEND_REACTION', { reaction: emoji })
               : sendReaction
           }
-          onLeave={() => void handleLeave()}
+          onLeave={() => setLeavePromptOpen(true)}
           onEndCall={() => void handleEndMeeting()}
           userName={controllingRemote && controlledPeerName ? controlledPeerName : effectiveName}
         />
@@ -1283,7 +1302,8 @@ export function LiveMeetingPage() {
               Leave this meeting?
             </h2>
             <p className="mt-2 text-[13px] text-[#6F7B8C]">
-              You are still in the live call. Confirm to leave, or stay to continue the meeting.
+              Are you sure you want to leave the meeting? You can rejoin later with the meeting
+              link.
             </p>
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
               <button

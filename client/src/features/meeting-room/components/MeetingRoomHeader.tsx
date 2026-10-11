@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BadgeCheck, Copy, Link2, Mail, MoreHorizontal, Users } from 'lucide-react';
+import { BadgeCheck, Copy, Link2, Mail, Menu, MoreHorizontal, Users } from 'lucide-react';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
 import { guestJoinUrl } from '../../../lib/frontendUrl';
 
@@ -19,6 +19,8 @@ type Props = {
   onLeave: () => void;
   onOpenParticipants?: () => void;
   onInviteByEmail?: () => void;
+  /** Mobile: open main app sidebar (icon + text). */
+  onOpenAppMenu?: () => void;
 };
 
 function formatClock(d: Date) {
@@ -52,6 +54,7 @@ export function MeetingRoomHeader({
   onLeave,
   onOpenParticipants,
   onInviteByEmail,
+  onOpenAppMenu,
 }: Props) {
   const [now, setNow] = useState(() => Date.now());
   const [menuOpen, setMenuOpen] = useState(false);
@@ -94,6 +97,16 @@ export function MeetingRoomHeader({
 
   return (
     <div className="relative z-40 flex min-w-0 items-center justify-between gap-2 sm:gap-3">
+      {onOpenAppMenu ? (
+        <button
+          type="button"
+          onClick={onOpenAppMenu}
+          className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-[#E8ECF1] bg-white text-[#334155] hover:bg-[#F8FAFC] lg:hidden"
+          aria-label="Open menu"
+        >
+          <Menu className="size-5" strokeWidth={2.25} />
+        </button>
+      ) : null}
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
           <h1 className="truncate text-[14px] font-bold tracking-[-0.02em] text-[#121B29] sm:text-[18px] lg:text-[20px]">

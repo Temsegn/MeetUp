@@ -63,11 +63,22 @@ type Props = {
   collapsed: boolean;
   onToggle: () => void;
   onNavigate?: () => void;
-  /** When true, keep collapsed and hide the expand control (e.g. live meeting). */
+  /** When true, keep collapsed and hide the expand control (e.g. live meeting desktop rail). */
   lockCollapsed?: boolean;
+  /** Force expanded icon + text (mobile meeting drawer). */
+  forceExpanded?: boolean;
+  /** Intercept navigation (e.g. confirm leave before leaving a live meeting). */
+  onNavIntent?: (to: string) => void;
 };
 
-export function AppSidebar({ collapsed, onToggle, onNavigate, lockCollapsed }: Props) {
+export function AppSidebar({
+  collapsed: collapsedProp,
+  onToggle,
+  onNavigate,
+  lockCollapsed,
+  forceExpanded,
+  onNavIntent,
+}: Props) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { user } = useAuth();
@@ -75,7 +86,17 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, lockCollapsed }: P
     user?.platformRole === 'admin' || user?.platformRole === 'super_admin';
   const [adminOpen, setAdminOpen] = useState(pathname.startsWith('/admin'));
   const adminRef = useRef<HTMLDivElement>(null);
+  const collapsed = forceExpanded ? false : collapsedProp;
   const w = collapsed ? 'w-[76px]' : 'w-[228px]';
+
+  const goTo = (to: string) => {
+    if (onNavIntent) {
+      onNavIntent(to);
+      return;
+    }
+    navigate(to);
+    onNavigate?.();
+  };
 
   useEffect(() => {
     if (pathname.startsWith('/admin')) setAdminOpen(true);
@@ -103,10 +124,7 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, lockCollapsed }: P
       <div className="relative mb-3 flex h-[100px] w-full shrink-0 items-center justify-center">
         <button
           type="button"
-          onClick={() => {
-            navigate('/app');
-            onNavigate?.();
-          }}
+          onClick={() => goTo('/app')}
           className={cn(
             'flex h-full items-center justify-center',
             collapsed ? 'w-full' : 'min-w-0 flex-1 justify-start pr-8',
@@ -150,6 +168,43 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, lockCollapsed }: P
       >
         {APP_NAV.map((item) => {
           const Icon = ICONS[item.label] ?? LayoutDashboard;
+          const active = navItemActive(
+            pathname,
+            item,
+            'end' in item && item.end
+              ? pathname === item.to
+              : pathname === item.to || pathname.startsWith(`${item.to}/`),
+          );
+          if (onNavIntent) {
+            return (
+              <button
+                key={item.to}
+                type="button"
+                title={item.label}
+                aria-label={item.label}
+                onClick={() => goTo(item.to)}
+                className={cn(
+                  'relative flex items-center rounded-[10px] transition-colors',
+                  collapsed ? 'size-9 justify-center' : 'min-h-9 w-full gap-2 px-2.5 py-2',
+                  active
+                    ? 'bg-black/20 text-white'
+                    : 'text-white/80 hover:bg-white/10 hover:text-white',
+                )}
+              >
+                <Icon className="size-[18px] shrink-0" strokeWidth={2} />
+                {!collapsed && (
+                  <span className="min-w-0 flex-1 truncate text-left text-[14px] font-medium leading-none">
+                    {item.label}
+                  </span>
+                )}
+                {!collapsed && 'badge' in item && item.badge ? (
+                  <span className="shrink-0 rounded-full bg-[#E7000B] px-1.5 py-0.5 text-[9px] font-bold leading-none text-white">
+                    {item.badge}
+                  </span>
+                ) : null}
+              </button>
+            );
+          }
           return (
             <NavLink
               key={item.to}
@@ -230,9 +285,8 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, lockCollapsed }: P
                         key={item.to}
                         type="button"
                         onClick={() => {
-                          navigate(item.to);
                           setAdminOpen(false);
-                          onNavigate?.();
+                          goTo(item.to);
                         }}
                         className={cn(
                           'flex w-full items-center gap-2 rounded-[8px] px-2.5 py-2 text-left text-[12px] font-medium transition',
@@ -264,9 +318,8 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, lockCollapsed }: P
                       title={item.label}
                       aria-label={item.label}
                       onClick={() => {
-                        navigate(item.to);
                         setAdminOpen(false);
-                        onNavigate?.();
+                        goTo(item.to);
                       }}
                       className="flex w-full items-center gap-2 rounded-[8px] px-2.5 py-2 text-left text-[12px] font-medium text-white/90 hover:bg-white/10"
                     >
@@ -289,10 +342,7 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, lockCollapsed }: P
                 type="button"
                 title="Upgrade to Pro"
                 aria-label="Upgrade to Pro"
-                onClick={() => {
-                  navigate('/app/billing');
-                  onNavigate?.();
-                }}
+                onClick={() => goTo('/app/billing')}
                 className="flex min-h-[64px] w-full flex-1 flex-col items-center justify-center gap-0.5"
               >
                 <ArrowUpRight className="size-3 text-white" strokeWidth={2} />
@@ -315,10 +365,7 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, lockCollapsed }: P
               <p className="mt-0.5 text-center text-[8px] leading-snug text-white/70">Unlock premium.</p>
               <button
                 type="button"
-                onClick={() => {
-                  navigate('/app/billing');
-                  onNavigate?.();
-                }}
+                onClick={() => goTo('/app/billing')}
                 className="mt-1.5 flex h-6 w-full items-center justify-center gap-0.5 rounded-md bg-white text-[9px] font-semibold text-[#016BE6] hover:bg-blue-50"
               >
                 Upgrade
