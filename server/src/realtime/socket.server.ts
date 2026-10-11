@@ -10,11 +10,13 @@ import { bindMessagesIo, registerMessagesHandlers } from '../modules/messages/me
 import { logger } from '../infrastructure/logging/logger';
 import { metrics } from '../infrastructure/metrics/metrics.service';
 import { startMeetingDurationJob } from '../modules/meetings/meeting-duration.job';
+import { startMeetingReminderJob } from '../modules/meetings/meeting-reminder.job';
 
 export const setupSocketServer = (io: SocketIOServer): void => {
   bindRemoteControlIo(io);
   bindMessagesIo(io);
   startMeetingDurationJob(io);
+  startMeetingReminderJob();
 
   // ── Authentication middleware ──────────────────────────────────────────────
   io.use(socketAuthMiddleware);

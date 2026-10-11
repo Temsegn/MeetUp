@@ -20,6 +20,7 @@ import {
 import { assertCanAccessMeeting, buildMeetingVisibilityFilter, listTeammateUserIds } from './meeting-join-authz.service';
 import { emailService } from '../../auth/services/email.service';
 import { meetingInviteEmail } from '../../auth/templates/meeting-invite-email';
+import { sendMeetingStartReminderForRoom } from '../meeting-reminder.job';
 import {
   getMeetingJoinBlock,
   isMeetingJoinable,
@@ -106,6 +107,13 @@ export async function promoteDueMeetings(workspaceId?: string): Promise<void> {
       // Count duration from the scheduled start when possible.
       m.startedAt = m.startedAt ?? m.scheduledAt ?? now;
       await m.save();
+
+      void sendMeetingStartReminderForRoom(m.roomId).catch((err) => {
+        logger.warn('sendMeetingStartReminderForRoom failed', {
+          roomId: m.roomId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      });
 
       if (!m.workspaceId) continue;
       await notifyMeetingParticipants({

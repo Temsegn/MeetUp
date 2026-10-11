@@ -26,6 +26,8 @@ export interface IMeeting extends Document {
   };
   /** External guest invite emails (lowercase). */
   guestEmails: string[];
+  /** When start-time reminder emails were sent (once). */
+  startReminderSentAt?: Date | null;
   createdAt: Date;
 }
 
@@ -52,8 +54,14 @@ const meetingSchema = new Schema<IMeeting>(
       muteOnEntry: { type: Boolean, default: false },
     },
     guestEmails: { type: [String], default: [] },
+    startReminderSentAt: { type: Date, default: null },
   },
   { timestamps: true }
+);
+
+meetingSchema.index(
+  { status: 1, startReminderSentAt: 1, scheduledAt: 1 },
+  { name: 'meeting_start_reminder_sweep' },
 );
 
 meetingSchema.index({ workspaceId: 1, status: 1 });

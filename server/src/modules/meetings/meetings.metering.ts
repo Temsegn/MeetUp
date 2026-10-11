@@ -9,6 +9,7 @@ import { ForbiddenError } from '../../shared/errors/AppError';
 import { getMeetingJoinBlock } from './meeting-joinability';
 import { promoteDueMeetings } from './services/meetings-workspace.service';
 import { markParticipantJoined } from './services/meeting-participants.service';
+import { sendMeetingStartReminderForRoom } from './meeting-reminder.job';
 
 /**
  * Called when a participant joins a mediasoup room.
@@ -36,7 +37,8 @@ export async function onParticipantJoin(opts: {
 
   try {
     if (meeting) {
-      if (meeting.status !== 'live') {
+      const becameLive = meeting.status !== 'live';
+      if (becameLive) {
         meeting.status = 'live';
         meeting.startedAt = meeting.startedAt ?? new Date();
       }
@@ -44,6 +46,14 @@ export async function onParticipantJoin(opts: {
       if (!meeting.participantCount || meeting.participantCount < 1) meeting.participantCount = 1;
       if (!meeting.peakParticipants || meeting.peakParticipants < 1) meeting.peakParticipants = 1;
       await meeting.save();
+      if (becameLive) {
+        void sendMeetingStartReminderForRoom(opts.roomId).catch((err) => {
+          logger.warn('sendMeetingStartReminderForRoom failed', {
+            roomId: opts.roomId,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
     }
 
     if (!opts.workspaceId) {
