@@ -19,6 +19,8 @@ export const authRateLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
   limit: env.AUTH_RATE_LIMIT_MAX,
   standardHeaders: true,
+  // Successful refresh/guest/join must not burn the budget.
+  skipSuccessfulRequests: true,
   message: { error: 'Too many requests. Please try again later.', code: 'RATE_LIMITED' },
 });
 
@@ -26,13 +28,15 @@ export const loginRateLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
   limit: env.LOGIN_RATE_LIMIT_MAX,
   standardHeaders: true,
+  skipSuccessfulRequests: true,
   message: { error: 'Too many login attempts. Please try again later.', code: 'RATE_LIMITED' },
 });
 
 /** Light limiter for password-reset / verification-token endpoints. */
 export const tokenRequestLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
-  limit: Math.max(5, Math.min(20, env.LOGIN_RATE_LIMIT_MAX)),
+  limit: Math.max(20, Math.min(60, env.LOGIN_RATE_LIMIT_MAX)),
   standardHeaders: true,
+  skipSuccessfulRequests: true,
   message: { error: 'Too many requests. Please try again later.', code: 'RATE_LIMITED' },
 });

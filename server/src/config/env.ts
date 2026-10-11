@@ -56,11 +56,11 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   EMAIL_FROM: z.string().default('MeetSpace <no-reply@meetspace.local>'),
 
-  // Rate limiting
+  // Rate limiting (raised: ICE/reconnect storms were locking users out of join)
   RATE_LIMIT_WINDOW_MS: z.string().default('900000').transform(Number), // 15 minutes
-  RATE_LIMIT_MAX:       z.string().default('100').transform(Number),
-  AUTH_RATE_LIMIT_MAX:  z.string().default('20').transform(Number),
-  LOGIN_RATE_LIMIT_MAX: z.string().default('10').transform(Number),
+  RATE_LIMIT_MAX:       z.string().default('500').transform(Number),
+  AUTH_RATE_LIMIT_MAX:  z.string().default('200').transform(Number),
+  LOGIN_RATE_LIMIT_MAX: z.string().default('60').transform(Number),
 
   // Mediasoup
   MEDIASOUP_WORKERS:   z.string().default('0').transform((v) => {
