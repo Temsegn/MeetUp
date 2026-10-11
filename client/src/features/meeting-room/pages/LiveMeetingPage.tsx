@@ -843,9 +843,9 @@ export function LiveMeetingPage() {
       data-room-id={roomId}
       className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden overflow-x-hidden bg-[#F7F9FC]"
     >
-      {/* Band 1 — compact header */}
-      <header className="flex shrink-0 items-center gap-2 px-2 pt-2 sm:gap-3 sm:px-4 sm:pt-3 lg:px-5">
-        <div className="min-w-0 flex-1">
+      {/* Band 1 — compact header (overflow visible so invite/copy menu is not clipped) */}
+      <header className="relative z-40 flex shrink-0 items-center gap-2 overflow-visible px-2 pt-2 sm:gap-3 sm:px-4 sm:pt-3 lg:px-5">
+        <div className="relative z-40 min-w-0 flex-1 overflow-visible">
           <MeetingRoomHeader
             title={meetingTitle}
             participantCount={tiles.length}
@@ -1056,8 +1056,8 @@ export function LiveMeetingPage() {
         ) : null}
       </div>
 
-      {/* Band 3 — controls always at bottom of viewport */}
-      <div className="sticky bottom-0 z-50 shrink-0 border-t border-[#E8ECF1]/80 bg-[#F7F9FC]/95 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:px-4 sm:pt-2 lg:px-5">
+      {/* Band 3 — controls always at bottom; overflow visible so More menu can open upward */}
+      <div className="sticky bottom-0 z-50 shrink-0 overflow-visible border-t border-[#E8ECF1]/80 bg-[#F7F9FC]/95 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:px-4 sm:pt-2 lg:px-5">
         <ConferenceControlBar
           muted={
             controllingRemote ? Boolean(remoteControl.remoteUiState?.isMuted) : isMuted

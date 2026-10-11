@@ -23,12 +23,13 @@ export function MeetingVideoGrid({ tiles, onOpenParticipants }: Props) {
         'grid h-full min-h-0 min-w-0 gap-1 sm:gap-2',
         'auto-rows-fr',
         count <= 1 && 'grid-cols-1',
-        count === 2 && 'grid-cols-2',
-        count === 3 && 'grid-cols-2',
+        // Mobile: stack two people above/below; side-by-side from sm up.
+        count === 2 && 'grid-cols-1 sm:grid-cols-2',
+        count === 3 && 'grid-cols-1 sm:grid-cols-2',
         count === 4 && 'grid-cols-2',
         count === 5 && 'grid-cols-2 sm:grid-cols-3',
         count === 6 && 'grid-cols-2 sm:grid-cols-3',
-        count >= 7 && count <= 9 && 'grid-cols-3',
+        count >= 7 && count <= 9 && 'grid-cols-2 sm:grid-cols-3',
         count >= 10 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
       )}
     >
@@ -39,7 +40,7 @@ export function MeetingVideoGrid({ tiles, onOpenParticipants }: Props) {
           isScreenShare={p.isScreenShare}
           className={cn(
             'h-full min-h-0 w-full min-w-0',
-            count === 3 && index === 2 && 'col-span-2 mx-auto max-w-[50%]',
+            count === 3 && index === 2 && 'sm:col-span-2 sm:mx-auto sm:max-w-[50%]',
             count === 5 && index === 3 && 'sm:col-span-1',
             count === 5 && index === 4 && 'col-span-2 mx-auto max-w-[50%] sm:col-span-1 sm:max-w-none',
           )}

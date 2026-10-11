@@ -221,31 +221,38 @@ export function ConferenceControlBar(props: Props) {
   }
 
   return (
-    <div className="relative mx-auto flex w-full max-w-full min-w-0 items-center justify-between gap-1 rounded-2xl border border-[#E8ECF1] bg-white/95 px-1.5 py-1.5 shadow-[0_8px_30px_rgba(15,23,42,0.08)] backdrop-blur-md sm:gap-2 sm:rounded-[22px] sm:px-3 sm:py-2 lg:max-w-5xl">
-      {/* Mobile / tablet compact bar */}
-      <div className="flex min-w-0 flex-1 items-center justify-center gap-0 overflow-hidden lg:hidden">
+    <div className="relative z-[60] mx-auto flex w-full max-w-full min-w-0 items-center justify-between gap-1 overflow-visible rounded-2xl border border-[#E8ECF1] bg-white/95 px-1.5 py-1.5 shadow-[0_8px_30px_rgba(15,23,42,0.08)] backdrop-blur-md sm:gap-2 sm:rounded-[22px] sm:px-3 sm:py-2 lg:max-w-5xl">
+      {/* Mobile / tablet compact bar — overflow visible so More menu can open upward */}
+      <div className="flex min-w-0 flex-1 items-center justify-center gap-0 overflow-visible lg:hidden">
         {primaryMobile.map((item) => (
           <LabeledControl key={item.id} item={item} />
         ))}
 
-        <div className="relative shrink-0" ref={moreRef}>
+        <div className="relative z-[70] shrink-0" ref={moreRef}>
           <LabeledControl
             item={{
               id: 'more',
               label: 'More',
               icon: MoreHorizontal,
               active: moreOpen,
-              onClick: () => setMoreOpen((v) => !v),
+              onClick: () => {
+                setReactionsOpen(false);
+                setMoreOpen((v) => !v);
+              },
             }}
           />
           {moreOpen ? (
-            <div className="absolute bottom-[calc(100%+10px)] right-0 z-50 max-h-[60vh] w-[min(220px,calc(100vw-1.5rem))] overflow-y-auto overflow-x-hidden rounded-2xl border border-[#E8ECF1] bg-white py-1 shadow-xl">
+            <div
+              role="menu"
+              className="absolute bottom-[calc(100%+10px)] right-0 z-[80] max-h-[min(60vh,360px)] w-[min(240px,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-[#E8ECF1] bg-white py-1 shadow-xl"
+            >
               {moreItems.map((item) => {
                 const Icon = item.icon;
                 return (
                   <button
                     key={item.id}
                     type="button"
+                    role="menuitem"
                     disabled={item.disabled}
                     onClick={() => {
                       item.onClick?.();
@@ -256,7 +263,7 @@ export function ConferenceControlBar(props: Props) {
                       item.active && 'text-[#016BE6]',
                     )}
                   >
-                    <Icon className={cn('size-4', item.recording && 'fill-current text-[#DC2626]')} />
+                    <Icon className={cn('size-4 shrink-0', item.recording && 'fill-current text-[#DC2626]')} />
                     {item.label}
                   </button>
                 );

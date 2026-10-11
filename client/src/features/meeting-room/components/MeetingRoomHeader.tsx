@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { BadgeCheck, Mail, MoreHorizontal, Users } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { BadgeCheck, Copy, Link2, Mail, MoreHorizontal, Users } from 'lucide-react';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
 import { guestJoinUrl } from '../../../lib/frontendUrl';
 
@@ -55,11 +55,29 @@ export function MeetingRoomHeader({
 }: Props) {
   const [now, setNow] = useState(() => Date.now());
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
 
   const scheduleLabel = useMemo(() => {
     if (!scheduledAt) return null;
@@ -75,8 +93,8 @@ export function MeetingRoomHeader({
   );
 
   return (
-    <div className="flex min-w-0 items-center justify-between gap-2 overflow-x-hidden sm:gap-3">
-      <div className="min-w-0 flex-1 overflow-hidden">
+    <div className="relative z-40 flex min-w-0 items-center justify-between gap-2 sm:gap-3">
+      <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
           <h1 className="truncate text-[14px] font-bold tracking-[-0.02em] text-[#121B29] sm:text-[18px] lg:text-[20px]">
             {title}
@@ -110,74 +128,87 @@ export function MeetingRoomHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+        <button
+          type="button"
+          onClick={onOpenParticipants}
+          className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#E8ECF1] bg-white px-2.5 text-[13px] font-medium text-[#121B29] hover:bg-[#F8FAFC] sm:h-10 sm:rounded-2xl sm:px-3"
+          aria-label="Participants"
+        >
+          <Users className="size-4 text-[#334155] sm:size-[18px]" />
+          {participantCount}
+        </button>
+
+        <div className="relative z-50" ref={menuRef}>
           <button
             type="button"
-            onClick={onOpenParticipants}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#E8ECF1] bg-white px-2.5 text-[13px] font-medium text-[#121B29] hover:bg-[#F8FAFC] sm:h-10 sm:rounded-2xl sm:px-3"
-            aria-label="Participants"
+            onClick={() => setMenuOpen((v) => !v)}
+            className="inline-flex size-9 items-center justify-center rounded-xl border border-[#E8ECF1] bg-white text-[#334155] hover:bg-[#F8FAFC] sm:size-10 sm:rounded-2xl"
+            aria-label="Meeting options"
+            aria-expanded={menuOpen}
+            aria-haspopup="menu"
           >
-            <Users className="size-4 text-[#334155] sm:size-[18px]" />
-            {participantCount}
+            <MoreHorizontal className="size-4 sm:size-[18px]" />
           </button>
-
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setMenuOpen((v) => !v)}
-              className="inline-flex size-9 items-center justify-center rounded-xl border border-[#E8ECF1] bg-white text-[#334155] hover:bg-[#F8FAFC] sm:size-10 sm:rounded-2xl"
-              aria-label="More"
+          {menuOpen ? (
+            <div
+              role="menu"
+              className="absolute right-0 top-full z-[100] mt-2 min-w-[200px] rounded-xl border border-[#E0E7EE] bg-white py-1 shadow-[0_12px_32px_rgba(15,23,42,0.16)]"
             >
-              <MoreHorizontal className="size-4 sm:size-[18px]" />
-            </button>
-            {menuOpen ? (
-              <div className="absolute right-0 z-30 mt-2 min-w-[180px] overflow-hidden rounded-xl border border-[#E0E7EE] bg-white py-1 shadow-lg">
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-medium text-[#151D2B] hover:bg-[#F8FAFC]"
+                onClick={() => {
+                  void navigator.clipboard.writeText(guestJoinUrl(roomId)).then(() => {
+                    setLinkCopied(true);
+                    window.setTimeout(() => setLinkCopied(false), 1500);
+                  });
+                  setMenuOpen(false);
+                }}
+              >
+                <Link2 className="size-3.5 shrink-0 text-[#016BE6]" />
+                {linkCopied ? 'Link copied' : 'Copy link'}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-medium text-[#151D2B] hover:bg-[#F8FAFC]"
+                onClick={() => {
+                  void navigator.clipboard.writeText(roomId);
+                  setMenuOpen(false);
+                }}
+              >
+                <Copy className="size-3.5 shrink-0 text-[#667383]" />
+                Copy meeting ID
+              </button>
+              {isHost && onInviteByEmail ? (
                 <button
                   type="button"
-                  className="block w-full px-3 py-2 text-left text-[12px] font-medium text-[#151D2B] hover:bg-[#F8FAFC]"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-medium text-[#151D2B] hover:bg-[#F8FAFC]"
                   onClick={() => {
-                    void navigator.clipboard.writeText(roomId);
                     setMenuOpen(false);
+                    onInviteByEmail();
                   }}
                 >
-                  Copy meeting ID
+                  <Mail className="size-3.5 shrink-0 text-[#016BE6]" />
+                  Invite by email
                 </button>
-                <button
-                  type="button"
-                  className="block w-full px-3 py-2 text-left text-[12px] font-medium text-[#151D2B] hover:bg-[#F8FAFC]"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(guestJoinUrl(roomId));
-                    setMenuOpen(false);
-                  }}
-                >
-                  Copy invite link
-                </button>
-                {isHost && onInviteByEmail ? (
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-[#151D2B] hover:bg-[#F8FAFC]"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onInviteByEmail();
-                    }}
-                  >
-                    <Mail className="size-3.5 text-[#016BE6]" />
-                    Invite by email
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
-          <div className="relative hidden sm:block">
-            <UserAvatar
-              name={userName}
-              avatarUrl={avatarUrl}
-              avatarColor={avatarColor}
-              size="lg"
-              className="!size-10"
-            />
-            <span className="absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-white bg-[#00A45C]" />
-          </div>
+        <div className="relative hidden sm:block">
+          <UserAvatar
+            name={userName}
+            avatarUrl={avatarUrl}
+            avatarColor={avatarColor}
+            size="lg"
+            className="!size-10"
+          />
+          <span className="absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-white bg-[#00A45C]" />
+        </div>
       </div>
     </div>
   );
