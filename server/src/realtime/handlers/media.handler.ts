@@ -148,7 +148,7 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
               String(workspaceMeeting.workspaceId),
               user.userId,
             );
-            workspaceRole = (member?.role as WorkspaceRole | undefined) ?? null;
+            workspaceRole = member?.role ?? null;
           }
           await assertCanAccessMeeting({
             meeting: workspaceMeeting,

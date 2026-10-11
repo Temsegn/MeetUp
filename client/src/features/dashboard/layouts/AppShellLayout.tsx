@@ -1,24 +1,35 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { AppSidebar } from '../components/AppSidebar';
 import { cn } from '../../../lib/cn';
 import { useAppPresence } from '../../messages/hooks/useAppPresence';
+import { useAuth } from '../../../contexts/AuthContext';
 
 export function AppShellLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { pathname } = useLocation();
+  const { user } = useAuth();
   useAppPresence();
   const isLiveMeetingRoom = /^\/app\/meeting\/[^/]+$/.test(pathname);
-  const isRecordingWatch =
-    /^\/app\/recordings\/[^/]+$/.test(pathname);
+  const isRecordingWatch = /^\/app\/recordings\/[^/]+$/.test(pathname);
   const isSettingsWorkspace =
     pathname.startsWith('/app/settings') || pathname.startsWith('/app/workspace');
   const isMessages = pathname.startsWith('/app/messages');
   const lockViewport = isLiveMeetingRoom || isRecordingWatch || isSettingsWorkspace || isMessages;
-  // Live meeting is full-bleed — no sidebar on any breakpoint.
-  const sidebarCollapsed = collapsed;
+
+  // Live meeting: logged-in users keep the app nav sidebar (Dashboard, Meetings, …) collapsed.
+  // Guests use /join and never hit this layout; if no user, hide sidebar.
+  const showAppSidebar = !isLiveMeetingRoom || Boolean(user);
+  const forceCollapsedInMeeting = isLiveMeetingRoom && Boolean(user);
+  const sidebarCollapsed = forceCollapsedInMeeting ? true : collapsed;
+
+  useEffect(() => {
+    if (!forceCollapsedInMeeting) return;
+    setMobileOpen(false);
+    setCollapsed(true);
+  }, [forceCollapsedInMeeting]);
 
   return (
     <div
@@ -29,7 +40,7 @@ export function AppShellLayout() {
           : 'h-full min-h-0',
       )}
     >
-      {mobileOpen && !isLiveMeetingRoom ? (
+      {mobileOpen && showAppSidebar && !forceCollapsedInMeeting ? (
         <button
           type="button"
           className="fixed inset-0 z-40 bg-black/40 lg:hidden"
@@ -38,25 +49,35 @@ export function AppShellLayout() {
         />
       ) : null}
 
-      {!isLiveMeetingRoom ? (
-      <div
-        className={`fixed inset-y-0 left-0 z-50 transition-transform duration-200 lg:relative lg:static lg:z-20 ${
-          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        }`}
-      >
-        <AppSidebar
-          collapsed={sidebarCollapsed}
-          onToggle={() => setCollapsed((c) => !c)}
-          onNavigate={() => setMobileOpen(false)}
-        />
-      </div>
+      {showAppSidebar ? (
+        <div
+          className={cn(
+            'z-50 transition-transform duration-200',
+            forceCollapsedInMeeting
+              ? 'relative inset-auto h-full min-h-0 shrink-0 self-stretch translate-x-0'
+              : cn(
+                  'fixed inset-y-0 left-0 lg:relative lg:static lg:z-20',
+                  mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+                ),
+          )}
+        >
+          <AppSidebar
+            collapsed={sidebarCollapsed}
+            lockCollapsed={forceCollapsedInMeeting}
+            onToggle={() => {
+              if (forceCollapsedInMeeting) return;
+              setCollapsed((c) => !c);
+            }}
+            onNavigate={() => setMobileOpen(false)}
+          />
+        </div>
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <div
           className={cn(
             'flex items-center gap-2 border-b border-[#E1E7EE] bg-white/80 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur lg:hidden',
-            isLiveMeetingRoom && 'hidden',
+            (isLiveMeetingRoom || forceCollapsedInMeeting) && 'hidden',
           )}
         >
           <button

@@ -26,13 +26,13 @@ export function meetingInviteEmail(input: {
     : null;
   const company = input.companyName.trim() || 'a team';
   const subject = input.isLive
-    ? `${company} invited you to join “${input.meetingTitle}” on Samhal`
-    : `${company} invited you to “${input.meetingTitle}” on Samhal`;
+    ? `${company} invited you to join “${input.meetingTitle}” on Samtal`
+    : `${company} invited you to “${input.meetingTitle}” on Samtal`;
 
   const text = [
     `Hi,`,
     '',
-    `${company} invited you to a meeting on the Samhal platform.`,
+    `${company} invited you to a meeting on the Samtal platform.`,
     '',
     `Meeting: ${input.meetingTitle}`,
     `Host: ${input.hostName}`,
@@ -41,18 +41,18 @@ export function meetingInviteEmail(input: {
     `This invitation is for ${input.inviteeEmail}. Open the link below, enter your name, and join.`,
     joinUrl,
     '',
-    '— The Samhal team',
+    '— The Samtal team',
   ]
     .filter(Boolean)
     .join('\n');
 
   const html = `
     <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0f172a">
-      <p style="color:#64748b;font-size:12px;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.06em">Samhal</p>
+      <p style="color:#64748b;font-size:12px;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.06em">Samtal</p>
       <h2 style="margin:0 0 8px">${input.isLive ? 'Join the meeting' : "You're invited to a meeting"}</h2>
       <p style="color:#475569;font-size:15px;line-height:1.55">
         <strong>${escapeHtml(company)}</strong> invited you to a meeting on the
-        <strong>Samhal</strong> platform.
+        <strong>Samtal</strong> platform.
       </p>
       <table style="width:100%;border-collapse:collapse;margin:20px 0;background:#F8FAFC;border-radius:12px;overflow:hidden">
         <tr>
@@ -82,7 +82,7 @@ export function meetingInviteEmail(input: {
         </a>
       </p>
       <p style="color:#94a3b8;font-size:12px;margin-top:24px">Or open: ${escapeHtml(joinUrl)}</p>
-      <p style="color:#94a3b8;font-size:12px;margin-top:32px">— The Samhal team</p>
+      <p style="color:#94a3b8;font-size:12px;margin-top:32px">— The Samtal team</p>
     </div>`;
 
   return { subject, text, html };

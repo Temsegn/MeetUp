@@ -25,8 +25,8 @@ export function MembersPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastInvite, setLastInvite] = useState<CreatedInvite | null>(null);
 
-  const canManage = activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
-  const isOwner = activeWorkspace?.role === 'owner';
+  const canManage = activeWorkspace?.role === 'admin';
+  const isAdmin = canManage;
 
   const reload = useCallback(async () => {
     if (!activeWorkspace?.workspaceId) return;
@@ -289,7 +289,7 @@ export function MembersPage() {
                             Chat
                           </Link>
                         ) : null}
-                        {isOwner && member.role !== 'owner' ? (
+                        {isAdmin && !isSelf ? (
                           <select
                             value={member.role}
                             disabled={busy}
@@ -300,7 +300,7 @@ export function MembersPage() {
                             <option value="admin">Admin</option>
                           </select>
                         ) : null}
-                        {canManage && member.role !== 'owner' && !isSelf ? (
+                        {canManage && !isSelf ? (
                           <button
                             type="button"
                             disabled={busy}

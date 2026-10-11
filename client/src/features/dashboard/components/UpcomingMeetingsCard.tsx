@@ -43,7 +43,7 @@ export function UpcomingMeetingsCard() {
     if (m.status === 'ended' || m.status === 'cancelled') return false;
     if (m.createdBy === user.id) return true;
     const role = activeWorkspace?.role;
-    return role === 'owner' || role === 'admin';
+    return role === 'admin';
   };
 
   useEffect(() => {

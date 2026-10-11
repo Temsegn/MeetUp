@@ -22,7 +22,6 @@ import { MeetingPreJoinScreen } from '../components/MeetingPreJoinScreen';
 import { MeetingRoomHeader } from '../components/MeetingRoomHeader';
 import { VideoTile, type LiveParticipant } from '../components/VideoTile';
 import { ConferenceControlBar } from '../components/ConferenceControlBar';
-import { MeetingSideRail } from '../components/MeetingSideRail';
 import { MeetingVideoGrid } from '../components/MeetingVideoGrid';
 import { ParticipantsPanel } from '../components/ParticipantsPanel';
 import { MeetingChatPanel } from '../components/MeetingChatPanel';
@@ -906,12 +905,11 @@ export function LiveMeetingPage() {
         </div>
       ) : null}
 
-      {/* Band 2 — video/whiteboard + always-visible xl side rail (collapsed or expanded) */}
+      {/* Band 2 — video/whiteboard (+ chat/participants panel on xl when open) */}
       <div
         className={cn(
           'grid min-h-0 min-w-0 flex-1 gap-2 overflow-hidden overflow-x-hidden px-2 pt-1.5 sm:gap-3 sm:px-4 sm:pt-2 lg:px-5',
-          'xl:grid-cols-[minmax(0,1fr)_auto]',
-          panelOpen && 'xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]',
+          panelOpen ? 'xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]' : 'grid-cols-1',
         )}
       >
         <div className="relative min-h-0 min-w-0 overflow-hidden rounded-xl bg-[#EEF2F7] sm:rounded-2xl">
@@ -1014,70 +1012,48 @@ export function LiveMeetingPage() {
           )}
         </div>
 
-        <aside className="hidden min-h-0 min-w-0 flex-col gap-2 overflow-hidden xl:flex">
-          {!panelOpen ? (
-            <MeetingSideRail
-              participantsOpen={showParticipants}
-              chatOpen={showChat}
-              participantCount={panelPeople.length}
-              onToggleParticipants={() => {
-                setShowParticipants((open) => {
-                  const next = !open;
-                  if (next) setShowChat(false);
-                  return next;
-                });
-              }}
-              onToggleChat={() => {
-                setShowChat((open) => {
-                  const next = !open;
-                  if (next) setShowParticipants(false);
-                  return next;
-                });
-              }}
-            />
-          ) : (
-            <>
-              {showParticipants ? (
-                <div className={cn('min-h-0', showChat ? 'flex-[0.55]' : 'flex-1')}>
-                  <ParticipantsPanel
-                    participants={panelPeople}
-                    waiting={waitingList}
-                    isHostViewer={isHostViewer}
-                    remoteControlPendingId={
-                      remoteControl.outgoingStatus === 'sent'
-                        ? remoteControl.outgoingTargetId
-                        : null
-                    }
-                    onParticipantAction={(id, action) => void handleParticipantAction(id, action)}
-                    onAdmitWaiting={handleAdmitWaiting}
-                    onDenyWaiting={handleDenyWaiting}
-                    onClose={() => setShowParticipants(false)}
-                  />
-                </div>
-              ) : null}
-              {showChat ? (
-                <div className={cn('min-h-0', showParticipants ? 'flex-[0.45]' : 'flex-1')}>
-                  <MeetingChatPanel
-                    roomId={roomId}
-                    peerId={participantId}
-                    userId={effectiveUserId ?? ''}
-                    userName={effectiveName}
-                    chatDisabled={chatDisabled && !controllingRemote}
-                    actingAsName={controllingRemote ? controlledPeerName : null}
-                    onSendOverride={
-                      controllingRemote
-                        ? (text) => {
-                            void remoteControl.sendAction('SEND_CHAT', { content: text });
-                          }
-                        : undefined
-                    }
-                    onClose={() => setShowChat(false)}
-                  />
-                </div>
-              ) : null}
-            </>
-          )}
-        </aside>
+        {panelOpen ? (
+          <aside className="hidden min-h-0 min-w-0 flex-col gap-3 overflow-hidden xl:flex">
+            {showParticipants ? (
+              <div className={cn('min-h-0', showChat ? 'flex-[0.55]' : 'flex-1')}>
+                <ParticipantsPanel
+                  participants={panelPeople}
+                  waiting={waitingList}
+                  isHostViewer={isHostViewer}
+                  remoteControlPendingId={
+                    remoteControl.outgoingStatus === 'sent'
+                      ? remoteControl.outgoingTargetId
+                      : null
+                  }
+                  onParticipantAction={(id, action) => void handleParticipantAction(id, action)}
+                  onAdmitWaiting={handleAdmitWaiting}
+                  onDenyWaiting={handleDenyWaiting}
+                  onClose={() => setShowParticipants(false)}
+                />
+              </div>
+            ) : null}
+            {showChat ? (
+              <div className={cn('min-h-0', showParticipants ? 'flex-[0.45]' : 'flex-1')}>
+                <MeetingChatPanel
+                  roomId={roomId}
+                  peerId={participantId}
+                  userId={effectiveUserId ?? ''}
+                  userName={effectiveName}
+                  chatDisabled={chatDisabled && !controllingRemote}
+                  actingAsName={controllingRemote ? controlledPeerName : null}
+                  onSendOverride={
+                    controllingRemote
+                      ? (text) => {
+                          void remoteControl.sendAction('SEND_CHAT', { content: text });
+                        }
+                      : undefined
+                  }
+                  onClose={() => setShowChat(false)}
+                />
+              </div>
+            ) : null}
+          </aside>
+        ) : null}
       </div>
 
       {/* Band 3 — controls always at bottom of viewport */}

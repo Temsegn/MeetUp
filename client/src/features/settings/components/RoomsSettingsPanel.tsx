@@ -50,7 +50,7 @@ export function RoomsSettingsPanel({ onCreateRoom }: Props) {
   const { activeWorkspace } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const canManage = activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
+  const canManage = activeWorkspace?.role === 'admin';
 
   const [loading, setLoading] = useState(true);
   const [rooms, setRooms] = useState<WorkspaceRoom[]>([]);

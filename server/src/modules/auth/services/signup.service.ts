@@ -106,13 +106,22 @@ export function createSignupService(deps: AuthDeps = authRepository) {
         tokenHash: hashToken(rawToken),
         expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_SECONDS * 1000),
       });
+      const { workspaceId } = await ensureWorkspaceForUser(user);
+      const { Workspace } = await import('../../../database/models/Workspace.model');
+      const ws = await Workspace.findById(workspaceId).lean();
+      const organizationName = ws?.name ?? user.department?.trim() ?? undefined;
+
       await safeSend(
         () => emailService.send({ to: user.email, ...verificationEmail(user, rawToken) }),
         'verification email',
         user.id
       );
       await safeSend(
-        () => emailService.send({ to: user.email, ...welcomeEmail(user) }),
+        () =>
+          emailService.send({
+            to: user.email,
+            ...welcomeEmail(user, { organizationName }),
+          }),
         'welcome email',
         user.id
       );
@@ -137,8 +146,6 @@ export function createSignupService(deps: AuthDeps = authRepository) {
         ip: input.ctx?.ip,
         userAgent: input.ctx?.userAgent,
       });
-
-      await ensureWorkspaceForUser(user);
 
       return {
         user,

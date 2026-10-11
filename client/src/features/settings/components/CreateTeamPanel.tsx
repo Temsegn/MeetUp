@@ -59,7 +59,7 @@ type TeamSettings = {
 export function CreateTeamPanel({ onCancel, onCreated }: Props) {
   const { activeWorkspace } = useAuth();
   const canCreate =
-    activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
+    activeWorkspace?.role === 'admin';
 
   const [name, setName] = useState('');
   const [teamId, setTeamId] = useState('');
@@ -187,7 +187,7 @@ export function CreateTeamPanel({ onCancel, onCreated }: Props) {
     return (
       <div className={CARD}>
         <p className="text-[12px] text-[#6F7B8C]">
-          Only workspace owners and admins can create teams.
+          Only workspace admins can create teams.
         </p>
         <button
           type="button"

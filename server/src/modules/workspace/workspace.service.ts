@@ -254,9 +254,6 @@ export function createWorkspaceService() {
     ) {
       if (!hasMinRole(actor.role, 'admin')) throw new ForbiddenError('Admins only.');
       const role = input.role ?? 'member';
-      if (role === 'admin' && actor.role !== 'owner') {
-        throw new ForbiddenError('Only the owner can invite admins.');
-      }
       const name = (input.name ?? '').trim();
       const email = normalizeEmail(input.email);
       const phone = (input.phone ?? '').trim();
@@ -835,17 +832,6 @@ export function createWorkspaceService() {
 
     async setMemberStatus(
       workspaceId: string,
-      actor: { id: string; role: WorkspaceRole },
-      targetUserId: string,
-      status: 'active' | 'inactive',
-    ) {
-      if (!hasMinRole(actor.role, 'admin')) throw new ForbiddenError('Admins only.');
-      const target = await workspaceRepository.findManagedMember(workspaceId, targetUserId);
-      if (!target) throw new NotFoundError('Member');
-      if (target.role === 'owner') throw new ForbiddenError('Cannot deactivate the owner.');
-      if (target.role === 'admin' && actor.role !== 'owner') {
-        throw new ForbiddenError('Only the owner can deactivate admins.');
-      }
       if (targetUserId === actor.id) throw new ValidationError('You cannot deactivate yourself.');
       const updated = await workspaceRepository.updateMemberStatus(workspaceId, targetUserId, status);
       if (!updated) throw new NotFoundError('Member');
@@ -853,6 +839,9 @@ export function createWorkspaceService() {
     },
 
     async removeMember(workspaceId: string, actor: { id: string; role: WorkspaceRole }, targetUserId: string) {
+      if (!hasMinRole(actor.role, 'admin')) throw new ForbiddenError('Admins only.');
+      const target = await workspaceRepository.findManagedMember(workspaceId, targetUserId);
+      if (!target) throw new NotFoundError('Member');
       if (!hasMinRole(actor.role, 'admin')) throw new ForbiddenError('Admins only.');
       const target = await workspaceRepository.findManagedMember(workspaceId, targetUserId);
       if (!target) throw new NotFoundError('Member');

@@ -32,7 +32,7 @@ export function TemplatesPage() {
 
   const workspaceId = activeWorkspace?.workspaceId;
   const canManageAdmin =
-    activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
+    activeWorkspace?.role === 'admin';
 
   const load = async () => {
     if (!workspaceId) {

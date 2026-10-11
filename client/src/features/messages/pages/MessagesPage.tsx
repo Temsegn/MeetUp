@@ -474,8 +474,8 @@ export function MessagesPage() {
     peerMember?.jobTitle || peerMember?.department
       ? [peerMember.jobTitle, peerMember.department].filter(Boolean).join(' · ')
       : peerMember
-        ? peerMember.role === 'owner'
-          ? 'Workspace owner'
+        ? peerMember.role === 'admin'
+          ? 'Workspace admin'
           : peerMember.role === 'admin'
             ? 'Admin'
             : 'Member'

@@ -57,7 +57,7 @@ export function SettingsPage() {
   const [showSkeleton, setShowSkeleton] = useState(true);
   const hideSubNav = active === 'invite' || Boolean(memberMode);
   const canInvite =
-    activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
+    activeWorkspace?.role === 'admin';
 
   useEffect(() => {
     if (!sectionParam && !memberMode) {

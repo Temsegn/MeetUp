@@ -78,7 +78,7 @@ function SelectRow({
 
 export function WorkspaceSettingsPanel({ onViewAllMembers, onInviteMembers }: Props) {
   const { activeWorkspace, user, refreshWorkspaces } = useAuth();
-  const canEdit = activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
+  const canEdit = activeWorkspace?.role === 'admin';
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(true);
@@ -573,7 +573,6 @@ export function WorkspaceSettingsPanel({ onViewAllMembers, onInviteMembers }: Pr
                       className={cn(INPUT, 'h-9 w-full appearance-none pr-8 text-[12px] sm:w-[128px]')}
                     >
                       <option>All Roles</option>
-                      <option>Owner</option>
                       <option>Admin</option>
                       <option>Member</option>
                     </select>
@@ -614,7 +613,7 @@ export function WorkspaceSettingsPanel({ onViewAllMembers, onInviteMembers }: Pr
                             </div>
                             <p className="truncate text-[11px] text-[#6F7B8C]">{m.email}</p>
                           </div>
-                          {m.role === 'owner' || !canEdit ? (
+                          {!canEdit || isYou ? (
                             <span className="inline-flex h-8 shrink-0 items-center rounded-[10.13px] border border-[#E1E7EE] px-2.5 text-[11px] font-medium capitalize text-[#475569]">
                               {m.role}
                             </span>
@@ -675,7 +674,7 @@ export function WorkspaceSettingsPanel({ onViewAllMembers, onInviteMembers }: Pr
                   </div>
                   <button
                     type="button"
-                    disabled={!canEdit || activeWorkspace?.role !== 'owner'}
+                    disabled={!canEdit || activeWorkspace?.role !== 'admin'}
                     className="h-9 shrink-0 rounded-[10.13px] border border-[#E1212D] bg-white px-4 text-[12px] font-semibold text-[#E1212D] hover:bg-[#FEF2F2] disabled:opacity-50"
                   >
                     Delete Workspace

@@ -56,6 +56,16 @@ export const connectDB = async (): Promise<void> => {
         err: idxErr instanceof Error ? idxErr.message : String(idxErr),
       });
     }
+    try {
+      const { migrateOwnerRolesToAdmin } = await import(
+        '../modules/workspace/org.bootstrap'
+      );
+      await migrateOwnerRolesToAdmin();
+    } catch (migErr) {
+      logger.warn('Owner→Admin role migration skipped', {
+        err: migErr instanceof Error ? migErr.message : String(migErr),
+      });
+    }
     // _connected set via 'connected' event above
   } catch (error: any) {
     logger.error('MongoDB initial connection failed', { err: error.message });

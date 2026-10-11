@@ -6,7 +6,7 @@ export interface WorkspaceMembership {
   workspaceId: string;
   workspaceName: string;
   slug: string;
-  role: 'owner' | 'admin' | 'member';
+  role: 'admin' | 'member';
 }
 
 export interface WorkspaceSettings {
@@ -33,7 +33,7 @@ export interface WorkspaceMember {
   id: string;
   workspaceId: string;
   userId: string;
-  role: 'owner' | 'admin' | 'member';
+  role: 'admin' | 'member';
   status: string;
   name: string;
   email: string;
@@ -47,7 +47,7 @@ export interface WorkspaceMember {
 
 export interface WorkspaceDirectoryMember {
   userId: string;
-  role: 'owner' | 'admin' | 'member';
+  role: 'admin' | 'member';
   name: string;
   email: string;
   phone?: string;

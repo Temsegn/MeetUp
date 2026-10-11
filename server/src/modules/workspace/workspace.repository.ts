@@ -10,7 +10,7 @@ import type {
   WorkspaceRole,
   WorkspaceSettings,
 } from './workspace.types';
-import { DEFAULT_WORKSPACE_SETTINGS } from './workspace.types';
+import { DEFAULT_WORKSPACE_SETTINGS, normalizeWorkspaceRole } from './workspace.types';
 
 function toWorkspace(doc: {
   _id: unknown;
@@ -341,7 +341,7 @@ export const workspaceRepository = {
 
   async updateInvite(
     inviteId: string,
-    patch: { email?: string; name?: string; phone?: string; role?: Exclude<WorkspaceRole, 'owner'> },
+    patch: { email?: string; name?: string; phone?: string; role?: WorkspaceRole },
   ): Promise<InviteRecord | null> {
     const $set: Record<string, unknown> = {};
     if (patch.email !== undefined) $set.email = patch.email;

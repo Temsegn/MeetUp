@@ -3,7 +3,7 @@ import { CalendarClock, ChevronDown, Plus, Video, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotificationCenter } from '../../../contexts/NotificationCenterContext';
-import { meetingsService } from '../../../services/meetings/meetings.service';
+import { meetingsService, type Meeting } from '../../../services/meetings/meetings.service';
 import {
   workspaceService,
   type WorkspaceDirectoryMember,
@@ -30,6 +30,7 @@ export function CreateMeetingMenu() {
   const [guestEmails, setGuestEmails] = useState<string[]>([]);
   const [guestEmailDraft, setGuestEmailDraft] = useState('');
   const [agendaItems, setAgendaItems] = useState<string[]>(['']);
+  const [liveWarning, setLiveWarning] = useState<Meeting[] | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -90,6 +91,7 @@ export function CreateMeetingMenu() {
     setGuestEmails([]);
     setGuestEmailDraft('');
     setAgendaItems(['']);
+    setLiveWarning(null);
     setCreateOpen(null);
     setMenuOpen(false);
   };
@@ -115,16 +117,8 @@ export function CreateMeetingMenu() {
     setError(null);
   };
 
-  const create = async () => {
-    if (!activeWorkspace?.workspaceId) return;
-    if (!title.trim()) {
-      setError('Title is required.');
-      return;
-    }
-    if (createOpen === 'scheduled' && !scheduledAt) {
-      setError('Date and time are required.');
-      return;
-    }
+  const executeCreate = async () => {
+    if (!activeWorkspace?.workspaceId || !createOpen) return;
     const draft = guestEmailDraft.trim().toLowerCase();
     const emails = [...guestEmails];
     if (draft) {
@@ -136,6 +130,7 @@ export function CreateMeetingMenu() {
     }
     setSaving(true);
     setError(null);
+    setLiveWarning(null);
     try {
       const agenda = agendaItems.map((a) => a.trim()).filter(Boolean);
       const meeting = await meetingsService.create(activeWorkspace.workspaceId, {
@@ -171,6 +166,35 @@ export function CreateMeetingMenu() {
       setError(err instanceof Error ? err.message : 'Could not create meeting.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const create = async () => {
+    if (!activeWorkspace?.workspaceId) return;
+    if (!title.trim()) {
+      setError('Title is required.');
+      return;
+    }
+    if (createOpen === 'scheduled' && !scheduledAt) {
+      setError('Date and time are required.');
+      return;
+    }
+    setError(null);
+    try {
+      setSaving(true);
+      const { meetings: live } = await meetingsService.list(activeWorkspace.workspaceId, {
+        status: 'live',
+        limit: 10,
+      });
+      setSaving(false);
+      if (live.length > 0) {
+        setLiveWarning(live);
+        return;
+      }
+      await executeCreate();
+    } catch (err) {
+      setSaving(false);
+      setError(err instanceof Error ? err.message : 'Could not check live meetings.');
     }
   };
 
@@ -226,6 +250,61 @@ export function CreateMeetingMenu() {
               <p className="text-[11px] text-[#6F7B8C]">Choose title, date, and participants.</p>
             </div>
           </button>
+        </div>
+      ) : null}
+
+      {createOpen && liveWarning ? (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/45 p-0 sm:items-center sm:p-4">
+          <div className="w-full max-w-md rounded-t-2xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-2xl">
+            <h3 className="text-[16px] font-bold text-[#151D2B]">A meeting is already live</h3>
+            <p className="mt-2 text-[13px] leading-snug text-[#64748B]">
+              Your organization has {liveWarning.length === 1 ? 'an active meeting' : 'active meetings'}.
+              You can join it, or create another meeting anyway.
+            </p>
+            <ul className="mt-3 max-h-40 space-y-2 overflow-y-auto">
+              {liveWarning.map((m) => (
+                <li
+                  key={m.id}
+                  className="rounded-xl border border-[#E8ECF1] bg-[#F8FAFC] px-3 py-2.5"
+                >
+                  <p className="truncate text-[13px] font-semibold text-[#151D2B]">
+                    {m.title?.trim() || 'Untitled meeting'}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-[#8A94A6]">Live now</p>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setLiveWarning(null)}
+                className="rounded-lg border border-[#E1E7EE] px-3 py-2 text-[12px] font-semibold text-[#475569] hover:bg-[#F8FAFC]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const first = liveWarning[0];
+                  if (!first) return;
+                  setLiveWarning(null);
+                  reset();
+                  navigate(`/app/meeting/${first.roomId}`);
+                }}
+                className="rounded-lg border border-[#016BE6] px-3 py-2 text-[12px] font-semibold text-[#016BE6] hover:bg-[#F4F8FF]"
+              >
+                Join live
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void executeCreate()}
+                className="rounded-lg bg-[#016BE6] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#0056EF] disabled:opacity-60"
+              >
+                {saving ? 'Creating…' : 'Create anyway'}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
 

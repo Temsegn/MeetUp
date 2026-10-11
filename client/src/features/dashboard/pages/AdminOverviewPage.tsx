@@ -9,7 +9,7 @@ export function AdminOverviewPage() {
   const { activeWorkspace } = useAuth();
   const { summary, loading } = useDashboardSummary('week');
   const isStaff =
-    activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
+    activeWorkspace?.role === 'admin';
 
   const billing = summary?.billing;
   const usedPct = billing

@@ -61,7 +61,7 @@ export function AuditLogsPanel() {
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const isStaff =
-    activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
+    activeWorkspace?.role === 'admin';
 
   return (
     <SettingsCard>

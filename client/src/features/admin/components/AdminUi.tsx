@@ -116,12 +116,12 @@ export function StatusBadge({ status }: { status: string }) {
 export function RoleChip({ role }: { role: string }) {
   const r = role.toLowerCase().replace(/[\s-]+/g, '_');
   const tone =
-    r === 'super_admin' || r === 'owner'
+    r === 'super_admin'
       ? 'bg-[#EEF2FF] text-[#4338CA]'
-      : r === 'admin'
+      : r === 'admin' || r === 'owner'
         ? 'bg-[#E8F1FE] text-[#016BE6]'
         : 'bg-[#F8FAFC] text-[#475569]';
-  const label = role.replace(/_/g, ' ');
+  const label = (r === 'owner' ? 'admin' : role).replace(/_/g, ' ');
   return (
     <span className={cn('inline-flex h-6 items-center rounded-full px-2 text-[10px] font-semibold capitalize', tone)}>
       {label === 'none' ? 'Member' : label}

@@ -8,11 +8,11 @@ export function passwordResetEmail(user: UserRecord, token: string): {
   html: string;
 } {
   const url = `${env.FRONTEND_URL}/auth/reset-password?token=${encodeURIComponent(token)}`;
-  const subject = 'Reset your MeetSpace password';
+  const subject = 'Reset your Samtal password';
   const text = [
     `Hi ${user.name},`,
     '',
-    'We received a request to reset your MeetSpace password. Open the link below to choose a new one:',
+    'We received a request to reset your Samtal password. Open the link below to choose a new one:',
     '',
     url,
     '',
@@ -22,7 +22,7 @@ export function passwordResetEmail(user: UserRecord, token: string): {
   const html = `
     <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0f172a">
       <h2 style="margin-bottom:4px">Reset your password</h2>
-      <p style="color:#475569">Hi ${escapeHtml(user.name)}, we received a request to reset your MeetSpace password.</p>
+      <p style="color:#475569">Hi ${escapeHtml(user.name)}, we received a request to reset your Samtal password.</p>
       <p style="margin:24px 0">
         <a href="${url}"
            style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">

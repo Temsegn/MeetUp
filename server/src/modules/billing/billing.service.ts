@@ -244,7 +244,7 @@ export function createBillingService() {
     },
 
     async changePlan(workspaceId: string, actorRole: WorkspaceRole, planKey: PlanKey) {
-      if (actorRole !== 'owner') throw new ForbiddenError('Only the owner can change the plan.');
+      if (actorRole !== 'admin') throw new ForbiddenError('Only an admin can change the plan.');
       const plan = await Plan.findOne({ key: planKey }).lean();
       if (!plan) throw new ValidationError('Unknown plan.');
       const current = await Subscription.findOne({ workspaceId: new Types.ObjectId(workspaceId) }).lean();
@@ -316,7 +316,7 @@ export function createBillingService() {
     },
 
     async upgradePlan(workspaceId: string, actorRole: WorkspaceRole, planKey: PlanKey, cardRaw?: unknown) {
-      if (actorRole !== 'owner') throw new ForbiddenError('Only the owner can change the plan.');
+      if (actorRole !== 'admin') throw new ForbiddenError('Only an admin can change the plan.');
       const plan = await Plan.findOne({ key: planKey }).lean();
       if (!plan) throw new ValidationError('Unknown plan.');
       const current = await Subscription.findOne({ workspaceId: new Types.ObjectId(workspaceId) }).lean();

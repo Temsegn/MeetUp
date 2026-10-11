@@ -14,6 +14,7 @@ const workspaceMemberSchema = new Schema<IWorkspaceMember>(
   {
     workspaceId: { type: Schema.Types.ObjectId, ref: 'Workspace', required: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    // Legacy 'owner' may exist until migrateOwnerRolesToAdmin runs on connect.
     role: { type: String, enum: ['owner', 'admin', 'member'], required: true, default: 'member' },
     status: { type: String, enum: ['active', 'inactive', 'invited', 'removed'], required: true, default: 'active' },
   },

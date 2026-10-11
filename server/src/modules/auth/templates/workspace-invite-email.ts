@@ -7,7 +7,7 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * Combined workspace invite email (Samhal):
+ * Organization invite email (Samtal):
  * accept invitation + verify email (when needed) + temporary password in one message.
  */
 export function workspaceInviteEmail(input: {
@@ -26,7 +26,8 @@ export function workspaceInviteEmail(input: {
     : '';
   const joinUrl = `${env.FRONTEND_URL}/auth/invite?token=${encodeURIComponent(input.token)}${verifyQ}`;
   const firstName = input.inviteeName.split(' ')[0] || 'there';
-  const subject = `You're invited to ${input.workspaceName} on Samhal`;
+  const roleLabel = input.role === 'admin' ? 'Admin' : 'Member';
+  const subject = `You're invited to ${input.workspaceName} on Samtal`;
 
   const tempLines = input.temporaryPassword
     ? [
@@ -43,7 +44,7 @@ export function workspaceInviteEmail(input: {
   const text = [
     `Hi ${firstName},`,
     '',
-    `${input.inviterName} invited you to join the workspace "${input.workspaceName}" on Samhal as a ${input.role}.`,
+    `${input.inviterName} invited you to join the organization “${input.workspaceName}” on Samtal as a ${roleLabel}.`,
     '',
     `Your sign-in email: ${input.email}`,
     ...tempLines,
@@ -53,7 +54,7 @@ export function workspaceInviteEmail(input: {
     '',
     'This invitation expires in 1 hour.',
     '',
-    '— The Samhal team',
+    '— The Samtal team',
   ].join('\n');
 
   const tempHtml = input.temporaryPassword
@@ -63,12 +64,12 @@ export function workspaceInviteEmail(input: {
 
   const html = `
     <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0f172a">
-      <p style="color:#64748b;font-size:12px;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.06em">Samhal</p>
+      <p style="color:#64748b;font-size:12px;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.06em">Samtal</p>
       <h2 style="margin:0 0 8px">You're invited to ${escapeHtml(input.workspaceName)}</h2>
       <p style="color:#475569">
         Hi ${escapeHtml(firstName)}, <strong>${escapeHtml(input.inviterName)}</strong> invited you to join
-        their workspace <strong>${escapeHtml(input.workspaceName)}</strong> on Samhal as a
-        <strong>${escapeHtml(input.role)}</strong>.
+        the organization <strong>${escapeHtml(input.workspaceName)}</strong> on Samtal as a
+        <strong>${escapeHtml(roleLabel)}</strong>.
       </p>
       <p style="color:#475569">Sign-in email: <strong>${escapeHtml(input.email)}</strong></p>
       ${tempHtml}
@@ -80,7 +81,7 @@ export function workspaceInviteEmail(input: {
       </p>
       <p style="color:#94a3b8;font-size:12px;margin-top:24px">Or open: ${escapeHtml(joinUrl)}</p>
       <p style="color:#94a3b8;font-size:12px">This invitation expires in 1 hour.</p>
-      <p style="color:#94a3b8;font-size:12px;margin-top:32px">— The Samhal team</p>
+      <p style="color:#94a3b8;font-size:12px;margin-top:32px">— The Samtal team</p>
     </div>`;
 
   return { subject, text, html };

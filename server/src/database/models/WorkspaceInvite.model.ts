@@ -6,7 +6,7 @@ export interface IWorkspaceInvite extends Document {
   email: string;
   name: string;
   phone: string;
-  role: Exclude<WorkspaceRole, 'owner'>;
+  role: WorkspaceRole;
   tokenHash: string;
   invitedBy: mongoose.Types.ObjectId;
   expiresAt: Date;

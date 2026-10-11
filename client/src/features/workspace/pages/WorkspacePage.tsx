@@ -22,7 +22,7 @@ export function WorkspacePage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const canEdit = activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
+  const canEdit = activeWorkspace?.role === 'admin';
 
   useEffect(() => {
     if (!activeWorkspace?.workspaceId) {
@@ -172,7 +172,7 @@ export function WorkspacePage() {
                     {error ? <p className="text-[12px] text-[#DC2626]">{error}</p> : null}
                   </div>
                 ) : (
-                  <p className="mt-4 text-[12px] text-[#8A94A6]">Only owners and admins can edit workspace settings.</p>
+                  <p className="mt-4 text-[12px] text-[#8A94A6]">Only admins can edit workspace settings.</p>
                 )}
               </section>
 

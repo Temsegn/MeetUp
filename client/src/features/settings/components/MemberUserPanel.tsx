@@ -73,8 +73,8 @@ function ReadField({ label, value }: { label: string; value: string }) {
 
 export function MemberUserPanel({ userId, mode, onBack, onEdit, onSaved }: Props) {
   const { activeWorkspace, user: me } = useAuth();
-  const isOwner = activeWorkspace?.role === 'owner';
-  const canManage = isOwner || activeWorkspace?.role === 'admin';
+  const isAdmin = activeWorkspace?.role === 'admin';
+  const canManage = isAdmin;
   const isEdit = mode === 'edit';
 
   const [member, setMember] = useState<WorkspaceMember | null>(null);
@@ -112,7 +112,7 @@ export function MemberUserPanel({ userId, mode, onBack, onEdit, onSaved }: Props
         setPhone(found.phone ?? '');
         setDepartment(found.department ?? '');
         setJobTitle(found.jobTitle ?? '');
-        setRole(found.role === 'owner' ? 'member' : found.role);
+        setRole(found.role === 'admin' ? 'admin' : 'member');
         setStatus(found.status ?? 'active');
       })
       .catch(() => {
@@ -129,21 +129,20 @@ export function MemberUserPanel({ userId, mode, onBack, onEdit, onSaved }: Props
   const previewName = name.trim() || 'User';
   const previewEmail = email.trim() || '—';
   const previewDept = department || '—';
-  const previewRole = member?.role === 'owner' ? 'owner' : role;
+  const previewRole = role;
 
   const permissions = useMemo(
     () =>
       PERMS.map((p) => ({
         ...p,
-        allowed:
-          previewRole === 'owner' || previewRole === 'admin' ? p.admin || p.key === 'billing' : p.member,
+        allowed: previewRole === 'admin' ? p.admin || p.key === 'billing' : p.member,
       })),
     [previewRole],
   );
 
-  const canEditFields = Boolean(canManage && member && member.role !== 'owner');
+  const canEditFields = Boolean(canManage && member);
   const canEditRole = Boolean(
-    canEditFields && isOwner && member && member.userId !== me?.id,
+    canEditFields && isAdmin && member && member.userId !== me?.id,
   );
 
   const save = async () => {
@@ -390,7 +389,7 @@ export function MemberUserPanel({ userId, mode, onBack, onEdit, onSaved }: Props
                     <select
                       id="mu-role"
                       value={role}
-                      disabled={!canEditRole || busy || member.role === 'owner'}
+                      disabled={!canEditRole || busy}
                       onChange={(e) => setRole(e.target.value as 'admin' | 'member')}
                       className={cn(
                         INPUT,
@@ -398,7 +397,7 @@ export function MemberUserPanel({ userId, mode, onBack, onEdit, onSaved }: Props
                       )}
                     >
                       <option value="member">Member</option>
-                      {isOwner ? <option value="admin">Admin</option> : null}
+                      {isAdmin ? <option value="admin">Admin</option> : null}
                     </select>
                     <ChevronDown
                       size={14}

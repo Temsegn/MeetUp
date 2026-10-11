@@ -37,8 +37,7 @@ export function BillingPage() {
     | null
   >(null);
 
-  const isOwner = activeWorkspace?.role === 'owner';
-  const isAdmin = activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
+  const isAdmin = activeWorkspace?.role === 'admin';
 
   const load = async () => {
     if (!activeWorkspace?.workspaceId) {
@@ -79,7 +78,7 @@ export function BillingPage() {
   const currentPrice = plan?.monthlyPrice ?? 0;
 
   const startPlanChange = (next: PlanInfo) => {
-    if (!activeWorkspace?.workspaceId || !isOwner) return;
+    if (!activeWorkspace?.workspaceId || !isAdmin) return;
     setError(null);
     setMessage(null);
     if ((next.monthlyPrice ?? 0) > currentPrice) {
@@ -260,7 +259,7 @@ export function BillingPage() {
                     <li>{p.recordingStorageGb} GB recordings</li>
                     <li>Overage {money(p.overageRatePerMinute)} / min</li>
                   </ul>
-                  {isOwner && !active ? (
+                  {isAdmin && !active ? (
                     <button
                       type="button"
                       disabled={busy}
@@ -291,8 +290,8 @@ export function BillingPage() {
             </section>
           ) : null}
 
-          {!isOwner ? (
-            <p className="text-[12px] text-[#8A94A6]">Only the workspace owner can change the billing plan.</p>
+          {!isAdmin ? (
+            <p className="text-[12px] text-[#8A94A6]">Only a workspace admin can change the billing plan.</p>
           ) : null}
 
           <section className="rounded-xl border border-[#E8ECF1] bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">

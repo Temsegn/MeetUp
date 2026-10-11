@@ -9,7 +9,10 @@ type Props = {
   onToggleChat: () => void;
 };
 
-/** Always-visible collapsed rail on large screens; expands via parent panel. */
+/**
+ * Collapsed meeting side menu for logged-in users (mobile + desktop).
+ * Expands into panels / sheets via parent.
+ */
 export function MeetingSideRail({
   participantsOpen,
   chatOpen,
@@ -18,18 +21,23 @@ export function MeetingSideRail({
   onToggleChat,
 }: Props) {
   return (
-    <div className="flex h-full w-12 shrink-0 flex-col items-center gap-2 rounded-xl border border-[#E8ECF1] bg-white py-3 shadow-sm">
+    <div
+      className="flex h-full w-11 shrink-0 flex-col items-center gap-1.5 rounded-xl border border-[#E8ECF1] bg-white py-2 shadow-sm sm:w-12 sm:gap-2 sm:py-3"
+      role="navigation"
+      aria-label="Meeting menu"
+    >
       <button
         type="button"
         onClick={onToggleParticipants}
         className={cn(
-          'relative inline-flex size-9 items-center justify-center rounded-xl transition-colors',
+          'relative inline-flex size-8 items-center justify-center rounded-xl transition-colors sm:size-9',
           participantsOpen
             ? 'bg-[#E5F1FF] text-[#016BE6]'
             : 'text-[#475569] hover:bg-[#F1F5F9]',
         )}
         aria-label="Participants"
         title="Participants"
+        aria-pressed={participantsOpen}
       >
         <Users className="size-4" strokeWidth={2} />
         {participantCount > 0 ? (
@@ -42,11 +50,12 @@ export function MeetingSideRail({
         type="button"
         onClick={onToggleChat}
         className={cn(
-          'inline-flex size-9 items-center justify-center rounded-xl transition-colors',
+          'inline-flex size-8 items-center justify-center rounded-xl transition-colors sm:size-9',
           chatOpen ? 'bg-[#E5F1FF] text-[#016BE6]' : 'text-[#475569] hover:bg-[#F1F5F9]',
         )}
         aria-label="Chat"
         title="Chat"
+        aria-pressed={chatOpen}
       >
         <MessageSquare className="size-4" strokeWidth={2} />
       </button>

@@ -1,14 +1,19 @@
-export type WorkspaceRole = 'owner' | 'admin' | 'member';
+export type WorkspaceRole = 'admin' | 'member';
 export type MemberStatus = 'active' | 'inactive' | 'invited' | 'removed';
 
 export const ROLE_RANK: Record<WorkspaceRole, number> = {
   member: 1,
   admin: 2,
-  owner: 3,
 };
 
 export function hasMinRole(role: WorkspaceRole, min: WorkspaceRole): boolean {
   return ROLE_RANK[role] >= ROLE_RANK[min];
+}
+
+/** Normalize legacy membership roles (owner → admin). */
+export function normalizeWorkspaceRole(role: string | undefined | null): WorkspaceRole {
+  if (role === 'admin' || role === 'owner') return 'admin';
+  return 'member';
 }
 
 /** Workspace prefs — applied to new meetings + workspace UI. Meeting toggles default OFF. */
@@ -58,7 +63,7 @@ export interface InviteRecord {
   email: string;
   name: string;
   phone: string;
-  role: Exclude<WorkspaceRole, 'owner'>;
+  role: WorkspaceRole;
   tokenHash: string;
   invitedBy: string;
   expiresAt: Date;

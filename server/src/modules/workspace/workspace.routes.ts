@@ -144,7 +144,7 @@ router.post('/:id/invites/:inviteId/resend', requireWorkspace('admin'), async (r
   res.json(result);
 });
 
-router.patch('/:id/members/:userId/role', requireWorkspace('owner'), async (req: AuthRequest, res) => {
+router.patch('/:id/members/:userId/role', requireWorkspace('admin'), async (req: AuthRequest, res) => {
   const role = (req.body as { role?: 'admin' | 'member' }).role ?? 'member';
   const member = await workspaceService.changeRole(
     req.workspaceId!,

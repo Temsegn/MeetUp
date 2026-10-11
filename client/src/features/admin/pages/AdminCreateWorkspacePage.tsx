@@ -410,9 +410,9 @@ export function AdminCreateWorkspacePage() {
 
           <section className="space-y-4">
             <div>
-              <h2 className="text-[15px] font-semibold text-[#151D2B]">Organization Owner</h2>
+              <h2 className="text-[15px] font-semibold text-[#151D2B]">Organization Admin</h2>
               <p className="mt-1 text-[12px] text-[#6F7B8C]">
-                This person will be the owner and primary administrator of the organization.
+                This person will be the primary administrator of the organization.
               </p>
             </div>
 

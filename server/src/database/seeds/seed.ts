@@ -43,7 +43,7 @@ async function upsertAccount(account: (typeof ACCOUNTS)[number], passwordHash: s
             mustChangePassword: false,
             emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
             'settings.account.plan': 'Free',
-            'settings.account.role': account.platformRole === 'super_admin' ? 'Super Admin' : 'Owner',
+            'settings.account.role': account.platformRole === 'super_admin' ? 'Super Admin' : 'Admin',
           },
           $unset: { googleId: '' },
         },
@@ -63,7 +63,7 @@ async function upsertAccount(account: (typeof ACCOUNTS)[number], passwordHash: s
           account: {
             ...DEFAULT_USER_SETTINGS.account,
             plan: 'Free',
-            role: account.platformRole === 'super_admin' ? 'Super Admin' : 'Owner',
+            role: account.platformRole === 'super_admin' ? 'Super Admin' : 'Admin',
             meetingCapacity: 5,
           },
         },

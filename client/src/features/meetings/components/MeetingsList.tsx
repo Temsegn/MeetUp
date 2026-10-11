@@ -37,7 +37,7 @@ export function MeetingsList({ meetings, filterKey = '', onChanged }: Props) {
     if (!user?.id) return false;
     if (m.hostUserId && m.hostUserId === user.id) return true;
     const role = activeWorkspace?.role;
-    return role === 'owner' || role === 'admin';
+    return role === 'admin';
   };
 
   useEffect(() => {

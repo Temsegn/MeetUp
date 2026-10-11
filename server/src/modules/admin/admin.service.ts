@@ -387,7 +387,7 @@ export const adminService = {
     await WorkspaceMember.create({
       workspaceId: workspace._id,
       userId: owner._id,
-      role: 'owner',
+      role: 'admin',
       status: 'active',
     });
 

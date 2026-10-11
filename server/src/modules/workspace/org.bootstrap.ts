@@ -3,8 +3,21 @@ import { Plan, DEFAULT_PLANS } from '../../database/models/Plan.model';
 import { Workspace } from '../../database/models/Workspace.model';
 import { WorkspaceMember } from '../../database/models/WorkspaceMember.model';
 import { Subscription } from '../../database/models/Subscription.model';
-import { DEFAULT_WORKSPACE_SETTINGS } from './workspace.types';
+import { DEFAULT_WORKSPACE_SETTINGS, normalizeWorkspaceRole } from './workspace.types';
 import { logger } from '../../infrastructure/logging/logger';
+
+/** Idempotent: former Owner membership becomes Admin. */
+export async function migrateOwnerRolesToAdmin(): Promise<number> {
+  const result = await WorkspaceMember.updateMany(
+    { role: 'owner' },
+    { $set: { role: 'admin' } },
+  );
+  const n = result.modifiedCount ?? 0;
+  if (n > 0) {
+    logger.info('Migrated workspace Owner roles to Admin', { count: n });
+  }
+  return n;
+}
 
 function slugify(name: string, userId: string): string {
   const base = name
@@ -36,7 +49,10 @@ export async function ensureWorkspaceForUser(user: {
   }).lean();
 
   if (existing) {
-    return { workspaceId: String(existing.workspaceId), role: existing.role };
+    return {
+      workspaceId: String(existing.workspaceId),
+      role: normalizeWorkspaceRole(existing.role),
+    };
   }
 
   const orgName = user.department?.trim() || `${user.name}'s workspace`;
@@ -71,5 +87,5 @@ export async function ensureWorkspaceForUser(user: {
   });
 
   logger.info('Workspace bootstrapped', { userId: user.id, workspaceId: String(workspace._id) });
-  return { workspaceId: String(workspace._id), role: 'owner' };
+  return { workspaceId: String(workspace._id), role: 'admin' };
 }

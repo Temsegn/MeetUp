@@ -26,7 +26,7 @@ router.get('/usage/meetings', requireWorkspace('admin'), async (req: AuthRequest
   res.json({ meetings: data });
 });
 
-router.patch('/plan', requireWorkspace('owner'), async (req: AuthRequest, res) => {
+router.patch('/plan', requireWorkspace('admin'), async (req: AuthRequest, res) => {
   const planKey = (req.body as { planKey?: PlanKey }).planKey ?? 'free';
   const data = await billingService.changePlan(req.workspaceId!, req.workspaceRole!, planKey);
   res.json(data);

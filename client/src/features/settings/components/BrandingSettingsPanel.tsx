@@ -11,7 +11,7 @@ const INPUT =
 
 export function BrandingSettingsPanel() {
   const { activeWorkspace, refreshWorkspaces } = useAuth();
-  const canEdit = activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
+  const canEdit = activeWorkspace?.role === 'admin';
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(true);
@@ -176,7 +176,7 @@ export function BrandingSettingsPanel() {
           </button>
         </div>
       ) : (
-        <p className="mt-4 text-[12px] text-[#8A94A6]">Only owners and admins can edit branding.</p>
+        <p className="mt-4 text-[12px] text-[#8A94A6]">Only admins can edit branding.</p>
       )}
     </SettingsCard>
   );

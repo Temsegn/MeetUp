@@ -34,7 +34,7 @@ type TableRow =
       key: string;
       name: string;
       email: string;
-      role: 'owner' | 'admin' | 'member';
+      role: 'admin' | 'member';
       department: string;
       joinedOn: string;
       status: RowStatus;
@@ -107,7 +107,7 @@ export function MembersSettingsPanel({ onInviteMembers }: { onInviteMembers: () 
   const [editInvitePhone, setEditInvitePhone] = useState('');
   const [editInviteRole, setEditInviteRole] = useState<'admin' | 'member'>('member');
 
-  const canManage = activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
+  const canManage = activeWorkspace?.role === 'admin';
   const isOwner = activeWorkspace?.role === 'owner';
 
   const reload = useCallback(async () => {
@@ -426,7 +426,6 @@ export function MembersSettingsPanel({ onInviteMembers }: { onInviteMembers: () 
                 className={cn(INPUT, 'h-9 w-[120px] appearance-none px-3 pr-8 text-[12px] text-[#111A2D]')}
               >
                 <option>All Roles</option>
-                <option>Owner</option>
                 <option>Admin</option>
                 <option>Member</option>
               </select>
@@ -509,10 +508,7 @@ export function MembersSettingsPanel({ onInviteMembers }: { onInviteMembers: () 
                         </div>
                       </td>
                       <td className="px-2 py-2.5">
-                        {row.kind === 'member' &&
-                        isOwner &&
-                        row.role !== 'owner' &&
-                        !isYou ? (
+                        {row.kind === 'member' && isAdmin && !isYou ? (
                           <div className="relative inline-block max-w-full">
                             <select
                               value={row.role}
@@ -588,7 +584,7 @@ export function MembersSettingsPanel({ onInviteMembers }: { onInviteMembers: () 
                                     Message
                                   </button>
                                 ) : null}
-                                {canManage && row.role !== 'owner' && !isYou ? (
+                                {canManage && !isYou ? (
                                   <button
                                     type="button"
                                     role="menuitem"
@@ -599,7 +595,7 @@ export function MembersSettingsPanel({ onInviteMembers }: { onInviteMembers: () 
                                     Edit
                                   </button>
                                 ) : null}
-                                {canManage && row.role !== 'owner' && !isYou ? (
+                                {canManage && !isYou ? (
                                   <button
                                     type="button"
                                     role="menuitem"
@@ -619,7 +615,7 @@ export function MembersSettingsPanel({ onInviteMembers }: { onInviteMembers: () 
                                     {row.member.status === 'inactive' ? 'Activate' : 'Deactivate'}
                                   </button>
                                 ) : null}
-                                {canManage && row.role !== 'owner' && !isYou ? (
+                                {canManage && !isYou ? (
                                   <button
                                     type="button"
                                     role="menuitem"
@@ -787,12 +783,12 @@ export function MembersSettingsPanel({ onInviteMembers }: { onInviteMembers: () 
               Role
               <select
                 value={editInviteRole}
-                disabled={!isOwner || busy}
+                disabled={!isAdmin || busy}
                 onChange={(e) => setEditInviteRole(e.target.value as 'admin' | 'member')}
                 className={cn(INPUT, 'mt-1 w-full px-3')}
               >
                 <option value="member">Member</option>
-                {isOwner ? <option value="admin">Admin</option> : null}
+                {isAdmin ? <option value="admin">Admin</option> : null}
               </select>
             </label>
             <div className="flex justify-end gap-2 pt-1">

@@ -70,7 +70,7 @@ export function MeetingDetailPage() {
 
   const isHost = Boolean(meeting && user?.id && meeting.createdBy === user.id);
   const isOwnerOrAdmin =
-    activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
+    activeWorkspace?.role === 'admin';
   const isHostOrAdmin = isHost || isOwnerOrAdmin;
 
   useEffect(() => {

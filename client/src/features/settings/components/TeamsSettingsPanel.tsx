@@ -51,7 +51,7 @@ export function TeamsSettingsPanel({ onCreateTeam }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
   const canCreate =
-    activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
+    activeWorkspace?.role === 'admin';
 
   const [loading, setLoading] = useState(true);
   const [teams, setTeams] = useState<WorkspaceTeam[]>([]);

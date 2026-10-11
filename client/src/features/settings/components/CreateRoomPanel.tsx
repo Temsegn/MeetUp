@@ -62,7 +62,7 @@ type RoomSettings = {
 
 export function CreateRoomPanel({ onCancel, onCreated }: Props) {
   const { activeWorkspace } = useAuth();
-  const canManage = activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
+  const canManage = activeWorkspace?.role === 'admin';
 
   const [name, setName] = useState('');
   const [roomId, setRoomId] = useState('');

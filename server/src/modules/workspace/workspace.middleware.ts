@@ -4,7 +4,7 @@ import { AuthRequest } from '../auth/auth.types';
 import { workspaceRepository } from './workspace.repository';
 import { ensureWorkspaceForUser } from './org.bootstrap';
 import type { WorkspaceRole } from './workspace.types';
-import { hasMinRole } from './workspace.types';
+import { hasMinRole, normalizeWorkspaceRole } from './workspace.types';
 
 export function requireWorkspace(minRole: WorkspaceRole = 'member') {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {

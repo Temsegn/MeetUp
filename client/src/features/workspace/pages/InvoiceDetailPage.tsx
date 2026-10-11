@@ -21,7 +21,7 @@ export function InvoiceDetailPage() {
   const [paying, setPaying] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
 
-  const canPay = activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
+  const canPay = activeWorkspace?.role === 'admin';
 
   useEffect(() => {
     if (!activeWorkspace?.workspaceId || !invoiceId) return;

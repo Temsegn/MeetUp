@@ -63,9 +63,11 @@ type Props = {
   collapsed: boolean;
   onToggle: () => void;
   onNavigate?: () => void;
+  /** When true, keep collapsed and hide the expand control (e.g. live meeting). */
+  lockCollapsed?: boolean;
 };
 
-export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
+export function AppSidebar({ collapsed, onToggle, onNavigate, lockCollapsed }: Props) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { user } = useAuth();
@@ -91,9 +93,10 @@ export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
   return (
     <aside
       className={cn(
-        'relative flex h-full shrink-0 flex-col bg-[#016BE6] text-white transition-[width] duration-200',
+        'relative flex h-full min-h-0 shrink-0 flex-col bg-[#016BE6] text-white transition-[width] duration-200',
         w,
         collapsed ? 'items-center px-1 pb-2 pt-1.5' : 'px-3 pb-2 pt-1.5',
+        lockCollapsed && 'pointer-events-auto',
       )}
     >
       {/* Same header height + vertical centering so the logo stays mid-aligned when collapsing */}
@@ -121,20 +124,22 @@ export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
           )}
         </button>
 
-        <button
-          type="button"
-          onClick={onToggle}
-          className={cn(
-            'absolute top-1/2 z-10 hidden size-6 -translate-y-1/2 items-center justify-center rounded-full border-[1.5px] border-white bg-[#016BE6] text-white transition-colors hover:bg-white/15 lg:flex',
-            collapsed ? 'right-0 translate-x-1/2' : 'right-0',
-          )}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          <ChevronLeft
-            className={cn('size-3.5', collapsed && 'rotate-180')}
-            strokeWidth={2.25}
-          />
-        </button>
+        {!lockCollapsed ? (
+          <button
+            type="button"
+            onClick={onToggle}
+            className={cn(
+              'absolute top-1/2 z-10 hidden size-6 -translate-y-1/2 items-center justify-center rounded-full border-[1.5px] border-white bg-[#016BE6] text-white transition-colors hover:bg-white/15 lg:flex',
+              collapsed ? 'right-0 translate-x-1/2' : 'right-0',
+            )}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <ChevronLeft
+              className={cn('size-3.5', collapsed && 'rotate-180')}
+              strokeWidth={2.25}
+            />
+          </button>
+        ) : null}
       </div>
 
       <nav
@@ -151,6 +156,8 @@ export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
               to={item.to}
               end={'end' in item ? item.end : false}
               onClick={() => onNavigate?.()}
+              title={item.label}
+              aria-label={item.label}
               className={({ isActive }) =>
                 cn(
                   'relative flex items-center rounded-[10px] transition-colors',
@@ -181,6 +188,7 @@ export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
             <button
               type="button"
               title="Platform Admin"
+              aria-label="Platform Admin"
               aria-expanded={adminOpen}
               onClick={() => setAdminOpen((o) => !o)}
               className={cn(
@@ -253,6 +261,8 @@ export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
                     <button
                       key={item.to}
                       type="button"
+                      title={item.label}
+                      aria-label={item.label}
                       onClick={() => {
                         navigate(item.to);
                         setAdminOpen(false);
@@ -271,50 +281,53 @@ export function AppSidebar({ collapsed, onToggle, onNavigate }: Props) {
         ) : null}
       </nav>
 
-      <div className="mt-auto flex w-full justify-center pb-1 pt-3">
-        {collapsed ? (
-          <div className="mx-auto flex min-h-[72px] w-full max-w-[60px] flex-col overflow-hidden rounded-lg bg-white/15 px-1 py-1.5 text-center">
-            <button
-              type="button"
-              title="Upgrade to Pro"
-              onClick={() => {
-                navigate('/app/billing');
-                onNavigate?.();
-              }}
-              className="flex min-h-[64px] w-full flex-1 flex-col items-center justify-center gap-0.5"
-            >
-              <ArrowUpRight className="size-3 text-white" strokeWidth={2} />
-              <span className="text-[8px] font-semibold leading-tight text-white">Pro</span>
-              <span className="mt-0.5 flex h-5 w-full items-center justify-center rounded bg-white text-[7px] font-bold text-[#016BE6]">
-                Up
-              </span>
-            </button>
-          </div>
-        ) : (
-          <div className="mx-auto flex w-[88%] flex-col overflow-hidden rounded-lg bg-white/15 px-2 py-1.5">
-            <div className="mb-1 flex h-9 w-full items-center justify-center overflow-hidden rounded-md">
-              <img
-                src="/upgrade-pro-people.png"
-                alt=""
-                className="h-full w-full object-cover object-center mix-blend-screen"
-              />
+      {!lockCollapsed ? (
+        <div className="mt-auto flex w-full justify-center pb-1 pt-3">
+          {collapsed ? (
+            <div className="mx-auto flex min-h-[72px] w-full max-w-[60px] flex-col overflow-hidden rounded-lg bg-white/15 px-1 py-1.5 text-center">
+              <button
+                type="button"
+                title="Upgrade to Pro"
+                aria-label="Upgrade to Pro"
+                onClick={() => {
+                  navigate('/app/billing');
+                  onNavigate?.();
+                }}
+                className="flex min-h-[64px] w-full flex-1 flex-col items-center justify-center gap-0.5"
+              >
+                <ArrowUpRight className="size-3 text-white" strokeWidth={2} />
+                <span className="text-[8px] font-semibold leading-tight text-white">Pro</span>
+                <span className="mt-0.5 flex h-5 w-full items-center justify-center rounded bg-white text-[7px] font-bold text-[#016BE6]">
+                  Up
+                </span>
+              </button>
             </div>
-            <p className="text-center text-[10px] font-semibold text-white">Upgrade to Pro</p>
-            <p className="mt-0.5 text-center text-[8px] leading-snug text-white/70">Unlock premium.</p>
-            <button
-              type="button"
-              onClick={() => {
-                navigate('/app/billing');
-                onNavigate?.();
-              }}
-              className="mt-1.5 flex h-6 w-full items-center justify-center gap-0.5 rounded-md bg-white text-[9px] font-semibold text-[#016BE6] hover:bg-blue-50"
-            >
-              Upgrade
-              <ArrowUpRight className="size-2.5" />
-            </button>
-          </div>
-        )}
-      </div>
+          ) : (
+            <div className="mx-auto flex w-[88%] flex-col overflow-hidden rounded-lg bg-white/15 px-2 py-1.5">
+              <div className="mb-1 flex h-9 w-full items-center justify-center overflow-hidden rounded-md">
+                <img
+                  src="/upgrade-pro-people.png"
+                  alt=""
+                  className="h-full w-full object-cover object-center mix-blend-screen"
+                />
+              </div>
+              <p className="text-center text-[10px] font-semibold text-white">Upgrade to Pro</p>
+              <p className="mt-0.5 text-center text-[8px] leading-snug text-white/70">Unlock premium.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  navigate('/app/billing');
+                  onNavigate?.();
+                }}
+                className="mt-1.5 flex h-6 w-full items-center justify-center gap-0.5 rounded-md bg-white text-[9px] font-semibold text-[#016BE6] hover:bg-blue-50"
+              >
+                Upgrade
+                <ArrowUpRight className="size-2.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      ) : null}
     </aside>
   );
 }

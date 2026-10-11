@@ -68,8 +68,8 @@ const PERMS: { key: string; label: string; member: boolean; admin: boolean }[] =
 
 export function InviteMemberPanel({ onCancel, onCreated }: Props) {
   const { activeWorkspace } = useAuth();
-  const isOwner = activeWorkspace?.role === 'owner';
-  const canManage = isOwner || activeWorkspace?.role === 'admin';
+  const isAdmin = activeWorkspace?.role === 'admin';
+  const canManage = isAdmin;
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
