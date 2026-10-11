@@ -93,21 +93,31 @@ export class MediaSession {
           if (res?.error) return reject(new Error(res.error));
 
           const params = res.params;
-          // Prefer TURN when configured, but do NOT force relay-only.
-          // relay-only makes meetings fail entirely when coturn/TLS is flaky;
-          // 'all' still uses TURN when available and falls back to direct UDP
-          // via MEDIASOUP_ANNOUNCED_IP (ports 40000-40199).
+          const iceServers = Array.isArray(params.iceServers) ? params.iceServers : [];
+          // When TURN is configured, force relay. Direct UDP to mediasoup inside
+          // Docker NAT often "connects" signaling but never delivers RTP — blank
+          // tiles / no audio. Coturn on :3478 is the reliable path on this deploy.
+          const hasTurn = iceServers.some((s: { urls?: string | string[] }) => {
+            const urls = Array.isArray(s.urls) ? s.urls : s.urls ? [s.urls] : [];
+            return urls.some((u) => /^turns?:/i.test(String(u)));
+          });
+          const iceTransportPolicy: RTCIceTransportPolicy = hasTurn ? 'relay' : 'all';
+          console.log(
+            `[MediaSession] ${direction} ICE policy=${iceTransportPolicy} servers=${iceServers.length}`,
+            iceServers.map((s: { urls?: string | string[] }) => s.urls),
+          );
+
           const transport =
             direction === 'send'
               ? this.device.createSendTransport({
                   ...params,
-                  iceServers: params.iceServers,
-                  iceTransportPolicy: 'all',
+                  iceServers,
+                  iceTransportPolicy,
                 })
               : this.device.createRecvTransport({
                   ...params,
-                  iceServers: params.iceServers,
-                  iceTransportPolicy: 'all',
+                  iceServers,
+                  iceTransportPolicy,
                 });
 
           transport.on('connect', ({ dtlsParameters }, callback, errback) => {

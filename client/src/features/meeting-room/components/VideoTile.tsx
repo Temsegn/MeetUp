@@ -31,40 +31,29 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoTrackId =
     participant.stream?.getVideoTracks().map((t) => t.id).join(',') ?? '';
-  // Prefer real track state over stale isCameraOff flags. Remote tracks stay
-  // muted until the first RTP packet — once unmuted, always show the video.
+  // Remote tracks stay muted until the first RTP packet. Only treat video as
+  // "live" once unmuted — otherwise we mount an empty <video> (blank grey tile).
   const hasLiveVideo = Boolean(
     participant.stream &&
+      participant.isCameraOff !== true &&
       participant.stream.getVideoTracks().some(
         (t) => t.readyState !== 'ended' && !t.muted,
       ),
   );
-  const hasVideoTrack = Boolean(
-    participant.stream &&
-      participant.stream.getVideoTracks().some((t) => t.readyState !== 'ended'),
-  );
-  // Bind as soon as a track exists so the element is ready when RTP unmutes.
-  const shouldBindVideo = hasVideoTrack && participant.isCameraOff !== true;
-
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    if (shouldBindVideo && participant.stream) {
+    if (hasLiveVideo && participant.stream) {
       el.srcObject = participant.stream;
       const tryPlay = () => {
         void el.play().catch(() => {});
       };
       tryPlay();
       el.addEventListener('loadedmetadata', tryPlay);
-      const onUnmute = () => tryPlay();
-      participant.stream.getVideoTracks().forEach((t) => t.addEventListener('unmute', onUnmute));
-      return () => {
-        el.removeEventListener('loadedmetadata', tryPlay);
-        participant.stream?.getVideoTracks().forEach((t) => t.removeEventListener('unmute', onUnmute));
-      };
+      return () => el.removeEventListener('loadedmetadata', tryPlay);
     }
     el.srcObject = null;
-  }, [participant.stream, participant.isCameraOff, videoTrackId, shouldBindVideo]);
+  }, [participant.stream, participant.isCameraOff, videoTrackId, hasLiveVideo]);
 
   useEffect(() => {
     const el = audioRef.current;
@@ -78,9 +67,7 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
     }
   }, [participant.audioStream, participant.stream, participant.isYou]);
 
-  // Keep the <video> mounted when a track is bound so unmute can paint.
-  // Show avatar only when there is truly nothing to display yet.
-  const showVideo = shouldBindVideo && (hasLiveVideo || hasVideoTrack);
+  const showVideo = hasLiveVideo;
 
   return (
     <div

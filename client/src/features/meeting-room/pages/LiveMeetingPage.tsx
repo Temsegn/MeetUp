@@ -608,14 +608,11 @@ export function LiveMeetingPage() {
       const cameraHasVideo = Boolean(
         remote?.camera?.getVideoTracks().some((t) => t.readyState !== 'ended'),
       );
-      // Prefer live tracks over stale join-time flags. Explicit pause
-      // (isCameraOff === true) still hides the camera when there is no
-      // screen share; once tracks arrive with isCameraOff cleared/undefined, show them.
+      // Only hide when the peer explicitly paused camera. Missing tracks mean
+      // "still loading / no RTP yet", not camera-off.
       const resolvedCameraOff = showingScreen
         ? false
-        : cameraHasVideo
-          ? p.isCameraOff === true
-          : p.isCameraOff !== false;
+        : p.isCameraOff === true;
       return {
         id: p.id,
         name: p.name,
