@@ -1,6 +1,6 @@
 import { Check } from 'lucide-react';
 import { cn } from '../../../lib/cn';
-import { LP_BODY, LP_EYEBROW, LP_GHOST, LP_H2, LP_PRIMARY } from '../landing-ui';
+import { LandingBlueWash, LP_BODY, LP_EYEBROW, LP_GHOST, LP_H2, LP_PRIMARY } from '../landing-ui';
 import { useLandingCopy } from '../useLandingCopy';
 import { AppEntryLink, AuthLink } from './LandingLinks';
 
@@ -12,8 +12,9 @@ export function PricingTeaser({ user }: Props) {
   const copy = useLandingCopy();
 
   return (
-    <section id="pricing" className="scroll-mt-24 bg-[#F7F9FC] py-20 sm:py-28">
-      <div className="mx-auto max-w-7xl px-5 sm:px-8">
+    <section id="pricing" className="relative scroll-mt-24 overflow-hidden bg-[#F3F8FF] py-20 sm:py-28">
+      <LandingBlueWash variant="light" />
+      <div className="relative mx-auto max-w-7xl px-5 sm:px-8">
         <div className="max-w-2xl">
           <p className={LP_EYEBROW}>{copy.pricing.eyebrow}</p>
           <h2 className={`mt-3 ${LP_H2}`}>{copy.pricing.title}</h2>

@@ -1,11 +1,27 @@
 import { useState } from 'react';
-import { Calendar, Check, Film, MessageSquare, MonitorUp, MousePointer2, Pencil, Video } from 'lucide-react';
+import {
+  Calendar,
+  Check,
+  Film,
+  MessageSquare,
+  MonitorUp,
+  MousePointer2,
+  Pencil,
+  Video,
+} from 'lucide-react';
 import { cn } from '../../../lib/cn';
 import { PRODUCT_MODULES } from '../constants/landing.constants';
-import { LP_BODY, LP_CARD, LP_EYEBROW, LP_H2, LP_SECTION } from '../landing-ui';
+import {
+  LandingBlueWash,
+  LP_BODY,
+  LP_CARD,
+  LP_EYEBROW,
+  LP_H2,
+  LP_ICON,
+  LP_SECTION_SOFT,
+  LP_SECTION_WHITE,
+} from '../landing-ui';
 import { useLandingCopy } from '../useLandingCopy';
-import { MeetingRoomPreview } from './MeetingRoomPreview';
-import { ProductAppPreview } from './ProductAppPreview';
 
 const MODULE_ICONS = {
   meetings: Video,
@@ -19,10 +35,11 @@ export function ProductModuleStrip() {
   const [active, setActive] = useState(0);
   const module = PRODUCT_MODULES[active];
   const content = copy.product.modules[module.id];
+  const ActiveIcon = MODULE_ICONS[module.id];
 
   return (
-    <section id="product" className={`${LP_SECTION} bg-white`}>
-      <div className="mx-auto max-w-7xl px-5 sm:px-8">
+    <section id="product" className={LP_SECTION_WHITE}>
+      <div className="relative mx-auto max-w-7xl px-5 sm:px-8">
         <div className="max-w-2xl">
           <p className={LP_EYEBROW}>{copy.product.eyebrow}</p>
           <h2 className={`mt-3 ${LP_H2}`}>{copy.product.title}</h2>
@@ -51,8 +68,8 @@ export function ProductModuleStrip() {
           })}
         </div>
 
-        <div className="mt-10 grid min-w-0 items-center gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-14">
-          <div>
+        <div className="mt-10 grid min-w-0 items-stretch gap-6 lg:grid-cols-2 lg:gap-8">
+          <div className={`${LP_CARD} p-6 sm:p-8`}>
             <p className={LP_EYEBROW}>{content.label}</p>
             <h3 className="lp-display mt-2 text-[22px] font-semibold tracking-tight text-[#0F172A] sm:text-[24px]">
               {content.title}
@@ -68,7 +85,20 @@ export function ProductModuleStrip() {
             </ul>
           </div>
 
-          <ProductAppPreview active={module.preview} alt={content.title} />
+          <div className="relative overflow-hidden rounded-2xl border border-[#CFE3FF] bg-[#F3F8FF] p-8 sm:p-10">
+            <LandingBlueWash variant="light" />
+            <div className="relative flex h-full min-h-[220px] flex-col items-center justify-center text-center">
+              <span className={`${LP_ICON} size-16`}>
+                <ActiveIcon className="size-7" strokeWidth={1.75} />
+              </span>
+              <p className="lp-display mt-5 text-[20px] font-semibold text-[#0F172A]">
+                {content.label}
+              </p>
+              <p className="mt-2 max-w-xs text-[14px] leading-relaxed text-[#5B677A]">
+                {content.points[0]}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -81,30 +111,28 @@ export function CollaborationSection() {
   const copy = useLandingCopy();
 
   return (
-    <section className={`${LP_SECTION} bg-[#F7F9FC]`}>
-      <div className="mx-auto max-w-7xl px-5 sm:px-8">
+    <section className={LP_SECTION_SOFT}>
+      <LandingBlueWash variant="light" />
+      <div className="relative mx-auto max-w-7xl px-5 sm:px-8">
         <div className="max-w-2xl">
           <p className={LP_EYEBROW}>{copy.collaboration.eyebrow}</p>
           <h2 className={`mt-3 ${LP_H2}`}>{copy.collaboration.title}</h2>
           <p className={`mt-4 ${LP_BODY}`}>{copy.collaboration.body}</p>
         </div>
-        <div className="mt-12 grid items-start gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-12">
-          <MeetingRoomPreview />
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            {copy.collaboration.items.map((item, i) => {
-              const Icon = COLLAB_ICONS[i] ?? Video;
-              return (
-                <li key={item.title} className={`${LP_CARD} p-5`}>
-                  <span className="inline-flex size-9 items-center justify-center rounded-xl bg-[#EAF2FF] text-[#016BE6]">
-                    <Icon className="size-4" strokeWidth={2} />
-                  </span>
-                  <h3 className="mt-3 text-[15px] font-semibold text-[#0F172A]">{item.title}</h3>
-                  <p className="mt-2 text-[13px] leading-relaxed text-[#5B677A]">{item.body}</p>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+        <ul className="mt-12 grid gap-4 sm:grid-cols-2">
+          {copy.collaboration.items.map((item, i) => {
+            const Icon = COLLAB_ICONS[i] ?? Video;
+            return (
+              <li key={item.title} className={`${LP_CARD} p-6`}>
+                <span className={LP_ICON}>
+                  <Icon className="size-5" strokeWidth={2} />
+                </span>
+                <h3 className="mt-4 text-[16px] font-semibold text-[#0F172A]">{item.title}</h3>
+                <p className="mt-2 text-[14px] leading-relaxed text-[#5B677A]">{item.body}</p>
+              </li>
+            );
+          })}
+        </ul>
       </div>
     </section>
   );

@@ -111,10 +111,10 @@ function MarketingLayoutInner() {
         lang={locale}
         className={cn(
           'samtal-light flex h-full min-h-0 flex-col font-sans text-[#151D2B] antialiased',
-          isAuth ? 'bg-white' : 'bg-[#F7F9FC]',
+          isAuth ? 'bg-white' : 'bg-[#F3F8FF]',
         )}
       >
-        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-white antialiased">
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F3F8FF] antialiased">
           {/* Login / auth screens are full-bleed — no marketing nav */}
           {isAuth ? null : <LandingNav user={user} />}
           <div
