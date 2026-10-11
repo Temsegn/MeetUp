@@ -19,8 +19,10 @@ Edit `/etc/turnserver.conf`:
 listening-port=3478
 tls-listening-port=5349
 
-# Your server's public IP
-external-ip=46.246.120.148
+# Public IP. If the host NIC is private (e.g. 10.1.1.77) behind 1:1 NAT, use:
+#   external-ip=PUBLIC_IP/PRIVATE_IP
+# Example: external-ip=46.246.120.148/10.1.1.77
+external-ip=46.246.120.148/10.1.1.77
 
 # Use fingerprint and long-term credentials
 fingerprint

@@ -94,14 +94,10 @@ export class MediaSession {
 
           const params = res.params;
           const iceServers = Array.isArray(params.iceServers) ? params.iceServers : [];
-          // When TURN is configured, force relay. Direct UDP to mediasoup inside
-          // Docker NAT often "connects" signaling but never delivers RTP — blank
-          // tiles / no audio. Coturn on :3478 is the reliable path on this deploy.
-          const hasTurn = iceServers.some((s: { urls?: string | string[] }) => {
-            const urls = Array.isArray(s.urls) ? s.urls : s.urls ? [s.urls] : [];
-            return urls.some((u) => /^turns?:/i.test(String(u)));
-          });
-          const iceTransportPolicy: RTCIceTransportPolicy = hasTurn ? 'relay' : 'all';
+          // Prefer 'all': host/srflx to mediasoup UDP + TURN when needed.
+          // Forced 'relay' with a misconfigured coturn (missing external-ip behind
+          // NAT like 10.1.1.77) causes permanent ICE failure + restart storms.
+          const iceTransportPolicy: RTCIceTransportPolicy = 'all';
           console.log(
             `[MediaSession] ${direction} ICE policy=${iceTransportPolicy} servers=${iceServers.length}`,
             iceServers.map((s: { urls?: string | string[] }) => s.urls),
@@ -154,29 +150,56 @@ export class MediaSession {
             });
           }
 
+          // Cap ICE restarts — failed+restart every ~1s floods the server and never recovers.
+          let iceRestarts = 0;
+          let iceRestartInFlight = false;
+          let lastIceRestartAt = 0;
+          const MAX_ICE_RESTARTS = 3;
+          const ICE_RESTART_COOLDOWN_MS = 8_000;
+
           transport.on('connectionstatechange', (state) => {
             console.log(`[MediaSession] ${direction} transport state: ${state}`);
-            if (state === 'failed' || state === 'disconnected') {
-              console.warn(
-                `[MediaSession] ${direction} transport ${state} — ICE/TURN may be broken ` +
-                  '(check MEDIASOUP_ANNOUNCED_IP is the public IP, not 127.0.0.1)',
-              );
+            if (state === 'connected' || state === 'completed') {
+              iceRestarts = 0;
+              return;
             }
-            if (state === 'failed') {
-              this.socket.emit(
-                'restart-ice',
-                { roomId: this.roomId, transportId: transport.id },
-                (res: any) => {
-                  if (res?.error) {
-                    console.error('[MediaSession] ICE restart failed', res.error);
-                    return;
-                  }
-                  transport.restartIce({ iceParameters: res.iceParameters }).catch((err) => {
-                    console.error('[MediaSession] restartIce failed', err);
-                  });
-                },
-              );
+            if (state !== 'failed') return;
+
+            const now = Date.now();
+            if (
+              iceRestartInFlight ||
+              iceRestarts >= MAX_ICE_RESTARTS ||
+              now - lastIceRestartAt < ICE_RESTART_COOLDOWN_MS
+            ) {
+              if (iceRestarts >= MAX_ICE_RESTARTS) {
+                console.error(
+                  `[MediaSession] ${direction} ICE failed after ${MAX_ICE_RESTARTS} restarts — ` +
+                    'check coturn external-ip (public/private) and UDP 40000-40199',
+                );
+              }
+              return;
             }
+
+            iceRestartInFlight = true;
+            iceRestarts += 1;
+            lastIceRestartAt = now;
+            console.warn(
+              `[MediaSession] ${direction} transport failed — ICE restart ${iceRestarts}/${MAX_ICE_RESTARTS}`,
+            );
+            this.socket.emit(
+              'restart-ice',
+              { roomId: this.roomId, transportId: transport.id },
+              (res: any) => {
+                iceRestartInFlight = false;
+                if (res?.error) {
+                  console.error('[MediaSession] ICE restart failed', res.error);
+                  return;
+                }
+                transport.restartIce({ iceParameters: res.iceParameters }).catch((err) => {
+                  console.error('[MediaSession] restartIce failed', err);
+                });
+              },
+            );
           });
 
           resolve(transport);
