@@ -24,8 +24,6 @@ import { VideoTile, type LiveParticipant } from '../components/VideoTile';
 import { ConferenceControlBar } from '../components/ConferenceControlBar';
 import { ParticipantsPanel } from '../components/ParticipantsPanel';
 import { MeetingChatPanel } from '../components/MeetingChatPanel';
-import { MeetingAgendaCard } from '../components/MeetingAgendaCard';
-import { MeetingSharedScreenCard } from '../components/MeetingSharedScreenCard';
 import { useMeetingModeration, emitHostModerate } from '../hooks/useMeetingModeration';
 import type { ParticipantModerationAction } from '../components/ParticipantRowMenu';
 
@@ -840,15 +838,20 @@ export function LiveMeetingPage() {
   }
 
   return (
-    <div ref={stageRef} data-room-id={roomId} className="relative flex h-full min-h-0 flex-col overflow-hidden">
+    <div
+      ref={stageRef}
+      data-room-id={roomId}
+      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[#F7F9FC]"
+    >
       <div
         className={cn(
-          'grid min-h-0 flex-1 gap-3 overflow-hidden p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:gap-4 sm:p-5 lg:p-[26px]',
-          panelOpen ? 'xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]' : 'grid-cols-1',
+          'grid min-h-0 flex-1 gap-2 overflow-hidden px-2 pt-2 pb-2 sm:gap-3 sm:px-4 sm:pt-3 lg:px-5 lg:pt-4',
+          'pb-[max(0.5rem,env(safe-area-inset-bottom))]',
+          panelOpen ? 'xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]' : 'grid-cols-1',
         )}
       >
-        <div className="flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden sm:gap-4">
-          <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="flex min-h-0 min-w-0 flex-col gap-2 overflow-hidden sm:gap-3">
+          <div className="flex shrink-0 flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <MeetingRoomHeader
                 title={meetingTitle}
@@ -893,7 +896,7 @@ export function LiveMeetingPage() {
             ) : null}
           </div>
 
-          <div className="relative min-h-[180px] flex-1 overflow-hidden sm:min-h-[320px]">
+          <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl bg-[#EEF2F7] sm:rounded-[22px]">
             {whiteboardOpen && socket ? (
               <WhiteboardStage
                 socket={socket}
@@ -908,10 +911,10 @@ export function LiveMeetingPage() {
               />
             ) : (
               <>
-            <div className="flex h-full flex-col overflow-hidden">
+            <div className="flex h-full min-h-0 flex-col overflow-hidden p-1.5 sm:p-2.5">
               {stageNameLabel ? (
-                <div className="mb-2 flex items-center gap-2">
-                  <p className="truncate text-[13px] font-semibold text-[#121B29]">
+                <div className="mb-1.5 flex shrink-0 items-center gap-2 px-0.5 sm:mb-2">
+                  <p className="truncate text-[12px] font-semibold text-[#121B29] sm:text-[13px]">
                     {stageNameLabel}
                   </p>
                   {controllingRemote ? (
@@ -922,7 +925,7 @@ export function LiveMeetingPage() {
                 </div>
               ) : null}
               {focusTileId ? (
-              <div className="flex min-h-0 flex-1 flex-col gap-3">
+              <div className="flex min-h-0 flex-1 flex-col gap-2 sm:gap-2.5">
                 {(() => {
                   const focusTile = labeledTiles.find((t) => t.id === focusTileId);
                   const others = labeledTiles.filter((t) => t.id !== focusTileId);
@@ -932,10 +935,10 @@ export function LiveMeetingPage() {
                       <VideoTile
                         participant={focusTile}
                         isScreenShare={focusTile.isScreenShare || Boolean(screenSharerId === focusTileId)}
-                        className="min-h-[200px] flex-1"
+                        className="min-h-0 flex-1"
                       />
                       {others.length > 0 ? (
-                        <div className="flex shrink-0 gap-2.5 overflow-x-auto pb-1">
+                        <div className="flex shrink-0 gap-2 overflow-x-auto pb-0.5 scrollbar-none">
                           {others.map((p) => (
                             <button
                               key={p.id}
@@ -955,7 +958,7 @@ export function LiveMeetingPage() {
                               <VideoTile
                                 participant={p}
                                 isScreenShare={p.isScreenShare}
-                                className="h-28 w-40 sm:h-28 sm:w-44"
+                                className="h-24 w-36 sm:h-28 sm:w-44"
                               />
                             </button>
                           ))}
@@ -968,11 +971,13 @@ export function LiveMeetingPage() {
             ) : (
               <div
                 className={cn(
-                  'grid h-full gap-2 sm:gap-[18px]',
+                  'grid h-full min-h-0 gap-1.5 sm:gap-2.5',
                   labeledTiles.length <= 1 && 'grid-cols-1',
-                  labeledTiles.length === 2 && 'grid-cols-1 sm:grid-cols-2',
-                  labeledTiles.length >= 3 && labeledTiles.length <= 4 && 'grid-cols-1 sm:grid-cols-2 sm:grid-rows-2',
-                  labeledTiles.length > 4 && 'grid-cols-2 md:grid-cols-3',
+                  labeledTiles.length === 2 && 'grid-cols-2',
+                  labeledTiles.length === 3 && 'grid-cols-2 sm:grid-cols-3',
+                  labeledTiles.length === 4 && 'grid-cols-2',
+                  labeledTiles.length > 4 && 'grid-cols-2 lg:grid-cols-3',
+                  'auto-rows-fr',
                 )}
               >
                 {labeledTiles.map((p) => (
@@ -980,7 +985,7 @@ export function LiveMeetingPage() {
                     key={p.id}
                     participant={p}
                     isScreenShare={p.isScreenShare}
-                    className="min-h-[140px] h-full w-full sm:min-h-[180px]"
+                    className="min-h-0 h-full w-full"
                   />
                 ))}
               </div>
@@ -999,6 +1004,7 @@ export function LiveMeetingPage() {
             )}
           </div>
 
+          <div className="shrink-0 px-0.5 pt-1 sm:px-1">
           <ConferenceControlBar
             muted={
               controllingRemote
@@ -1110,19 +1116,6 @@ export function LiveMeetingPage() {
             onEndCall={() => void handleEndMeeting()}
             userName={controllingRemote && controlledPeerName ? controlledPeerName : effectiveName}
           />
-
-          <div className="hidden shrink-0 gap-[18px] pb-1 md:grid lg:grid-cols-[minmax(0,0.4fr)_minmax(0,0.6fr)]">
-            <MeetingAgendaCard items={meetingMeta?.agenda ?? []} />
-            <MeetingSharedScreenCard
-              sharing={Boolean(screenSharerId)}
-              sharerName={
-                screenSharerId
-                  ? screenSharerId === participantId
-                    ? 'Me'
-                    : tiles.find((t) => t.id === screenSharerId)?.name ?? null
-                  : null
-              }
-            />
           </div>
         </div>
 

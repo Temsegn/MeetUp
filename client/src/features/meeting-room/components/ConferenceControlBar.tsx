@@ -64,13 +64,13 @@ function LabeledControl({ item }: { item: ControlItem }) {
       type="button"
       onClick={item.onClick}
       disabled={item.disabled}
-      className="flex w-11 shrink-0 flex-col items-center gap-1 py-1 disabled:opacity-40 sm:w-[72px] sm:gap-1.5 md:w-[84px]"
+      className="flex w-12 shrink-0 flex-col items-center gap-0.5 py-0.5 disabled:opacity-40 sm:w-16 sm:gap-1"
       aria-label={item.label}
       title={item.label}
     >
       <span
         className={cn(
-          'inline-flex size-10 items-center justify-center rounded-full transition-colors sm:size-11 md:size-[49px]',
+          'inline-flex size-10 items-center justify-center rounded-full transition-colors sm:size-11',
           item.active
             ? item.danger || item.recording
               ? 'bg-[#FEE2E2] text-[#DC2626]'
@@ -79,11 +79,11 @@ function LabeledControl({ item }: { item: ControlItem }) {
         )}
       >
         <Icon
-          className={cn('size-5 sm:size-[22px]', item.recording && 'fill-current')}
+          className={cn('size-[18px] sm:size-5', item.recording && 'fill-current')}
           strokeWidth={2}
         />
       </span>
-      <span className="hidden max-w-full truncate text-[11px] tracking-[0.02em] text-[#667383] sm:block sm:text-[12px]">
+      <span className="hidden max-w-full truncate text-[10px] tracking-[0.02em] text-[#667383] sm:block sm:text-[11px]">
         {item.label}
       </span>
     </button>
@@ -105,6 +105,7 @@ export function ConferenceControlBar(props: Props) {
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
+  // Always-visible essentials; secondary actions go under More (cleaner on mobile).
   const primary: ControlItem[] = [
     {
       id: 'mute',
@@ -123,26 +124,12 @@ export function ConferenceControlBar(props: Props) {
       onClick: props.onToggleCamera,
     },
     {
-      id: 'hand',
-      label: 'Raise Hand',
-      icon: Hand,
-      active: props.handRaised,
-      onClick: props.onToggleHand,
-    },
-    {
       id: 'share',
       label: 'Screen',
       icon: MonitorUp,
       active: props.sharing,
       disabled: !props.sharing && props.shareDisabled,
       onClick: props.onToggleShare,
-    },
-    {
-      id: 'people',
-      label: 'Participants',
-      icon: Users,
-      active: props.participantsOpen,
-      onClick: props.onToggleParticipants,
     },
     {
       id: 'chat',
@@ -154,6 +141,20 @@ export function ConferenceControlBar(props: Props) {
   ];
 
   const moreItems: ControlItem[] = [
+    {
+      id: 'people',
+      label: 'Participants',
+      icon: Users,
+      active: props.participantsOpen,
+      onClick: props.onToggleParticipants,
+    },
+    {
+      id: 'hand',
+      label: 'Raise Hand',
+      icon: Hand,
+      active: props.handRaised,
+      onClick: props.onToggleHand,
+    },
     {
       id: 'whiteboard',
       label: 'Whiteboard',
@@ -182,10 +183,9 @@ export function ConferenceControlBar(props: Props) {
     });
   }
 
-
   return (
-    <div className="mx-auto flex w-full max-w-[830px] items-center justify-between gap-1 overflow-x-auto scrollbar-none rounded-[18px] border border-[#E0E7EE] bg-white p-2 shadow-[0_1px_2px_rgba(55,72,99,0.04)] sm:gap-3 sm:overflow-visible sm:rounded-[22px] sm:p-3.5">
-      <div className="flex min-w-0 flex-1 items-center justify-start gap-0.5 sm:flex-wrap sm:justify-center md:justify-start">
+    <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-2 rounded-2xl border border-[#E8ECF1] bg-white/95 px-2 py-2 shadow-[0_8px_30px_rgba(15,23,42,0.08)] backdrop-blur-md sm:gap-3 sm:rounded-[22px] sm:px-3 sm:py-2.5">
+      <div className="flex min-w-0 flex-1 items-center justify-center gap-0.5 sm:gap-1">
         {primary.map((item) => (
           <LabeledControl key={item.id} item={item} />
         ))}
@@ -201,7 +201,7 @@ export function ConferenceControlBar(props: Props) {
             }}
           />
           {moreOpen ? (
-            <div className="absolute bottom-[calc(100%+8px)] right-0 z-50 min-w-[190px] overflow-hidden rounded-xl border border-[#E8ECF1] bg-white py-1 shadow-lg">
+            <div className="absolute bottom-[calc(100%+10px)] right-0 z-50 min-w-[200px] overflow-hidden rounded-2xl border border-[#E8ECF1] bg-white py-1 shadow-xl">
               {moreItems.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -214,7 +214,7 @@ export function ConferenceControlBar(props: Props) {
                       if (item.id !== 'reactions') setMoreOpen(false);
                     }}
                     className={cn(
-                      'flex w-full items-center gap-2 px-3 py-2.5 text-left text-[12px] font-medium text-[#151D2B] hover:bg-[#F8FAFC] disabled:opacity-40',
+                      'flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-medium text-[#151D2B] hover:bg-[#F8FAFC] disabled:opacity-40',
                       item.active && 'text-[#016BE6]',
                     )}
                   >
@@ -228,7 +228,7 @@ export function ConferenceControlBar(props: Props) {
           {reactionsOpen ? (
             <div
               ref={reactionsRef}
-              className="absolute bottom-[calc(100%+8px)] left-1/2 z-50 -translate-x-1/2 rounded-xl border border-[#E8ECF1] bg-white p-2 shadow-lg"
+              className="absolute bottom-[calc(100%+10px)] left-1/2 z-50 -translate-x-1/2 rounded-2xl border border-[#E8ECF1] bg-white p-2.5 shadow-xl"
             >
               <p className="mb-1.5 px-1 text-center text-[10px] font-medium text-[#6F7B8C]">
                 Send as {props.userName ?? 'You'}
@@ -243,7 +243,7 @@ export function ConferenceControlBar(props: Props) {
                       setReactionsOpen(false);
                       setMoreOpen(false);
                     }}
-                    className="flex size-9 items-center justify-center rounded-lg text-lg hover:bg-[#F8FAFC]"
+                    className="flex size-10 items-center justify-center rounded-xl text-lg hover:bg-[#F8FAFC]"
                   >
                     {emoji}
                   </button>
@@ -254,30 +254,28 @@ export function ConferenceControlBar(props: Props) {
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        {/* Leave button — always visible for everyone */}
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         <button
           type="button"
           onClick={props.onLeave}
-          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-[16px] border border-[#E0E7EE] bg-white px-3 text-[13px] font-semibold text-[#334155] hover:bg-[#F8FAFC] sm:h-12 sm:rounded-[18px] sm:px-5 sm:text-[14px] md:h-[52px] md:px-6"
+          className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-[#E8ECF1] bg-white px-2.5 text-[12px] font-semibold text-[#334155] hover:bg-[#F8FAFC] sm:h-11 sm:rounded-2xl sm:px-4 sm:text-[13px]"
           aria-label="Leave meeting"
           title="Leave meeting"
         >
-          <PhoneOff className="size-[18px]" strokeWidth={2} />
+          <PhoneOff className="size-4 sm:size-[18px]" strokeWidth={2} />
           <span className="hidden sm:inline">Leave</span>
         </button>
 
-        {/* End Call — host only */}
         {props.canEndMeeting ? (
           <button
             type="button"
             onClick={props.onEndCall}
-            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-[16px] bg-[#DF1E39] px-3 text-[13px] font-semibold text-white hover:bg-[#C91830] sm:h-12 sm:rounded-[18px] sm:px-6 sm:text-[14px] md:h-[52px] md:px-7"
+            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-[#DF1E39] px-2.5 text-[12px] font-semibold text-white hover:bg-[#C91830] sm:h-11 sm:rounded-2xl sm:px-4 sm:text-[13px]"
             aria-label="End meeting for everyone"
             title="End meeting for everyone"
           >
-            <PhoneOff className="size-[18px]" strokeWidth={2} />
-            <span className="hidden sm:inline">End Call</span>
+            <PhoneOff className="size-4 sm:size-[18px]" strokeWidth={2} />
+            <span className="hidden sm:inline">End</span>
           </button>
         ) : null}
       </div>

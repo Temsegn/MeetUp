@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BadgeCheck, ChevronDown, LogOut, Mail, MoreHorizontal, Users } from 'lucide-react';
+import { BadgeCheck, Mail, MoreHorizontal, Users } from 'lucide-react';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
 import { guestJoinUrl } from '../../../lib/frontendUrl';
 
@@ -75,13 +75,13 @@ export function MeetingRoomHeader({
   );
 
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="flex items-center justify-between gap-2 sm:gap-3">
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h1 className="truncate text-[17px] font-bold tracking-[-0.02em] text-[#121B29] sm:text-[24px] lg:text-[27px]">
+        <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+          <h1 className="truncate text-[15px] font-bold tracking-[-0.02em] text-[#121B29] sm:text-[20px] lg:text-[22px]">
             {title}
           </h1>
-          <BadgeCheck className="size-5 shrink-0 text-[#076BEE]" aria-hidden />
+          <BadgeCheck className="hidden size-4 shrink-0 text-[#076BEE] sm:block sm:size-5" aria-hidden />
           {isHost ? (
             <span className="shrink-0 rounded-md bg-[#E8F1FF] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#016BE6]">
               Host
@@ -89,19 +89,19 @@ export function MeetingRoomHeader({
           ) : null}
           {isHost && recording ? (
             <span
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[#FECACA] bg-[#FEF2F2] px-2 py-0.5 text-[11px] font-bold tracking-wide text-[#DC2626]"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[#FECACA] bg-[#FEF2F2] px-2 py-0.5 text-[10px] font-bold tracking-wide text-[#DC2626] sm:text-[11px]"
               aria-live="polite"
             >
-              <span className="relative flex size-2.5">
+              <span className="relative flex size-2">
                 <span className="absolute inline-flex size-full animate-ping rounded-full bg-[#EF4444] opacity-75" />
-                <span className="relative inline-flex size-2.5 rounded-full bg-[#DC2626]" />
+                <span className="relative inline-flex size-2 rounded-full bg-[#DC2626]" />
               </span>
               REC {formatElapsed(recordingElapsedMs)}
             </span>
           ) : null}
         </div>
-        <p className="mt-1 text-[14px] tracking-[-0.01em] text-[#667383] sm:text-[15px]">
-          {scheduleLabel ? <span>{scheduleLabel} • </span> : <span className="font-mono text-[13px]">{roomId} • </span>}
+        <p className="mt-0.5 truncate text-[12px] tracking-[-0.01em] text-[#667383] sm:text-[13px]">
+          {scheduleLabel ? <span>{scheduleLabel} • </span> : null}
           <span className="font-semibold text-[#076BEE]">{liveElapsed}</span>
           {durationMinutes ? (
             <span className="text-[#94A3B8]"> / {durationMinutes} min</span>
@@ -109,15 +109,14 @@ export function MeetingRoomHeader({
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 sm:gap-5">
-        <div className="flex items-center gap-2.5 sm:gap-3">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={onOpenParticipants}
-            className="inline-flex h-11 items-center gap-2 rounded-[18px] border border-[#E0E7EE] bg-white px-3.5 text-[14px] font-medium text-[#121B29] hover:bg-[#F8FAFC]"
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#E8ECF1] bg-white px-2.5 text-[13px] font-medium text-[#121B29] hover:bg-[#F8FAFC] sm:h-10 sm:rounded-2xl sm:px-3"
             aria-label="Participants"
           >
-            <Users className="size-[18px] text-[#334155]" />
+            <Users className="size-4 text-[#334155] sm:size-[18px]" />
             {participantCount}
           </button>
 
@@ -125,10 +124,10 @@ export function MeetingRoomHeader({
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className="inline-flex size-11 items-center justify-center rounded-[18px] border border-[#E0E7EE] bg-white text-[#334155] hover:bg-[#F8FAFC]"
+              className="inline-flex size-9 items-center justify-center rounded-xl border border-[#E8ECF1] bg-white text-[#334155] hover:bg-[#F8FAFC] sm:size-10 sm:rounded-2xl"
               aria-label="More"
             >
-              <MoreHorizontal className="size-[18px]" />
+              <MoreHorizontal className="size-4 sm:size-[18px]" />
             </button>
             {menuOpen ? (
               <div className="absolute right-0 z-30 mt-2 min-w-[180px] overflow-hidden rounded-xl border border-[#E0E7EE] bg-white py-1 shadow-lg">
@@ -169,30 +168,16 @@ export function MeetingRoomHeader({
             ) : null}
           </div>
 
-          <button
-            type="button"
-            onClick={onLeave}
-            className="hidden h-11 items-center gap-2 rounded-[18px] bg-[#DC6C7C] px-4 text-[14px] font-semibold text-white hover:bg-[#D15A6C] sm:inline-flex"
-            aria-label="Leave meeting"
-          >
-            <LogOut className="size-[18px]" />
-            Leave
-          </button>
-        </div>
-
-        <div className="hidden items-center gap-2 pl-1 sm:flex">
-          <div className="relative">
+          <div className="relative hidden sm:block">
             <UserAvatar
               name={userName}
               avatarUrl={avatarUrl}
               avatarColor={avatarColor}
               size="lg"
-              className="!size-[44px] sm:!size-[49px]"
+              className="!size-10"
             />
-            <span className="absolute bottom-0.5 right-0.5 size-3 rounded-full border-2 border-white bg-[#00A45C]" />
+            <span className="absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-white bg-[#00A45C]" />
           </div>
-          <ChevronDown className="hidden size-[18px] text-[#94A3B8] sm:block" aria-hidden />
-        </div>
       </div>
     </div>
   );

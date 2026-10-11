@@ -76,8 +76,8 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
       data-meeting-local={participant.isYou ? '1' : '0'}
       data-meeting-screen={isScreenShare ? '1' : '0'}
       className={cn(
-        'relative overflow-hidden rounded-[22px] bg-[#F0F5FA]',
-        participant.isSpeaking && 'shadow-[0_0_0_2px_white,0_0_0_4px_#076BEE]',
+        'relative min-h-0 overflow-hidden rounded-2xl bg-[#E8EEF5] sm:rounded-[22px]',
+        participant.isSpeaking && 'ring-2 ring-[#076BEE] ring-offset-2 ring-offset-[#EEF2F7]',
         className,
       )}
     >
@@ -90,7 +90,7 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
           className={cn('h-full w-full', isScreenShare ? 'object-contain bg-black' : 'object-cover')}
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#E8EEF5] to-[#F0F5FA]">
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#E2E8F0] to-[#F1F5F9]">
           <UserAvatar
             name={participant.name}
             avatarUrl={participant.avatarUrl}
@@ -101,7 +101,7 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
       )}
       {!participant.isYou ? <audio ref={audioRef} autoPlay playsInline /> : null}
       {participant.isSpeaking ? (
-        <div className="absolute right-3 top-3 inline-flex size-10 items-center justify-center rounded-full bg-[#076BEE] text-white">
+        <div className="absolute right-2 top-2 inline-flex size-8 items-center justify-center rounded-full bg-[#076BEE] text-white sm:right-3 sm:top-3 sm:size-10">
           <span className="flex items-end gap-0.5">
             <span className="h-2 w-0.5 animate-pulse rounded-full bg-white" />
             <span className="h-3.5 w-0.5 animate-pulse rounded-full bg-white [animation-delay:120ms]" />
@@ -109,10 +109,10 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
           </span>
         </div>
       ) : null}
-      <div className="absolute bottom-3 left-3 inline-flex max-w-[80%] items-center gap-1.5 rounded-[13px] bg-[rgba(18,27,41,0.7)] px-2.5 py-1.5">
-        {participant.isMuted ? <MicOff className="size-3.5 shrink-0 text-white/90" /> : null}
-        {participant.isHandRaised ? <Hand className="size-3.5 shrink-0 text-amber-300" /> : null}
-        <p className="truncate text-[12px] font-medium text-white sm:text-[13px]">
+      <div className="absolute bottom-2 left-2 inline-flex max-w-[85%] items-center gap-1.5 rounded-xl bg-[rgba(18,27,41,0.72)] px-2 py-1 backdrop-blur-sm sm:bottom-3 sm:left-3 sm:rounded-[13px] sm:px-2.5 sm:py-1.5">
+        {participant.isMuted ? <MicOff className="size-3 shrink-0 text-white/90 sm:size-3.5" /> : null}
+        {participant.isHandRaised ? <Hand className="size-3 shrink-0 text-amber-300 sm:size-3.5" /> : null}
+        <p className="truncate text-[11px] font-medium text-white sm:text-[13px]">
           {participant.labelOverride ?? (participant.isYou ? 'Me' : participant.name)}
         </p>
       </div>

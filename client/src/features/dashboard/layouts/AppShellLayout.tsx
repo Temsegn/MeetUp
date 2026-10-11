@@ -17,12 +17,17 @@ export function AppShellLayout() {
     pathname.startsWith('/app/settings') || pathname.startsWith('/app/workspace');
   const isMessages = pathname.startsWith('/app/messages');
   const lockViewport = isLiveMeetingRoom || isRecordingWatch || isSettingsWorkspace || isMessages;
-  // Live / waiting stay inside the app shell with a collapsed sidebar (Figma meeting shell).
-  const sidebarCollapsed = isLiveMeetingRoom ? true : collapsed;
+  // Live meeting is full-bleed — no sidebar on any breakpoint.
+  const sidebarCollapsed = collapsed;
 
   return (
-    <div className="samtal-light flex h-full min-h-0 w-full overflow-hidden bg-white">
-      {mobileOpen ? (
+    <div
+      className={cn(
+        'samtal-light flex w-full overflow-hidden bg-white',
+        isLiveMeetingRoom ? 'h-[100svh] h-[100dvh]' : 'h-full min-h-0',
+      )}
+    >
+      {mobileOpen && !isLiveMeetingRoom ? (
         <button
           type="button"
           className="fixed inset-0 z-40 bg-black/40 lg:hidden"
@@ -31,20 +36,19 @@ export function AppShellLayout() {
         />
       ) : null}
 
+      {!isLiveMeetingRoom ? (
       <div
         className={`fixed inset-y-0 left-0 z-50 transition-transform duration-200 lg:relative lg:static lg:z-20 ${
-          isLiveMeetingRoom ? 'hidden lg:block' : ''
-        } ${mobileOpen && !isLiveMeetingRoom ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        }`}
       >
         <AppSidebar
           collapsed={sidebarCollapsed}
-          onToggle={() => {
-            if (isLiveMeetingRoom) return;
-            setCollapsed((c) => !c);
-          }}
+          onToggle={() => setCollapsed((c) => !c)}
           onNavigate={() => setMobileOpen(false)}
         />
       </div>
+      ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <div
