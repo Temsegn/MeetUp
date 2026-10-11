@@ -29,7 +29,7 @@ export function ProductModuleStrip() {
           <p className={`mt-4 ${LP_BODY}`}>{copy.product.body}</p>
         </div>
 
-        <div className="mt-8 flex w-fit max-w-full flex-wrap gap-1.5">
+        <div className="mt-9 flex w-fit max-w-full flex-wrap gap-2">
           {PRODUCT_MODULES.map((m, i) => {
             const Icon = MODULE_ICONS[m.id];
             return (
@@ -38,10 +38,10 @@ export function ProductModuleStrip() {
                 type="button"
                 onClick={() => setActive(i)}
                 className={cn(
-                  'inline-flex h-8 items-center gap-1.5 rounded-xl border px-3.5 text-[12px] font-semibold transition-colors',
+                  'inline-flex h-9 items-center gap-2 rounded-xl border px-3.5 text-[13px] font-semibold transition-colors',
                   active === i
                     ? 'border-[#016BE6] bg-[#016BE6] text-white'
-                    : 'border-[#E1E7EE] bg-white text-[#6F7B8C] hover:border-[#CBD5E1] hover:text-[#334155]',
+                    : 'border-[#E6EBF2] bg-white text-[#5B677A] hover:border-[#CBD5E1] hover:text-[#243044]',
                 )}
               >
                 <Icon className="size-3.5" strokeWidth={2} />
@@ -51,14 +51,16 @@ export function ProductModuleStrip() {
           })}
         </div>
 
-        <div className="mt-8 grid min-w-0 items-center gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+        <div className="mt-10 grid min-w-0 items-center gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-14">
           <div>
             <p className={LP_EYEBROW}>{content.label}</p>
-            <h3 className="mt-2 text-[22px] font-bold tracking-tight text-[#151D2B]">{content.title}</h3>
-            <p className="mt-3 text-[14px] leading-relaxed text-[#6F7B8C]">{content.body}</p>
-            <ul className="mt-6 space-y-3">
+            <h3 className="lp-display mt-2 text-[22px] font-semibold tracking-tight text-[#0F172A] sm:text-[24px]">
+              {content.title}
+            </h3>
+            <p className="mt-3 text-[15px] leading-relaxed text-[#5B677A]">{content.body}</p>
+            <ul className="mt-7 space-y-3.5">
               {content.points.map((item) => (
-                <li key={item} className="flex items-start gap-2.5 text-[14px] text-[#151D2B]">
+                <li key={item} className="flex items-start gap-2.5 text-[14px] text-[#0F172A]">
                   <Check className="mt-0.5 size-4 shrink-0 text-[#016BE6]" strokeWidth={2.25} />
                   {item}
                 </li>
@@ -79,25 +81,25 @@ export function CollaborationSection() {
   const copy = useLandingCopy();
 
   return (
-    <section className={`${LP_SECTION} bg-[#F5F7FA]`}>
+    <section className={`${LP_SECTION} bg-[#F7F9FC]`}>
       <div className="mx-auto max-w-7xl px-5 sm:px-8">
         <div className="max-w-2xl">
           <p className={LP_EYEBROW}>{copy.collaboration.eyebrow}</p>
           <h2 className={`mt-3 ${LP_H2}`}>{copy.collaboration.title}</h2>
           <p className={`mt-4 ${LP_BODY}`}>{copy.collaboration.body}</p>
         </div>
-        <div className="mt-10 grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+        <div className="mt-12 grid items-start gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-12">
           <MeetingRoomPreview />
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
             {copy.collaboration.items.map((item, i) => {
               const Icon = COLLAB_ICONS[i] ?? Video;
               return (
                 <li key={item.title} className={`${LP_CARD} p-5`}>
-                  <span className="inline-flex size-8 items-center justify-center rounded-full bg-[#E8F1FE] text-[#016BE6]">
+                  <span className="inline-flex size-9 items-center justify-center rounded-xl bg-[#EAF2FF] text-[#016BE6]">
                     <Icon className="size-4" strokeWidth={2} />
                   </span>
-                  <h3 className="mt-3 text-[15px] font-semibold text-[#151D2B]">{item.title}</h3>
-                  <p className="mt-2 text-[13px] leading-relaxed text-[#6F7B8C]">{item.body}</p>
+                  <h3 className="mt-3 text-[15px] font-semibold text-[#0F172A]">{item.title}</h3>
+                  <p className="mt-2 text-[13px] leading-relaxed text-[#5B677A]">{item.body}</p>
                 </li>
               );
             })}

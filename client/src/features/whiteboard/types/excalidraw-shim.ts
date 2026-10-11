@@ -9,7 +9,27 @@ export type ExcalidrawImperativeAPI = {
     appState?: Record<string, unknown>;
   }) => void;
   getSceneElementsIncludingDeleted: () => readonly unknown[];
+  getAppState?: () => {
+    scrollX: number;
+    scrollY: number;
+    width: number;
+    height: number;
+    zoom: { value: number };
+  };
+  scrollToContent?: (
+    target?: unknown,
+    opts?: {
+      fitToContent?: boolean;
+      fitToViewport?: boolean;
+      animate?: boolean;
+      duration?: number;
+      minZoom?: number;
+      maxZoom?: number;
+      viewportZoomFactor?: number;
+    },
+  ) => void;
   addFiles: (files: unknown[]) => void;
+  refresh?: () => void;
 };
 
 export type AppState = Record<string, unknown>;

@@ -2,6 +2,7 @@
 
 @theme {
   --font-sans: "Plus Jakarta Sans", "Noto Sans Arabic", "Inter", system-ui, sans-serif;
+  --font-display: "Sora", "Plus Jakarta Sans", "Noto Sans Arabic", system-ui, sans-serif;
   --font-meeting: "Inter", system-ui, sans-serif;
 
   --color-brand: #016be6;
@@ -141,3 +142,24 @@ body {
     font-size: 16px !important;
   }
 }
+
+/* Marketing landing — calm entrance motion */
+@keyframes lp-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes lp-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes lp-stage {
+  from { opacity: 0; transform: translateY(28px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.lp-rise { animation: lp-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.lp-rise-delay-1 { animation-delay: 0.08s; }
+.lp-rise-delay-2 { animation-delay: 0.16s; }
+.lp-rise-delay-3 { animation-delay: 0.24s; }
+.lp-fade { animation: lp-fade 0.9s ease both; }
+.lp-stage { animation: lp-stage 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both; }
+.lp-display { font-family: var(--font-display); }

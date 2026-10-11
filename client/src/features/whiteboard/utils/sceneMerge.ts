@@ -70,6 +70,55 @@ export function diffElements(
   return changed;
 }
 
+/** Split large element batches so Socket.IO payloads stay under server limits. */
+export function chunkElements(
+  elements: readonly WhiteboardElement[],
+  size = 200,
+): WhiteboardElement[][] {
+  if (elements.length <= size) return [elements as WhiteboardElement[]];
+  const chunks: WhiteboardElement[][] = [];
+  for (let i = 0; i < elements.length; i += size) {
+    chunks.push(elements.slice(i, i + size) as WhiteboardElement[]);
+  }
+  return chunks;
+}
+
+/** True when any live element sits outside the current Excalidraw camera. */
+export function elementsOutsideViewport(
+  elements: readonly WhiteboardElement[],
+  appState: {
+    scrollX: number;
+    scrollY: number;
+    width: number;
+    height: number;
+    zoom: { value: number };
+  },
+): boolean {
+  const zoom = appState.zoom?.value || 1;
+  const left = -appState.scrollX;
+  const top = -appState.scrollY;
+  const right = left + appState.width / zoom;
+  const bottom = top + appState.height / zoom;
+  const pad = 48 / zoom;
+
+  for (const el of elements) {
+    if (el.isDeleted) continue;
+    const x = typeof el.x === 'number' ? el.x : null;
+    const y = typeof el.y === 'number' ? el.y : null;
+    if (x == null || y == null) continue;
+    const w = typeof el.width === 'number' ? el.width : 0;
+    const h = typeof el.height === 'number' ? el.height : 0;
+    const elLeft = Math.min(x, x + w);
+    const elTop = Math.min(y, y + h);
+    const elRight = Math.max(x, x + w);
+    const elBottom = Math.max(y, y + h);
+    if (elRight < left - pad || elLeft > right + pad || elBottom < top - pad || elTop > bottom + pad) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function throttle<T extends (...args: never[]) => void>(fn: T, waitMs: number): T {
   let last = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;

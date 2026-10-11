@@ -1,5 +1,6 @@
 import React from 'react';
 import { AUTH_ASSETS } from '../../constants/auth.assets';
+import { SIGN_IN_COPY } from '../../constants/sign-in.constants';
 
 type Props = {
   id?: string;
@@ -9,7 +10,7 @@ type Props = {
 };
 
 const inputClass =
-  'h-9 w-full rounded-[10px] border border-[#E2E8F0] bg-white px-3 pl-9 text-[0.8125rem] text-[#1C2842] caret-[#0056EF] outline-none placeholder:text-[#62748E] hover:border-slate-300 focus:border-[#0056EF] focus:shadow-[0_0_0_2px_rgba(0,86,239,0.12)]';
+  'h-11 w-full rounded-xl border border-[#E2E8F0] bg-white px-3 pl-10 text-[0.9375rem] text-[#0F172A] caret-[#016BE6] outline-none placeholder:text-[#94A3B8] hover:border-slate-300 focus:border-[#016BE6] focus:shadow-[0_0_0_3px_rgba(1,107,230,0.12)]';
 
 export const EmailField: React.FC<Props> = ({
   id = 'signin-email',
@@ -17,20 +18,20 @@ export const EmailField: React.FC<Props> = ({
   error,
   onChange,
 }) => (
-  <div className="mb-2.5">
-    <label className="mb-1 block text-[0.75rem] font-semibold text-[#1C2842]" htmlFor={id}>
-      Email address
+  <div className="mb-3.5">
+    <label className="sr-only" htmlFor={id}>
+      {SIGN_IN_COPY.emailLabel}
     </label>
     <div className="relative flex items-center">
-      <span className="pointer-events-none absolute left-3 z-10 flex size-3.5 items-center justify-center" aria-hidden>
-        <img src={AUTH_ASSETS.email} alt="" width={14} height={14} className="block size-3.5" />
+      <span className="pointer-events-none absolute left-3.5 z-10 flex size-4 items-center justify-center" aria-hidden>
+        <img src={AUTH_ASSETS.email} alt="" width={16} height={16} className="block size-4 opacity-60" />
       </span>
       <input
         id={id}
         name="email"
         type="email"
         className={`${inputClass}${error ? ' border-red-600' : ''}`}
-        placeholder="Enter your email"
+        placeholder={SIGN_IN_COPY.emailPlaceholder}
         autoComplete="email"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -40,7 +41,7 @@ export const EmailField: React.FC<Props> = ({
       />
     </div>
     {error ? (
-      <p id={`${id}-error`} className="mt-1 text-[0.6875rem] text-red-600" role="alert">
+      <p id={`${id}-error`} className="mt-1.5 text-[0.75rem] text-red-600" role="alert">
         {error}
       </p>
     ) : null}

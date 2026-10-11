@@ -39,12 +39,12 @@ const EN_COPY = {
   },
   hero: {
     eyebrow: 'Organization video meetings',
-    title: 'Meet, collaborate, and keep the record in one workspace',
-    body: 'Samtal is a conferencing workspace for teams. Live video and audio, waiting rooms, screen share, whiteboard, chat, calendar, and recordings — with members, invitations, and roles.',
-    primary: 'Create an account',
+    title: 'Meet, collaborate, and keep every session in one place',
+    body: 'Secure video meetings for organizations — with waiting rooms, screen share, whiteboard, chat, calendar, and recordings.',
+    primary: 'Start free',
     primaryAuthed: 'Open workspace',
     secondary: 'See the product',
-    proof: 'English and Arabic. Sign in with email, or continue with Google when it is configured.',
+    proof: 'English and Arabic. Email sign-in, with Google when configured.',
   },
   capabilities: [
     { value: 'Waiting rooms', label: 'Host admit before anyone joins' },
@@ -54,7 +54,7 @@ const EN_COPY = {
   ],
   product: {
     eyebrow: 'Product',
-    title: 'The same workspace your team already uses after sign-in',
+    title: 'One workspace after sign-in',
     body: 'Meetings, messages, calendar, and recordings share one sidebar, one account, and one organization.',
     modules: {
       meetings: {
@@ -110,24 +110,24 @@ const EN_COPY = {
   workspace: {
     eyebrow: 'Organization',
     title: 'Members, rooms, and roles in one workspace',
-    body: 'Each account belongs to an organization. Owners and admins manage people, rooms, branding, and the plan from Settings.',
+    body: 'Each account belongs to an organization. Admins manage people, rooms, branding, and the plan from Settings.',
     items: [
-      { title: 'Members', body: 'Invite teammates by email. Owner, admin, and member roles decide who can host and govern.' },
+      { title: 'Members', body: 'Invite teammates by email. Admin and member roles decide who can host and govern.' },
       { title: 'Teams and rooms', body: 'Group people into teams and keep dedicated rooms for recurring work.' },
-      { title: 'Invitations', body: 'Workspace invites use the public site origin. Guests join with the email they were invited with.' },
+      { title: 'Invitations', body: 'Workspace invites use the public site. Guests join with the email they were invited with.' },
       { title: 'Billing', body: 'Free, Pro, and Enterprise plans meter participant minutes, members, concurrent meetings, and recording storage.' },
     ],
   },
   security: {
     eyebrow: 'Access and media',
-    title: 'Meetings are authenticated, not public links',
+    title: 'Authenticated meetings, not open links',
     body: 'Who enters a room is decided by sign-in, invitations, and host controls — not by guessing a URL.',
     items: [
       { title: 'Signed-in sessions', body: 'Access tokens back the app. Socket connections without a valid session are refused.' },
       { title: 'Invitation model', body: 'Members join as host, invitee, or teammate. Guests must match an invited email.' },
       { title: 'Host waiting rooms', body: 'Guests wait for admit. Hosts can require a waiting room for members as well.' },
       { title: 'Encrypted media path', body: 'Live audio and video use DTLS-SRTP between each client and the media server.' },
-      { title: 'Workspace roles', body: 'Owner, admin, and member permissions for who can see, host, and manage the organization.' },
+      { title: 'Workspace roles', body: 'Admin and member permissions for who can see, host, and manage the organization.' },
       { title: 'Session hygiene', body: 'HttpOnly refresh cookies, CSRF origin checks, and password-aware token invalidation.' },
     ],
     footnote:
@@ -135,8 +135,8 @@ const EN_COPY = {
   },
   pricing: {
     eyebrow: 'Plans',
-    title: 'Start free. Upgrade when the organization needs more capacity.',
-    body: 'Prices are monthly for the organization, matching the live catalog. Participant minutes, members, concurrent meetings, and recording storage scale by plan.',
+    title: 'Start free. Scale when you need capacity.',
+    body: 'Monthly organization pricing. Participant minutes, members, concurrent meetings, and recording storage grow with each plan.',
     tiers: [
       {
         name: 'Free',
@@ -151,7 +151,7 @@ const EN_COPY = {
           'Messages and waiting room',
         ],
         highlighted: false,
-        cta: 'Create an account',
+        cta: 'Start free',
       },
       {
         name: 'Pro',
@@ -185,15 +185,16 @@ const EN_COPY = {
       },
     ],
     openApp: 'Open workspace',
+    popular: 'Popular',
   },
   cta: {
-    title: 'Create the workspace, then run the first room',
-    body: 'Sign up, invite your team, and keep meetings, chat, and recordings in one place.',
-    action: 'Create an account',
+    title: 'Create your workspace. Run the first room today.',
+    body: 'Invite your team and keep meetings, chat, and recordings in one place.',
+    action: 'Start free',
     actionAuthed: 'Go to workspace',
   },
   footer: {
-    blurb: 'Meetings, messaging, calendar, and recordings for organizations — with invitations, roles, and host controls.',
+    blurb: 'Organization meetings with invitations, roles, waiting rooms, and a shared workspace library.',
     product: 'Product',
     company: 'Account',
     legal: 'Access',
@@ -231,12 +232,12 @@ const AR_COPY: LandingCopy = {
   },
   hero: {
     eyebrow: 'اجتماعات مرئية للمؤسسات',
-    title: 'اجتماع وتعاون وأرشفة في مساحة عمل واحدة',
-    body: 'سمتال مساحة عمل للاجتماعات. فيديو وصوت مباشر، غرف انتظار، مشاركة شاشة، لوح أبيض، دردشة، تقويم، وتسجيلات — مع الأعضاء والدعوات والأدوار.',
-    primary: 'إنشاء حساب',
+    title: 'اجتماع وتعاون وأرشفة لكل جلسة في مكان واحد',
+    body: 'اجتماعات مرئية آمنة للمؤسسات — مع غرف انتظار، مشاركة شاشة، لوح أبيض، دردشة، تقويم، وتسجيلات.',
+    primary: 'ابدأ مجاناً',
     primaryAuthed: 'فتح مساحة العمل',
     secondary: 'اطّلع على المنتج',
-    proof: 'العربية والإنجليزية. سجّل الدخول بالبريد، أو عبر Google عندما يكون مُعداً.',
+    proof: 'العربية والإنجليزية. تسجيل بالبريد، ومع Google عند التهيئة.',
   },
   capabilities: [
     { value: 'غرف انتظار', label: 'المضيف يوافق قبل الانضمام' },
@@ -246,7 +247,7 @@ const AR_COPY: LandingCopy = {
   ],
   product: {
     eyebrow: 'المنتج',
-    title: 'نفس مساحة العمل بعد تسجيل الدخول',
+    title: 'مساحة عمل واحدة بعد تسجيل الدخول',
     body: 'الاجتماعات والرسائل والتقويم والتسجيلات تشترك في شريط جانبي واحد وحساب واحد ومؤسسة واحدة.',
     modules: {
       meetings: {
@@ -298,24 +299,24 @@ const AR_COPY: LandingCopy = {
   workspace: {
     eyebrow: 'المؤسسة',
     title: 'أعضاء وغرف وأدوار في مساحة عمل واحدة',
-    body: 'كل حساب ينتمي إلى مؤسسة. يدير المالك والمدير الأشخاص والغرف والعلامة التجارية والخطة من الإعدادات.',
+    body: 'كل حساب ينتمي إلى مؤسسة. يدير المدراء الأشخاص والغرف والعلامة التجارية والخطة من الإعدادات.',
     items: [
-      { title: 'الأعضاء', body: 'ادعُ الزملاء بالبريد. أدوار المالك والمدير والعضو تحدد من يستضيف ويدير.' },
+      { title: 'الأعضاء', body: 'ادعُ الزملاء بالبريد. أدوار المدير والعضو تحدد من يستضيف ويدير.' },
       { title: 'الفرق والغرف', body: 'اجمع الأشخاص في فرق واحتفظ بغرف مخصصة للعمل المتكرر.' },
-      { title: 'الدعوات', body: 'دعوات المساحة تستخدم أصل الموقع العام. ينضم الضيوف بالبريد الذي دُعوا به.' },
+      { title: 'الدعوات', body: 'دعوات المساحة تستخدم الموقع العام. ينضم الضيوف بالبريد الذي دُعوا به.' },
       { title: 'الفوترة', body: 'خطط مجانية وPro وEnterprise تقيس دقائق المشاركين والأعضاء والاجتماعات المتزامنة وتخزين التسجيلات.' },
     ],
   },
   security: {
     eyebrow: 'الوصول والوسائط',
-    title: 'الاجتماعات موثّقة وليست روابط عامة',
+    title: 'اجتماعات موثّقة وليست روابط مفتوحة',
     body: 'من يدخل الغرفة يحدده تسجيل الدخول والدعوات وتحكم المضيف — لا تخمين الرابط.',
     items: [
       { title: 'جلسات مسجّلة الدخول', body: 'رموز الوصول تدعم التطبيق. تُرفض اتصالات المقبس دون جلسة صالحة.' },
       { title: 'نموذج الدعوة', body: 'ينضم الأعضاء كمضيف أو مدعو أو زميل. الضيوف يجب أن يطابقوا بريداً مدعواً.' },
       { title: 'غرف انتظار المضيف', body: 'ينتظر الضيوف الموافقة. يمكن إلزام الأعضاء بغرفة انتظار أيضاً.' },
       { title: 'مسار إعلام مشفّر', body: 'الصوت والصورة يستخدمان DTLS-SRTP بين كل عميل وخادم الوسائط.' },
-      { title: 'أدوار مساحة العمل', body: 'صلاحيات المالك والمدير والعضو لمن يرى ويستضيف ويدير المؤسسة.' },
+      { title: 'أدوار مساحة العمل', body: 'صلاحيات المدير والعضو لمن يرى ويستضيف ويدير المؤسسة.' },
       { title: 'نظافة الجلسة', body: 'كوكيز تحديث HttpOnly، فحوصات أصل CSRF، وإبطال الرموز عند تغيير كلمة المرور.' },
     ],
     footnote:
@@ -323,8 +324,8 @@ const AR_COPY: LandingCopy = {
   },
   pricing: {
     eyebrow: 'الخطط',
-    title: 'ابدأ مجاناً. رقِّ عندما تحتاج المؤسسة سعة أكبر.',
-    body: 'الأسعار شهرية للمؤسسة وفق الكتالوج الحي. دقائق المشاركين والأعضاء والاجتماعات المتزامنة وتخزين التسجيلات تتوسع حسب الخطة.',
+    title: 'ابدأ مجاناً. وسّع السعة عند الحاجة.',
+    body: 'أسعار شهرية للمؤسسة. دقائق المشاركين والأعضاء والاجتماعات المتزامنة وتخزين التسجيلات تنمو مع كل خطة.',
     tiers: [
       {
         name: 'مجاني',
@@ -333,7 +334,7 @@ const AR_COPY: LandingCopy = {
         description: 'للمجموعات الصغيرة عند البداية.',
         features: ['500 دقيقة مشاركين', '5 أعضاء', 'اجتماع متزامن واحد', '2 غيغابايت للتسجيلات', 'رسائل وغرفة انتظار'],
         highlighted: false,
-        cta: 'إنشاء حساب',
+        cta: 'ابدأ مجاناً',
       },
       {
         name: 'Pro',
@@ -355,15 +356,16 @@ const AR_COPY: LandingCopy = {
       },
     ],
     openApp: 'فتح مساحة العمل',
+    popular: 'الأكثر اختياراً',
   },
   cta: {
-    title: 'أنشئ مساحة العمل ثم افتح أول غرفة',
-    body: 'سجّل، ادعُ فريقك، واحتفظ بالاجتماعات والدردشة والتسجيلات في مكان واحد.',
-    action: 'إنشاء حساب',
+    title: 'أنشئ مساحة العمل. افتح أول غرفة اليوم.',
+    body: 'ادعُ فريقك واحتفظ بالاجتماعات والدردشة والتسجيلات في مكان واحد.',
+    action: 'ابدأ مجاناً',
     actionAuthed: 'الذهاب إلى مساحة العمل',
   },
   footer: {
-    blurb: 'اجتماعات ورسائل وتقويم وتسجيلات للمؤسسات — مع دعوات وأدوار وتحكم المضيف.',
+    blurb: 'اجتماعات مؤسسية مع دعوات وأدوار وغرف انتظار ومكتبة مساحة عمل مشتركة.',
     product: 'المنتج',
     company: 'الحساب',
     legal: 'الوصول',

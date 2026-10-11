@@ -1,10 +1,14 @@
 export const AUTH_ASSETS = {
-  /** Sign-in / forgot logo */
+  /** Sign-in / forgot logo (form / light surfaces) */
   logo: '/auth/samtal-logo.png?v=4',
+  /** White wordmark for blue promo panels (same asset as app sidebar) */
+  logoOnBlue: '/samtal-logo-sidebar.png?v=5',
   /** Signup-only logo (user-provided) */
   signUpLogo: '/auth/signup-logo.png?v=4',
   /** Figma right-panel showcase (node 16:754) — trimmed left padding */
   signInShowcase: '/marketing/auth-showcase.png',
+  /** Login left-panel dashboard preview (Recordings workspace) */
+  signInDashboard: '/auth/signin-dashboard.png',
   /** Figma signup dashboard mock (node 16:1001) */
   signUpDashboard: '/marketing/hero-workspace.png',
   promoDashboard: '/marketing/hero-workspace.png',

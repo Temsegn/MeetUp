@@ -1,13 +1,13 @@
 import React from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
-import { AuthShell, AuthMain, AuthFooter } from '../components/AuthShell';
+import { AuthShell, AuthMain } from '../components/AuthShell';
 import { SignInPanel } from '../components/sign-in/SignInPanel';
 import { ProductShowcase } from '../components/sign-in/ProductShowcase';
 import { useSignIn } from '../hooks/useSignIn';
-import { SIGN_IN_COPY } from '../constants/sign-in.constants';
 
 /**
- * Sign In — one viewport; full-width footer like design (© left, links right).
+ * Sign In — full-bleed, no marketing nav.
+ * Large: blue promo left + form right. Mobile: form only.
  */
 export const SignInPage: React.FC = () => {
   const [params] = useSearchParams();
@@ -42,6 +42,7 @@ export const SignInPage: React.FC = () => {
   return (
     <AuthShell>
       <AuthMain>
+        <ProductShowcase />
         <SignInPanel
           values={values}
           fieldErrors={fieldErrors}
@@ -57,13 +58,7 @@ export const SignInPage: React.FC = () => {
           resendLoading={resendLoading}
           resendMessage={resendMessage}
         />
-        <ProductShowcase />
       </AuthMain>
-      <AuthFooter
-        copyright={SIGN_IN_COPY.footer.copyright}
-        privacy={SIGN_IN_COPY.footer.privacy}
-        terms={SIGN_IN_COPY.footer.terms}
-      />
     </AuthShell>
   );
 };

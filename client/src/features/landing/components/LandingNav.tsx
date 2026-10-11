@@ -34,24 +34,24 @@ export function LandingNav({ user }: Props) {
   };
 
   return (
-    <header className="relative z-30 shrink-0 border-b border-[#E1E7EE] bg-white/95 backdrop-blur-xl">
-      <div className="mx-auto grid min-h-[4rem] max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-3 px-4 pt-[env(safe-area-inset-top)] sm:px-6 md:grid-cols-[1fr_auto_1fr] md:px-8">
+    <header className="sticky top-0 z-30 shrink-0 border-b border-[#E6EBF2]/80 bg-white/80 backdrop-blur-xl">
+      <div className="mx-auto grid min-h-[4.25rem] max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-3 px-4 pt-[env(safe-area-inset-top)] sm:px-6 md:grid-cols-[1fr_auto_1fr] md:px-8">
         <button type="button" onClick={goHome} className="flex shrink-0 items-center justify-self-start" aria-label="Samtal">
-          <img src={LANDING_ASSETS.logo} alt="Samtal" className="h-8 w-auto" />
+          <img src={LANDING_ASSETS.logo} alt="Samtal" className="h-8 w-auto sm:h-9" />
         </button>
 
         <nav className="hidden items-center justify-center md:flex" aria-label="Main">
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-1">
             {NAV_LINKS.map((link) => (
               <button
                 key={link.id}
                 type="button"
                 onClick={() => goSection(link.id)}
                 className={cn(
-                  'rounded-[14px] px-3.5 py-1.5 text-[13px] font-semibold transition-colors',
+                  'rounded-lg px-3.5 py-2 text-[13px] font-medium transition-colors',
                   activeId === link.id
-                    ? 'bg-[#E8F1FE] text-[#016BE6]'
-                    : 'text-[#6F7B8C] hover:bg-[#F5F7FA] hover:text-[#151D2B]',
+                    ? 'bg-[#EAF2FF] text-[#016BE6]'
+                    : 'text-[#5B677A] hover:bg-[#F5F7FA] hover:text-[#0F172A]',
                 )}
               >
                 {navLabels[link.id]}
@@ -61,13 +61,13 @@ export function LandingNav({ user }: Props) {
         </nav>
 
         <div className="hidden items-center justify-self-end gap-2 md:flex">
-          <div className="me-1 flex rounded-[14px] border border-[#E1E7EE] bg-white p-0.5 text-[11px] font-semibold">
+          <div className="me-1 flex rounded-lg border border-[#E6EBF2] bg-[#F8FAFC] p-0.5 text-[11px] font-semibold">
             <button
               type="button"
               onClick={() => setLocale('en')}
               className={cn(
-                'rounded-[12px] px-2.5 py-1',
-                locale === 'en' ? 'bg-[#016BE6] text-white' : 'text-[#6F7B8C]',
+                'rounded-md px-2.5 py-1 transition-colors',
+                locale === 'en' ? 'bg-white text-[#0F172A] shadow-sm' : 'text-[#5B677A]',
               )}
             >
               {copy.nav.langEn}
@@ -76,8 +76,8 @@ export function LandingNav({ user }: Props) {
               type="button"
               onClick={() => setLocale('ar')}
               className={cn(
-                'rounded-[12px] px-2.5 py-1',
-                locale === 'ar' ? 'bg-[#016BE6] text-white' : 'text-[#6F7B8C]',
+                'rounded-md px-2.5 py-1 transition-colors',
+                locale === 'ar' ? 'bg-white text-[#0F172A] shadow-sm' : 'text-[#5B677A]',
               )}
             >
               {copy.nav.langAr}
@@ -87,7 +87,7 @@ export function LandingNav({ user }: Props) {
             <AppEntryLink className={LP_NAV_PRIMARY}>{copy.nav.openDashboard}</AppEntryLink>
           ) : (
             <>
-              <AuthLink to="/auth" className="px-2.5 text-[13px] font-semibold text-[#6F7B8C] hover:text-[#151D2B]">
+              <AuthLink to="/auth" className="px-2.5 text-[13px] font-semibold text-[#5B677A] hover:text-[#0F172A]">
                 {copy.nav.signIn}
               </AuthLink>
               <AuthLink to="/auth/sign-up" className={LP_NAV_PRIMARY}>
@@ -99,7 +99,7 @@ export function LandingNav({ user }: Props) {
 
         <button
           type="button"
-          className="justify-self-end rounded-[14px] p-2 text-[#6F7B8C] hover:bg-[#F5F7FA] md:hidden"
+          className="justify-self-end rounded-xl p-2 text-[#5B677A] hover:bg-[#F5F7FA] md:hidden"
           aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={mobileOpen}
           onClick={() => setMobileOpen((v) => !v)}
@@ -109,8 +109,8 @@ export function LandingNav({ user }: Props) {
       </div>
 
       {mobileOpen ? (
-        <div className="absolute inset-x-0 top-full z-40 border-b border-[#E1E7EE] bg-white px-4 py-4 shadow-[0_8px_24px_-16px_rgba(15,23,42,0.2)] md:hidden">
-          <nav className="flex flex-col">
+        <div className="absolute inset-x-0 top-full z-40 border-b border-[#E6EBF2] bg-white px-4 py-4 shadow-[0_16px_40px_-24px_rgba(15,23,42,0.25)] md:hidden">
+          <nav className="flex flex-col gap-0.5">
             {NAV_LINKS.map((link) => (
               <button
                 key={link.id}
@@ -120,21 +120,21 @@ export function LandingNav({ user }: Props) {
                   goSection(link.id);
                 }}
                 className={cn(
-                  'rounded-[14px] px-3 py-2.5 text-start text-[14px] font-semibold hover:bg-[#F5F7FA]',
-                  activeId === link.id ? 'bg-[#E8F1FE] text-[#016BE6]' : 'text-[#151D2B]',
+                  'rounded-xl px-3 py-2.5 text-start text-[14px] font-semibold hover:bg-[#F5F7FA]',
+                  activeId === link.id ? 'bg-[#EAF2FF] text-[#016BE6]' : 'text-[#0F172A]',
                 )}
               >
                 {navLabels[link.id]}
               </button>
             ))}
           </nav>
-          <div className="mt-3 flex gap-2 border-t border-[#E8ECF1] pt-3">
+          <div className="mt-3 flex gap-2 border-t border-[#E6EBF2] pt-3">
             <button
               type="button"
               onClick={() => setLocale('en')}
               className={cn(
-                'h-10 flex-1 rounded-[14px] border text-[13px] font-semibold',
-                locale === 'en' ? 'border-[#016BE6] bg-[#016BE6] text-white' : 'border-[#E1E7EE] text-[#334155]',
+                'h-10 flex-1 rounded-xl border text-[13px] font-semibold',
+                locale === 'en' ? 'border-[#016BE6] bg-[#016BE6] text-white' : 'border-[#E6EBF2] text-[#334155]',
               )}
             >
               EN
@@ -143,8 +143,8 @@ export function LandingNav({ user }: Props) {
               type="button"
               onClick={() => setLocale('ar')}
               className={cn(
-                'h-10 flex-1 rounded-[14px] border text-[13px] font-semibold',
-                locale === 'ar' ? 'border-[#016BE6] bg-[#016BE6] text-white' : 'border-[#E1E7EE] text-[#334155]',
+                'h-10 flex-1 rounded-xl border text-[13px] font-semibold',
+                locale === 'ar' ? 'border-[#016BE6] bg-[#016BE6] text-white' : 'border-[#E6EBF2] text-[#334155]',
               )}
             >
               عربي

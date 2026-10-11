@@ -3,10 +3,6 @@ import { AuthLogo } from '../AuthShell';
 import { WelcomeHeader } from './WelcomeHeader';
 import { SignInForm } from './SignInForm';
 import { SignUpPrompt } from './SignUpPrompt';
-import {
-  SIGN_IN_COL_GAP,
-  SIGN_IN_PAGE_INSET_LEFT,
-} from '../../constants/sign-in.constants';
 import type { SignInFormValues, FieldErrors } from '../../schemas/auth.schemas';
 
 type Props = {
@@ -25,20 +21,20 @@ type Props = {
   resendMessage?: string;
 };
 
-/** Left form — centered vertically, clean one-column sign-in. */
+/** Right form — all content centered in the column. */
 export const SignInPanel: React.FC<Props> = (props) => (
   <section
-    className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-white"
+    className="flex min-h-0 min-w-0 flex-col overflow-y-auto overflow-x-hidden bg-white"
     aria-labelledby="signin-heading"
   >
-    <div
-      className={`flex h-full min-h-0 flex-col justify-center py-6 sm:py-8 ${SIGN_IN_PAGE_INSET_LEFT} ${SIGN_IN_COL_GAP}`}
-    >
-      <div className="w-full max-w-[22.5rem] self-start">
-        <AuthLogo className="mb-5 h-8 max-w-[10rem] sm:h-9 sm:max-w-[11rem]" />
+    <div className="flex min-h-full flex-col items-center justify-center px-8 py-10 sm:px-12 sm:py-12">
+      <div className="flex w-full max-w-[24rem] flex-col items-center">
+        <AuthLogo className="mb-0 h-14 max-w-[15rem] object-contain sm:h-16 sm:max-w-[16rem]" />
         <WelcomeHeader />
-        <SignInForm {...props} />
-        <SignUpPrompt />
+        <div className="w-full">
+          <SignInForm {...props} />
+          <SignUpPrompt />
+        </div>
       </div>
     </div>
   </section>

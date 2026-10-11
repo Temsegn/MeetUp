@@ -37,4 +37,28 @@ describe('sceneMerge', () => {
     const merged = mergeElements([el('a', 1, 1)], [el('b', 1, 1)]);
     assert.equal(merged.length, 2);
   });
+
+  it('chunks large batches', async () => {
+    const { chunkElements } = await import('./sceneMerge');
+    const many = Array.from({ length: 450 }, (_, i) => el(`e${i}`, 1, 1));
+    const chunks = chunkElements(many, 200);
+    assert.equal(chunks.length, 3);
+    assert.equal(chunks[0].length, 200);
+    assert.equal(chunks[2].length, 50);
+  });
+
+  it('detects elements outside viewport', async () => {
+    const { elementsOutsideViewport } = await import('./sceneMerge');
+    const inside = el('in', 1, 1, { x: 10, y: 10, width: 20, height: 20 });
+    const outside = el('out', 1, 1, { x: 5000, y: 5000, width: 40, height: 40 });
+    const appState = {
+      scrollX: 0,
+      scrollY: 0,
+      width: 400,
+      height: 700,
+      zoom: { value: 1 },
+    };
+    assert.equal(elementsOutsideViewport([inside], appState), false);
+    assert.equal(elementsOutsideViewport([outside], appState), true);
+  });
 });

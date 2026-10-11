@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useRef } from 'react';
 import type { Socket } from 'socket.io-client';
 import { Excalidraw } from '@excalidraw/excalidraw';
-import { X } from 'lucide-react';
+import { Maximize2, X } from 'lucide-react';
 import '@excalidraw/excalidraw/index.css';
 import './whiteboard.css';
 import { useWhiteboardCollaboration } from '../hooks/useWhiteboardCollaboration';
@@ -22,7 +22,7 @@ interface WhiteboardStageProps {
 }
 
 /**
- * In-stage Excalidraw whiteboard — X top-right; full toolbar; Socket.IO collab.
+ * In-stage Excalidraw whiteboard — Socket.IO collab with shared scene coords.
  * Keeps `data-meeting-whiteboard` for meeting recording capture.
  */
 export const WhiteboardStage: React.FC<WhiteboardStageProps> = ({
@@ -41,6 +41,7 @@ export const WhiteboardStage: React.FC<WhiteboardStageProps> = ({
     setApi,
     onChange,
     onPointerUpdate,
+    fitContent,
   } = useWhiteboardCollaboration({
     socket,
     roomId,
@@ -55,12 +56,14 @@ export const WhiteboardStage: React.FC<WhiteboardStageProps> = ({
     (api: ExcalidrawImperativeAPI) => {
       apiRef.current = api;
       setApi(api);
-      // Force light canvas — app root uses color-scheme: dark which otherwise paints black
       try {
         api.updateScene({
           appState: {
             viewBackgroundColor: '#ffffff',
             theme: 'light',
+            // Keep zen-mode off so tools stay available on mobile.
+            zenModeEnabled: false,
+            gridSize: null,
           } as never,
         } as never);
       } catch {
@@ -139,8 +142,12 @@ export const WhiteboardStage: React.FC<WhiteboardStageProps> = ({
         theme: 'light' as const,
         openSidebar: null,
         openDialog: null,
+        // Scene uses shared world coordinates; camera fits content on each device.
+        scrollX: 0,
+        scrollY: 0,
+        zoom: { value: 1 },
       },
-      scrollToContent: Boolean(initialData.elements?.length),
+      scrollToContent: Boolean(initialData.elements?.some((el) => !el.isDeleted)),
     };
   }, [initialData]);
 
@@ -150,14 +157,26 @@ export const WhiteboardStage: React.FC<WhiteboardStageProps> = ({
       data-meeting-whiteboard="1"
       data-theme="light"
     >
-      <button
-        type="button"
-        onClick={onClose}
-        className="meeting-whiteboard-close"
-        aria-label="Close whiteboard"
-      >
-        <X size={20} />
-      </button>
+      <div className="meeting-whiteboard-chrome">
+        <button
+          type="button"
+          onClick={fitContent}
+          className="meeting-whiteboard-fit"
+          aria-label="Fit whiteboard content"
+          title="Fit content"
+        >
+          <Maximize2 size={16} />
+          <span>Fit</span>
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="meeting-whiteboard-close"
+          aria-label="Close whiteboard"
+        >
+          <X size={20} />
+        </button>
+      </div>
 
       {!ready && !error ? (
         <div className="meeting-whiteboard-status">Connecting whiteboard…</div>
@@ -180,6 +199,8 @@ export const WhiteboardStage: React.FC<WhiteboardStageProps> = ({
             UIOptions={uiOptions}
             name={userName}
             theme="light"
+            detectScroll
+            handleKeyboardGlobally={false}
           />
         </div>
       ) : null}

@@ -19,8 +19,60 @@
   min-height: 0;
   max-width: 100%;
   overflow: hidden;
-  contain: layout paint size;
   background: #ffffff !important;
+  /* Allow pan/zoom gestures inside the board without fighting the meeting page */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.meeting-whiteboard-chrome {
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top, 0px));
+  right: max(8px, env(safe-area-inset-right, 0px));
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.meeting-whiteboard-chrome > * {
+  pointer-events: auto;
+}
+
+.meeting-whiteboard-fit,
+.meeting-whiteboard-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  border-radius: 9999px;
+  border: 1px solid #e1e7ee;
+  background: rgba(255, 255, 255, 0.96);
+  color: #64748b;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.12);
+  cursor: pointer;
+  transition: background 150ms, color 150ms;
+}
+
+.meeting-whiteboard-fit {
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.meeting-whiteboard-close {
+  width: 36px;
+  padding: 0;
+}
+
+.meeting-whiteboard-fit:hover,
+.meeting-whiteboard-close:hover {
+  background: #ffffff;
+  color: #151d2b;
 }
 
 .meeting-whiteboard-canvas {
@@ -34,6 +86,9 @@
   max-width: 100%;
   overflow: hidden;
   background: #ffffff;
+  /* Excalidraw owns panning; keep the stage from scrolling the meeting shell */
+  overscroll-behavior: contain;
+  touch-action: none;
 }
 
 /* Excalidraw requires an explicit sized box — percentage height alone often collapses */
@@ -47,6 +102,7 @@
   min-height: 100% !important;
   overflow: hidden !important;
   background: #ffffff !important;
+  touch-action: none;
 }
 
 .meeting-whiteboard-canvas .excalidraw {
@@ -54,35 +110,17 @@
   --island-bg-color: #ffffff;
 }
 
+/* Interactive canvas surface — two-finger pan / pinch zoom on touch devices */
+.meeting-whiteboard-canvas .excalidraw .excalidraw__canvas,
+.meeting-whiteboard-canvas .excalidraw canvas {
+  touch-action: none;
+}
+
 /* Never apply dark theme styles inside the meeting board */
 .meeting-whiteboard-stage .excalidraw.theme--dark {
   --theme-filter: none !important;
   --default-bg-color: #ffffff !important;
   filter: none !important;
-}
-
-.meeting-whiteboard-close {
-  position: absolute;
-  top: max(8px, env(safe-area-inset-top, 0px));
-  right: max(8px, env(safe-area-inset-right, 0px));
-  z-index: 20;
-  display: flex;
-  width: 36px;
-  height: 36px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  border: 1px solid #e1e7ee;
-  background: rgba(255, 255, 255, 0.96);
-  color: #64748b;
-  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.12);
-  cursor: pointer;
-  transition: background 150ms, color 150ms;
-}
-
-.meeting-whiteboard-close:hover {
-  background: #ffffff;
-  color: #151d2b;
 }
 
 .meeting-whiteboard-status {
@@ -125,19 +163,23 @@
   max-width: min(100%, 100vw);
 }
 
-/* Mobile: denser, contained chrome — keep pen/shape tools usable */
-@media (max-width: 640px) {
+/* Mobile / narrow: professional compact chrome, full canvas pan/zoom */
+@media (max-width: 768px) {
+  .meeting-whiteboard-fit {
+    height: 34px;
+    padding: 0 10px;
+    font-size: 11px;
+  }
+
   .meeting-whiteboard-close {
     width: 34px;
     height: 34px;
-    top: 6px;
-    right: 6px;
   }
 
   .meeting-whiteboard-stage .excalidraw .App-toolbar,
   .meeting-whiteboard-stage .excalidraw .App-toolbar-content {
-    transform: scale(0.92);
-    transform-origin: center bottom;
+    /* Do not scale — scaling breaks touch hit-targets vs drawn coords */
+    max-width: calc(100vw - 1rem);
   }
 
   .meeting-whiteboard-stage .excalidraw .layer-ui__wrapper__footer,
@@ -147,20 +189,34 @@
     max-width: calc(100vw - 1rem);
   }
 
-  /* Prefer vertical tool stack; avoid wide horizontal overflow */
   .meeting-whiteboard-stage .excalidraw .App-menu__left {
-    max-width: min(100%, 56px);
+    max-width: min(100%, 52px);
   }
 
   .meeting-whiteboard-stage .excalidraw .Stack_horizontal {
     flex-wrap: wrap;
     max-width: 100%;
+    justify-content: center;
+    gap: 2px;
   }
 
   /* Hide bulky desktop-only chrome that often clips off-screen */
   .meeting-whiteboard-stage .excalidraw .sidebar,
   .meeting-whiteboard-stage .excalidraw .layer-ui__wrapper__top-right .user-list,
-  .meeting-whiteboard-stage .excalidraw .encrypted-icon {
+  .meeting-whiteboard-stage .excalidraw .encrypted-icon,
+  .meeting-whiteboard-stage .excalidraw .HelpButton {
     display: none !important;
+  }
+
+  /* Keep footer tools scrollable horizontally when needed */
+  .meeting-whiteboard-stage .excalidraw .App-toolbar {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .meeting-whiteboard-stage .excalidraw .App-toolbar::-webkit-scrollbar {
+    display: none;
   }
 }

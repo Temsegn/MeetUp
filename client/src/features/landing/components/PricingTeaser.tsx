@@ -12,7 +12,7 @@ export function PricingTeaser({ user }: Props) {
   const copy = useLandingCopy();
 
   return (
-    <section id="pricing" className="scroll-mt-20 bg-[#F5F7FA] py-16 sm:py-24">
+    <section id="pricing" className="scroll-mt-24 bg-[#F7F9FC] py-20 sm:py-28">
       <div className="mx-auto max-w-7xl px-5 sm:px-8">
         <div className="max-w-2xl">
           <p className={LP_EYEBROW}>{copy.pricing.eyebrow}</p>
@@ -20,33 +20,37 @@ export function PricingTeaser({ user }: Props) {
           <p className={`mt-4 ${LP_BODY}`}>{copy.pricing.body}</p>
         </div>
 
-        <div className="mt-10 grid gap-3 lg:grid-cols-3">
+        <div className="mt-12 grid gap-4 lg:grid-cols-3">
           {copy.pricing.tiers.map((tier) => (
             <article
               key={tier.name}
               className={cn(
-                'flex flex-col rounded-[14px] border p-6 shadow-[0_1px_3px_rgba(15,23,42,0.04)] sm:p-7',
+                'flex flex-col rounded-2xl border p-6 sm:p-7',
                 tier.highlighted
-                  ? 'border-[#016BE6] bg-[#F8FBFF] ring-1 ring-[#016BE6]/15'
-                  : 'border-[#E2E7ED] bg-white',
+                  ? 'border-[#016BE6] bg-white shadow-[0_20px_50px_-32px_rgba(1,107,230,0.45)]'
+                  : 'border-[#E6EBF2] bg-white',
               )}
             >
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-[13px] font-semibold text-[#6F7B8C]">{tier.name}</h3>
+                <h3 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[#5B677A]">
+                  {tier.name}
+                </h3>
                 {tier.highlighted ? (
-                  <span className="inline-flex h-6 items-center rounded-full bg-[#ECFDF3] px-2 text-[10px] font-semibold text-[#027A48]">
-                    Pro
+                  <span className="inline-flex h-6 items-center rounded-md bg-[#EAF2FF] px-2 text-[11px] font-semibold text-[#016BE6]">
+                    {copy.pricing.popular}
                   </span>
                 ) : null}
               </div>
-              <p className="mt-4">
-                <span className="text-[32px] font-bold tracking-tight text-[#151D2B]">{tier.price}</span>
-                <span className="ms-2 text-[12px] text-[#6F7B8C]">{tier.period}</span>
+              <p className="mt-5">
+                <span className="lp-display text-[36px] font-semibold tracking-tight text-[#0F172A]">
+                  {tier.price}
+                </span>
+                <span className="ms-2 text-[13px] text-[#5B677A]">{tier.period}</span>
               </p>
-              <p className="mt-3 text-[13px] leading-relaxed text-[#6F7B8C]">{tier.description}</p>
-              <ul className="mt-6 flex-1 space-y-2.5">
+              <p className="mt-3 text-[14px] leading-relaxed text-[#5B677A]">{tier.description}</p>
+              <ul className="mt-7 flex-1 space-y-3">
                 {tier.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2 text-[13px] text-[#151D2B]">
+                  <li key={feature} className="flex items-start gap-2 text-[14px] text-[#0F172A]">
                     <Check className="mt-0.5 size-4 shrink-0 text-[#016BE6]" strokeWidth={2.25} />
                     {feature}
                   </li>

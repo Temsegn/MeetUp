@@ -67,11 +67,17 @@ export function ProductAppPreview({ active = 'dashboard', alt, className, size =
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-[14px] border border-[#E2E7ED] bg-white shadow-[0_8px_30px_-18px_rgba(15,23,42,0.18)]',
+        'overflow-hidden border border-[#E6EBF2] bg-white',
+        !hero && 'rounded-2xl shadow-[0_16px_50px_-28px_rgba(15,23,42,0.28)]',
         className,
       )}
     >
-      <div className={cn('flex min-w-0 bg-[#F5F7FA]', hero ? 'min-h-[240px] sm:min-h-[340px] lg:min-h-[400px]' : 'min-h-[220px] sm:min-h-[300px]')}>
+      <div
+        className={cn(
+          'flex min-w-0 bg-[#F7F9FC]',
+          hero ? 'min-h-[260px] sm:min-h-[380px] lg:min-h-[460px]' : 'min-h-[220px] sm:min-h-[300px]',
+        )}
+      >
         <aside
           className={cn(
             'hidden shrink-0 flex-col bg-[#016BE6] text-white sm:flex',
