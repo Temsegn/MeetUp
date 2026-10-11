@@ -63,15 +63,15 @@ export const ProductShowcase: React.FC = () => (
           />
         </div>
 
-        <ul className="mt-5 flex w-full flex-wrap items-start gap-x-7 gap-y-3 xl:gap-x-9">
+        <ul className="mt-8 flex w-full flex-wrap items-start gap-x-7 gap-y-3 xl:mt-9 xl:gap-x-9">
           {SIGN_IN_COPY.promo.features.map((feature, i) => {
             const Icon = FEATURE_ICONS[i] ?? Video;
             return (
               <li key={feature} className="flex min-w-0 items-center gap-2.5 text-white">
-                <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-white/15">
-                  <Icon className="size-3.5 text-white" strokeWidth={1.85} aria-hidden />
+                <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-white/15">
+                  <Icon className="size-4 text-white" strokeWidth={1.85} aria-hidden />
                 </span>
-                <span className="max-w-[8.5rem] text-[11px] font-medium leading-snug text-white xl:max-w-[9.5rem] xl:text-[12px]">
+                <span className="max-w-[9.5rem] text-[13px] font-medium leading-snug text-white xl:max-w-[10.5rem] xl:text-[14px]">
                   {feature}
                 </span>
               </li>
