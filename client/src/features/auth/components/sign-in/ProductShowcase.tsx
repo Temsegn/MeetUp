@@ -35,7 +35,7 @@ export const ProductShowcase: React.FC = () => (
     />
 
     <div className="relative flex h-full min-h-0 items-center justify-center px-10 py-8 xl:px-14 xl:py-10">
-      <div className="flex w-full max-w-[42rem] flex-col items-start">
+      <div className="flex w-full max-w-[46rem] flex-col items-start">
         {/* Logo larger than the headlines below */}
         <Link to="/" className="inline-flex w-fit shrink-0" aria-label="Samtal home">
           <img
@@ -59,7 +59,7 @@ export const ProductShowcase: React.FC = () => (
           <img
             src={AUTH_ASSETS.signInDashboard}
             alt="Samtal recordings workspace"
-            className="h-auto w-full max-h-[min(58vh,36rem)] rounded-2xl object-contain object-left shadow-[0_24px_56px_-18px_rgba(7,24,60,0.5)] ring-1 ring-white/20 xl:max-h-[min(62vh,40rem)]"
+            className="h-auto w-full max-h-[min(64vh,40rem)] rounded-2xl object-contain object-left shadow-[0_24px_56px_-18px_rgba(7,24,60,0.5)] ring-1 ring-white/20 xl:max-h-[min(70vh,46rem)]"
           />
         </div>
 

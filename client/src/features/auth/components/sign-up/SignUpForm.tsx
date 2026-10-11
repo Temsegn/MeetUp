@@ -36,6 +36,7 @@ export const SignUpForm: React.FC<Props> = ({
   const c = AUTH_COPY.signUp;
 
   return (
+    <div className="flex w-full flex-col gap-2">
     <form className="flex w-full flex-col gap-2" onSubmit={onSubmit} noValidate>
       {error ? (
         <div
@@ -153,8 +154,8 @@ export const SignUpForm: React.FC<Props> = ({
         )}
         {loading ? 'Creating account…' : c.submit}
       </button>
-
-      <JoinMeetingButton />
     </form>
+    <JoinMeetingButton />
+    </div>
   );
 };

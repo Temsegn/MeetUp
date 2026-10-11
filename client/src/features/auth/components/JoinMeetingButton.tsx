@@ -22,21 +22,24 @@ function parseRoomId(raw: string): string {
   return trimmed.replace(/^\/+/, '');
 }
 
-/** Replaces social OAuth on auth forms — join a meeting by room ID or invite link. */
+/**
+ * Guest join entry — must NOT nest a <form> inside sign-in/sign-up forms
+ * (browsers ignore nested forms and Join would submit login instead).
+ */
 export const JoinMeetingButton: React.FC = () => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
 
-  const goJoin = (e: React.FormEvent) => {
-    e.preventDefault();
+  const goJoin = () => {
     const roomId = parseRoomId(value);
     if (!roomId) {
       setError('Enter a meeting ID or invite link.');
       return;
     }
     setError('');
+    // Guest pre-join at /join/:roomId (no login required).
     navigate(`/join/${encodeURIComponent(roomId)}`);
   };
 
@@ -55,7 +58,7 @@ export const JoinMeetingButton: React.FC = () => {
           Join Meeting
         </button>
       ) : (
-        <form onSubmit={goJoin} className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           <label htmlFor="auth-join-room" className="sr-only">
             Meeting ID or invite link
           </label>
@@ -67,6 +70,13 @@ export const JoinMeetingButton: React.FC = () => {
             onChange={(e) => {
               setValue(e.target.value);
               if (error) setError('');
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                goJoin();
+              }
             }}
             placeholder="Meeting ID or invite link"
             className="h-11 w-full rounded-xl border border-[#E2E8F0] bg-white px-3.5 text-[0.9375rem] text-[#0F172A] placeholder:text-[#94A3B8] outline-none focus:border-[#016BE6] focus:ring-2 focus:ring-[#016BE6]/20"
@@ -88,14 +98,19 @@ export const JoinMeetingButton: React.FC = () => {
               Cancel
             </button>
             <button
-              type="submit"
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                goJoin();
+              }}
               className="inline-flex h-11 flex-[1.4] items-center justify-center gap-2 rounded-xl bg-[#016BE6] text-[0.875rem] font-semibold text-white hover:bg-[#0059C4]"
             >
               <Video size={16} aria-hidden />
               Join
             </button>
           </div>
-        </form>
+        </div>
       )}
     </div>
   );
