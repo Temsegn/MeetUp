@@ -15,8 +15,11 @@
   flex-direction: column;
   width: 100%;
   height: 100%;
+  min-width: 0;
   min-height: 0;
+  max-width: 100%;
   overflow: hidden;
+  contain: layout paint size;
   background: #ffffff !important;
 }
 
@@ -26,7 +29,9 @@
   z-index: 1;
   width: 100%;
   height: 100%;
+  min-width: 0;
   min-height: 0;
+  max-width: 100%;
   overflow: hidden;
   background: #ffffff;
 }
@@ -37,7 +42,10 @@
 .meeting-whiteboard-canvas .excalidraw .excalidraw-container {
   width: 100% !important;
   height: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
   min-height: 100% !important;
+  overflow: hidden !important;
   background: #ffffff !important;
 }
 
@@ -55,12 +63,12 @@
 
 .meeting-whiteboard-close {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 10001;
+  top: max(8px, env(safe-area-inset-top, 0px));
+  right: max(8px, env(safe-area-inset-right, 0px));
+  z-index: 20;
   display: flex;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
@@ -103,4 +111,56 @@
   opacity: 1 !important;
   visibility: visible !important;
   pointer-events: auto !important;
+}
+
+/* Clamp islands so they never expand the page horizontally */
+.meeting-whiteboard-stage .excalidraw .Island,
+.meeting-whiteboard-stage .excalidraw .App-menu,
+.meeting-whiteboard-stage .excalidraw .App-toolbar,
+.meeting-whiteboard-stage .excalidraw .layer-ui__wrapper {
+  max-width: 100%;
+}
+
+.meeting-whiteboard-stage .excalidraw .App-toolbar {
+  max-width: min(100%, 100vw);
+}
+
+/* Mobile: denser, contained chrome — keep pen/shape tools usable */
+@media (max-width: 640px) {
+  .meeting-whiteboard-close {
+    width: 34px;
+    height: 34px;
+    top: 6px;
+    right: 6px;
+  }
+
+  .meeting-whiteboard-stage .excalidraw .App-toolbar,
+  .meeting-whiteboard-stage .excalidraw .App-toolbar-content {
+    transform: scale(0.92);
+    transform-origin: center bottom;
+  }
+
+  .meeting-whiteboard-stage .excalidraw .layer-ui__wrapper__footer,
+  .meeting-whiteboard-stage .excalidraw .HelpButton,
+  .meeting-whiteboard-stage .excalidraw .main-menu-trigger + .dropdown-menu,
+  .meeting-whiteboard-stage .excalidraw .library-menu-items-container {
+    max-width: calc(100vw - 1rem);
+  }
+
+  /* Prefer vertical tool stack; avoid wide horizontal overflow */
+  .meeting-whiteboard-stage .excalidraw .App-menu__left {
+    max-width: min(100%, 56px);
+  }
+
+  .meeting-whiteboard-stage .excalidraw .Stack_horizontal {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  /* Hide bulky desktop-only chrome that often clips off-screen */
+  .meeting-whiteboard-stage .excalidraw .sidebar,
+  .meeting-whiteboard-stage .excalidraw .layer-ui__wrapper__top-right .user-list,
+  .meeting-whiteboard-stage .excalidraw .encrypted-icon {
+    display: none !important;
+  }
 }

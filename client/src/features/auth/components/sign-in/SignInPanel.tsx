@@ -25,17 +25,17 @@ type Props = {
   resendMessage?: string;
 };
 
-/** Left form — app-scale; outer left margin matches page right margin. */
+/** Left form — centered vertically, clean one-column sign-in. */
 export const SignInPanel: React.FC<Props> = (props) => (
   <section
     className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-white"
     aria-labelledby="signin-heading"
   >
     <div
-      className={`flex h-full min-h-0 flex-col justify-start pt-10 pb-4 lg:pt-12 ${SIGN_IN_PAGE_INSET_LEFT} ${SIGN_IN_COL_GAP}`}
+      className={`flex h-full min-h-0 flex-col justify-center py-6 sm:py-8 ${SIGN_IN_PAGE_INSET_LEFT} ${SIGN_IN_COL_GAP}`}
     >
-      <div className="w-full max-w-[24rem] self-start">
-        <AuthLogo className="mb-4 h-8 max-w-[10.5rem] sm:h-9 sm:max-w-[11.5rem]" />
+      <div className="w-full max-w-[22.5rem] self-start">
+        <AuthLogo className="mb-5 h-8 max-w-[10rem] sm:h-9 sm:max-w-[11rem]" />
         <WelcomeHeader />
         <SignInForm {...props} />
         <SignUpPrompt />

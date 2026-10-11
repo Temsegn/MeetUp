@@ -22,6 +22,8 @@ import { MeetingPreJoinScreen } from '../components/MeetingPreJoinScreen';
 import { MeetingRoomHeader } from '../components/MeetingRoomHeader';
 import { VideoTile, type LiveParticipant } from '../components/VideoTile';
 import { ConferenceControlBar } from '../components/ConferenceControlBar';
+import { MeetingSideRail } from '../components/MeetingSideRail';
+import { MeetingVideoGrid } from '../components/MeetingVideoGrid';
 import { ParticipantsPanel } from '../components/ParticipantsPanel';
 import { MeetingChatPanel } from '../components/MeetingChatPanel';
 import { useMeetingModeration, emitHostModerate } from '../hooks/useMeetingModeration';
@@ -60,9 +62,8 @@ export function LiveMeetingPage() {
   const [isJoining, setIsJoining] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
-  const [showParticipants, setShowParticipants] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches,
-  );
+  // Start collapsed — xl side rail stays visible; panels expand on demand.
+  const [showParticipants, setShowParticipants] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [whiteboardOpen, setWhiteboardOpen] = useState(false);
   const [chatDisabled, setChatDisabled] = useState(false);
@@ -841,324 +842,355 @@ export function LiveMeetingPage() {
     <div
       ref={stageRef}
       data-room-id={roomId}
-      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[#F7F9FC]"
+      className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden overflow-x-hidden bg-[#F7F9FC]"
     >
-      <div
-        className={cn(
-          'grid min-h-0 flex-1 gap-2 overflow-hidden px-2 pt-2 pb-2 sm:gap-3 sm:px-4 sm:pt-3 lg:px-5 lg:pt-4',
-          'pb-[max(0.5rem,env(safe-area-inset-bottom))]',
-          panelOpen ? 'xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]' : 'grid-cols-1',
-        )}
-      >
-        <div className="flex min-h-0 min-w-0 flex-col gap-2 overflow-hidden sm:gap-3">
-          <div className="flex shrink-0 flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <MeetingRoomHeader
-                title={meetingTitle}
-                participantCount={tiles.length}
-                roomId={roomId}
-                isHost={isHost}
-                scheduledAt={meetingMeta?.scheduledAt}
-                durationMinutes={meetingMeta?.duration}
-                startedAt={meetingMeta?.startedAt}
-                recording={isHost && isRecording}
-                recordingElapsedMs={
-                  isRecording && recordingStartedAt
-                    ? Math.max(0, recordingTick - recordingStartedAt)
-                    : 0
-                }
-                userName={effectiveName}
-                avatarUrl={user?.avatarUrl}
-                avatarColor={user?.avatarColor}
-                onLeave={() => void handleLeave()}
-                onOpenParticipants={() => setShowParticipants(true)}
-                onInviteByEmail={
-                  isHost
-                    ? () => {
-                        setInviteError(null);
-                        setInviteOpen(true);
-                      }
-                    : undefined
-                }
-              />
-            </div>
-            {remoteControl.session ? (
-              <RemoteControlBanner
-                session={remoteControl.session}
-                viewMode={remoteControl.viewMode}
-                onStop={() => void remoteControl.stop()}
-                onSwitchView={
-                  remoteControl.session.role === 'controlling'
-                    ? (view) => void remoteControl.switchView(view)
-                    : undefined
-                }
-              />
-            ) : null}
-          </div>
-
-          <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl bg-[#EEF2F7] sm:rounded-[22px]">
-            {whiteboardOpen && socket ? (
-              <WhiteboardStage
-                socket={socket}
-                roomId={roomId}
-                participantId={participantId}
-                userName={effectiveName}
-                onClose={() => {
-                  if (isOpener()) announceClose();
-                  else addToast('Only the person who opened the whiteboard can close it for everyone');
-                }}
-                addToast={addToast}
-              />
-            ) : (
-              <>
-            <div className="flex h-full min-h-0 flex-col overflow-hidden p-1.5 sm:p-2.5">
-              {stageNameLabel ? (
-                <div className="mb-1.5 flex shrink-0 items-center gap-2 px-0.5 sm:mb-2">
-                  <p className="truncate text-[12px] font-semibold text-[#121B29] sm:text-[13px]">
-                    {stageNameLabel}
-                  </p>
-                  {controllingRemote ? (
-                    <span className="shrink-0 rounded-full bg-[#E8F1FF] px-2 py-0.5 text-[10px] font-semibold text-[#016BE6]">
-                      Controlling
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-              {focusTileId ? (
-              <div className="flex min-h-0 flex-1 flex-col gap-2 sm:gap-2.5">
-                {(() => {
-                  const focusTile = labeledTiles.find((t) => t.id === focusTileId);
-                  const others = labeledTiles.filter((t) => t.id !== focusTileId);
-                  if (!focusTile) return null;
-                  return (
-                    <>
-                      <VideoTile
-                        participant={focusTile}
-                        isScreenShare={focusTile.isScreenShare || Boolean(screenSharerId === focusTileId)}
-                        className="min-h-0 flex-1"
-                      />
-                      {others.length > 0 ? (
-                        <div className="flex shrink-0 gap-2 overflow-x-auto pb-0.5 scrollbar-none">
-                          {others.map((p) => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              className="shrink-0"
-                              onClick={() => {
-                                if (!remoteControl.session || remoteControl.session.role !== 'controlling') {
-                                  return;
-                                }
-                                if (p.id === participantId) {
-                                  void remoteControl.switchView('self');
-                                } else if (p.id === controlledPeerId) {
-                                  void remoteControl.switchView('remote');
-                                }
-                              }}
-                            >
-                              <VideoTile
-                                participant={p}
-                                isScreenShare={p.isScreenShare}
-                                className="h-24 w-36 sm:h-28 sm:w-44"
-                              />
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </>
-                  );
-                })()}
-              </div>
-            ) : (
-              <div
-                className={cn(
-                  'grid h-full min-h-0 gap-1.5 sm:gap-2.5',
-                  labeledTiles.length <= 1 && 'grid-cols-1',
-                  labeledTiles.length === 2 && 'grid-cols-2',
-                  labeledTiles.length === 3 && 'grid-cols-2 sm:grid-cols-3',
-                  labeledTiles.length === 4 && 'grid-cols-2',
-                  labeledTiles.length > 4 && 'grid-cols-2 lg:grid-cols-3',
-                  'auto-rows-fr',
-                )}
-              >
-                {labeledTiles.map((p) => (
-                  <VideoTile
-                    key={p.id}
-                    participant={p}
-                    isScreenShare={p.isScreenShare}
-                    className="min-h-0 h-full w-full"
-                  />
-                ))}
-              </div>
-            )}
-            </div>
-
-            <ReactionOverlay
-              reactions={activeReactions}
-              peerNames={peerNames}
-              ownParticipantId={participantId}
-              ownUserName={
-                controllingRemote && controlledPeerName ? controlledPeerName : effectiveName
-              }
-            />
-              </>
-            )}
-          </div>
-
-          <div className="shrink-0 px-0.5 pt-1 sm:px-1">
-          <ConferenceControlBar
-            muted={
-              controllingRemote
-                ? Boolean(remoteControl.remoteUiState?.isMuted)
-                : isMuted
+      {/* Band 1 — compact header */}
+      <header className="flex shrink-0 items-center gap-2 px-2 pt-2 sm:gap-3 sm:px-4 sm:pt-3 lg:px-5">
+        <div className="min-w-0 flex-1">
+          <MeetingRoomHeader
+            title={meetingTitle}
+            participantCount={tiles.length}
+            roomId={roomId}
+            isHost={isHost}
+            scheduledAt={meetingMeta?.scheduledAt}
+            durationMinutes={meetingMeta?.duration}
+            startedAt={meetingMeta?.startedAt}
+            recording={isHost && isRecording}
+            recordingElapsedMs={
+              isRecording && recordingStartedAt
+                ? Math.max(0, recordingTick - recordingStartedAt)
+                : 0
             }
-            cameraOff={
-              controllingRemote
-                ? Boolean(remoteControl.remoteUiState?.isCameraOff)
-                : isCameraOff
-            }
-            handRaised={
-              controllingRemote
-                ? Boolean(remoteControl.remoteUiState?.isHandRaised)
-                : raisedHands.has(participantId)
-            }
-            sharing={
-              controllingRemote
-                ? Boolean(remoteControl.remoteUiState?.isSharingScreen)
-                : !!screenStream
-            }
-            recording={isRecording}
-            recordingBusy={isRecordingBusy}
-            whiteboardOpen={whiteboardOpen}
-            participantsOpen={showParticipants}
-            chatOpen={showChat}
-            canEndMeeting={isHost && !controllingRemote}
-            canRecord={isHost && !controllingRemote}
-            shareDisabled={someoneElseSharing && !controllingRemote}
-            shareDisabledReason="Someone else is sharing"
-            onToggleMute={
-              controllingRemote
-                ? () => void remoteControl.sendAction('TOGGLE_MUTE')
-                : () => void handleToggleMute()
-            }
-            onToggleCamera={
-              controllingRemote
-                ? () => void remoteControl.sendAction('TOGGLE_CAMERA')
-                : () => void handleToggleCamera()
-            }
-            onToggleHand={
-              controllingRemote
-                ? () =>
-                    void remoteControl.sendAction(
-                      remoteControl.remoteUiState?.isHandRaised ? 'LOWER_HAND' : 'RAISE_HAND',
-                    )
-                : () => toggleRaiseHand()
-            }
-            onToggleShare={
-              controllingRemote
-                ? () =>
-                    void remoteControl.sendAction(
-                      remoteControl.remoteUiState?.isSharingScreen
-                        ? 'STOP_SCREEN_SHARE'
-                        : 'START_SCREEN_SHARE',
-                    )
-                : () => void handleShareScreen()
-            }
-            onToggleRecording={
-              isHost && !controllingRemote
-                ? isRecording
-                  ? () => void stopRecording()
-                  : () => void startRecording()
+            userName={effectiveName}
+            avatarUrl={user?.avatarUrl}
+            avatarColor={user?.avatarColor}
+            onLeave={() => void handleLeave()}
+            onOpenParticipants={() => setShowParticipants(true)}
+            onInviteByEmail={
+              isHost
+                ? () => {
+                    setInviteError(null);
+                    setInviteOpen(true);
+                  }
                 : undefined
             }
-            onToggleWhiteboard={
-              controllingRemote ? () => undefined : handleToggleWhiteboard
-            }
-            onToggleParticipants={
-              controllingRemote
-                ? () => {
-                    const next = !showParticipants;
-                    setShowParticipants(next);
-                    if (next) setShowChat(false);
-                    void remoteControl.sendAction(
-                      next ? 'OPEN_PARTICIPANTS' : 'CLOSE_PARTICIPANTS',
-                    );
-                  }
-                : () => {
-                    setShowParticipants((open) => {
-                      const next = !open;
-                      if (next) setShowChat(false);
-                      return next;
-                    });
-                  }
-            }
-            onToggleChat={
-              controllingRemote
-                ? () => {
-                    const next = !showChat;
-                    setShowChat(next);
-                    if (next) setShowParticipants(false);
-                    void remoteControl.sendAction(next ? 'OPEN_CHAT' : 'CLOSE_CHAT');
-                  }
-                : () => {
-                    setShowChat((open) => {
-                      const next = !open;
-                      if (next) setShowParticipants(false);
-                      return next;
-                    });
-                  }
-            }
-            onSendReaction={
-              controllingRemote
-                ? (emoji) => void remoteControl.sendAction('SEND_REACTION', { reaction: emoji })
-                : sendReaction
-            }
-            onLeave={() => void handleLeave()}
-            onEndCall={() => void handleEndMeeting()}
-            userName={controllingRemote && controlledPeerName ? controlledPeerName : effectiveName}
           />
+        </div>
+        {remoteControl.session ? (
+          <div className="hidden min-w-0 shrink sm:block">
+            <RemoteControlBanner
+              session={remoteControl.session}
+              viewMode={remoteControl.viewMode}
+              onStop={() => void remoteControl.stop()}
+              onSwitchView={
+                remoteControl.session.role === 'controlling'
+                  ? (view) => void remoteControl.switchView(view)
+                  : undefined
+              }
+            />
           </div>
+        ) : null}
+      </header>
+      {remoteControl.session ? (
+        <div className="shrink-0 px-2 pt-1 sm:hidden">
+          <RemoteControlBanner
+            session={remoteControl.session}
+            viewMode={remoteControl.viewMode}
+            onStop={() => void remoteControl.stop()}
+            onSwitchView={
+              remoteControl.session.role === 'controlling'
+                ? (view) => void remoteControl.switchView(view)
+                : undefined
+            }
+          />
+        </div>
+      ) : null}
+
+      {/* Band 2 — video/whiteboard + always-visible xl side rail (collapsed or expanded) */}
+      <div
+        className={cn(
+          'grid min-h-0 min-w-0 flex-1 gap-2 overflow-hidden overflow-x-hidden px-2 pt-1.5 sm:gap-3 sm:px-4 sm:pt-2 lg:px-5',
+          'xl:grid-cols-[minmax(0,1fr)_auto]',
+          panelOpen && 'xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]',
+        )}
+      >
+        <div className="relative min-h-0 min-w-0 overflow-hidden rounded-xl bg-[#EEF2F7] sm:rounded-2xl">
+          {whiteboardOpen && socket ? (
+            <WhiteboardStage
+              socket={socket}
+              roomId={roomId}
+              participantId={participantId}
+              userName={effectiveName}
+              onClose={() => {
+                if (isOpener()) announceClose();
+                else addToast('Only the person who opened the whiteboard can close it for everyone');
+              }}
+              addToast={addToast}
+            />
+          ) : (
+            <>
+              <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-1 sm:p-2">
+                {stageNameLabel ? (
+                  <div className="mb-1 flex shrink-0 items-center gap-2 px-0.5 sm:mb-1.5">
+                    <p className="truncate text-[12px] font-semibold text-[#121B29] sm:text-[13px]">
+                      {stageNameLabel}
+                    </p>
+                    {controllingRemote ? (
+                      <span className="shrink-0 rounded-full bg-[#E8F1FF] px-2 py-0.5 text-[10px] font-semibold text-[#016BE6]">
+                        Controlling
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+                {focusTileId ? (
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 sm:gap-2">
+                    {(() => {
+                      const focusTile = labeledTiles.find((t) => t.id === focusTileId);
+                      const others = labeledTiles.filter((t) => t.id !== focusTileId);
+                      if (!focusTile) return null;
+                      return (
+                        <>
+                          <VideoTile
+                            participant={focusTile}
+                            isScreenShare={
+                              focusTile.isScreenShare || Boolean(screenSharerId === focusTileId)
+                            }
+                            className="min-h-0 min-w-0 flex-1"
+                          />
+                          {others.length > 0 ? (
+                            <div className="flex min-w-0 shrink-0 gap-2 overflow-x-auto overscroll-x-contain pb-0.5 scrollbar-none">
+                              {others.map((p) => (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  className="shrink-0"
+                                  onClick={() => {
+                                    if (
+                                      !remoteControl.session ||
+                                      remoteControl.session.role !== 'controlling'
+                                    ) {
+                                      return;
+                                    }
+                                    if (p.id === participantId) {
+                                      void remoteControl.switchView('self');
+                                    } else if (p.id === controlledPeerId) {
+                                      void remoteControl.switchView('remote');
+                                    }
+                                  }}
+                                >
+                                  <VideoTile
+                                    participant={p}
+                                    isScreenShare={p.isScreenShare}
+                                    className="h-20 w-28 sm:h-28 sm:w-44"
+                                  />
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <MeetingVideoGrid
+                    tiles={labeledTiles}
+                    onOpenParticipants={() => {
+                      setShowChat(false);
+                      setShowParticipants(true);
+                    }}
+                  />
+                )}
+              </div>
+
+              <ReactionOverlay
+                reactions={activeReactions}
+                peerNames={peerNames}
+                ownParticipantId={participantId}
+                ownUserName={
+                  controllingRemote && controlledPeerName ? controlledPeerName : effectiveName
+                }
+              />
+            </>
+          )}
         </div>
 
-        {panelOpen ? (
-          <aside className="hidden min-h-0 flex-col gap-3 overflow-hidden xl:flex">
-            {showParticipants ? (
-              <div className={cn('min-h-0', showChat ? 'flex-[0.55]' : 'flex-1')}>
-                <ParticipantsPanel
-                  participants={panelPeople}
-                  waiting={waitingList}
-                  isHostViewer={isHostViewer}
-                  remoteControlPendingId={
-                    remoteControl.outgoingStatus === 'sent' ? remoteControl.outgoingTargetId : null
-                  }
-                  onParticipantAction={(id, action) => void handleParticipantAction(id, action)}
-                  onAdmitWaiting={handleAdmitWaiting}
-                  onDenyWaiting={handleDenyWaiting}
-                  onClose={() => setShowParticipants(false)}
-                />
-              </div>
-            ) : null}
-            {showChat ? (
-              <div className={cn('min-h-0', showParticipants ? 'flex-[0.45]' : 'flex-1')}>
-                <MeetingChatPanel
-                  roomId={roomId}
-                  peerId={participantId}
-                  userId={effectiveUserId ?? ''}
-                  userName={effectiveName}
-                  chatDisabled={chatDisabled && !controllingRemote}
-                  actingAsName={controllingRemote ? controlledPeerName : null}
-                  onSendOverride={
-                    controllingRemote
-                      ? (text) => {
-                          void remoteControl.sendAction('SEND_CHAT', { content: text });
-                        }
-                      : undefined
-                  }
-                  onClose={() => setShowChat(false)}
-                />
-              </div>
-            ) : null}
-          </aside>
-        ) : null}
+        <aside className="hidden min-h-0 min-w-0 flex-col gap-2 overflow-hidden xl:flex">
+          {!panelOpen ? (
+            <MeetingSideRail
+              participantsOpen={showParticipants}
+              chatOpen={showChat}
+              participantCount={panelPeople.length}
+              onToggleParticipants={() => {
+                setShowParticipants((open) => {
+                  const next = !open;
+                  if (next) setShowChat(false);
+                  return next;
+                });
+              }}
+              onToggleChat={() => {
+                setShowChat((open) => {
+                  const next = !open;
+                  if (next) setShowParticipants(false);
+                  return next;
+                });
+              }}
+            />
+          ) : (
+            <>
+              {showParticipants ? (
+                <div className={cn('min-h-0', showChat ? 'flex-[0.55]' : 'flex-1')}>
+                  <ParticipantsPanel
+                    participants={panelPeople}
+                    waiting={waitingList}
+                    isHostViewer={isHostViewer}
+                    remoteControlPendingId={
+                      remoteControl.outgoingStatus === 'sent'
+                        ? remoteControl.outgoingTargetId
+                        : null
+                    }
+                    onParticipantAction={(id, action) => void handleParticipantAction(id, action)}
+                    onAdmitWaiting={handleAdmitWaiting}
+                    onDenyWaiting={handleDenyWaiting}
+                    onClose={() => setShowParticipants(false)}
+                  />
+                </div>
+              ) : null}
+              {showChat ? (
+                <div className={cn('min-h-0', showParticipants ? 'flex-[0.45]' : 'flex-1')}>
+                  <MeetingChatPanel
+                    roomId={roomId}
+                    peerId={participantId}
+                    userId={effectiveUserId ?? ''}
+                    userName={effectiveName}
+                    chatDisabled={chatDisabled && !controllingRemote}
+                    actingAsName={controllingRemote ? controlledPeerName : null}
+                    onSendOverride={
+                      controllingRemote
+                        ? (text) => {
+                            void remoteControl.sendAction('SEND_CHAT', { content: text });
+                          }
+                        : undefined
+                    }
+                    onClose={() => setShowChat(false)}
+                  />
+                </div>
+              ) : null}
+            </>
+          )}
+        </aside>
+      </div>
+
+      {/* Band 3 — controls always at bottom of viewport */}
+      <div className="sticky bottom-0 z-50 shrink-0 border-t border-[#E8ECF1]/80 bg-[#F7F9FC]/95 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:px-4 sm:pt-2 lg:px-5">
+        <ConferenceControlBar
+          muted={
+            controllingRemote ? Boolean(remoteControl.remoteUiState?.isMuted) : isMuted
+          }
+          cameraOff={
+            controllingRemote
+              ? Boolean(remoteControl.remoteUiState?.isCameraOff)
+              : isCameraOff
+          }
+          handRaised={
+            controllingRemote
+              ? Boolean(remoteControl.remoteUiState?.isHandRaised)
+              : raisedHands.has(participantId)
+          }
+          sharing={
+            controllingRemote
+              ? Boolean(remoteControl.remoteUiState?.isSharingScreen)
+              : !!screenStream
+          }
+          recording={isRecording}
+          recordingBusy={isRecordingBusy}
+          whiteboardOpen={whiteboardOpen}
+          participantsOpen={showParticipants}
+          chatOpen={showChat}
+          canEndMeeting={isHost && !controllingRemote}
+          canRecord={isHost && !controllingRemote}
+          shareDisabled={someoneElseSharing && !controllingRemote}
+          shareDisabledReason="Someone else is sharing"
+          onToggleMute={
+            controllingRemote
+              ? () => void remoteControl.sendAction('TOGGLE_MUTE')
+              : () => void handleToggleMute()
+          }
+          onToggleCamera={
+            controllingRemote
+              ? () => void remoteControl.sendAction('TOGGLE_CAMERA')
+              : () => void handleToggleCamera()
+          }
+          onToggleHand={
+            controllingRemote
+              ? () =>
+                  void remoteControl.sendAction(
+                    remoteControl.remoteUiState?.isHandRaised ? 'LOWER_HAND' : 'RAISE_HAND',
+                  )
+              : () => toggleRaiseHand()
+          }
+          onToggleShare={
+            controllingRemote
+              ? () =>
+                  void remoteControl.sendAction(
+                    remoteControl.remoteUiState?.isSharingScreen
+                      ? 'STOP_SCREEN_SHARE'
+                      : 'START_SCREEN_SHARE',
+                  )
+              : () => void handleShareScreen()
+          }
+          onToggleRecording={
+            isHost && !controllingRemote
+              ? isRecording
+                ? () => void stopRecording()
+                : () => void startRecording()
+              : undefined
+          }
+          onToggleWhiteboard={
+            controllingRemote ? () => undefined : handleToggleWhiteboard
+          }
+          onToggleParticipants={
+            controllingRemote
+              ? () => {
+                  const next = !showParticipants;
+                  setShowParticipants(next);
+                  if (next) setShowChat(false);
+                  void remoteControl.sendAction(
+                    next ? 'OPEN_PARTICIPANTS' : 'CLOSE_PARTICIPANTS',
+                  );
+                }
+              : () => {
+                  setShowParticipants((open) => {
+                    const next = !open;
+                    if (next) setShowChat(false);
+                    return next;
+                  });
+                }
+          }
+          onToggleChat={
+            controllingRemote
+              ? () => {
+                  const next = !showChat;
+                  setShowChat(next);
+                  if (next) setShowParticipants(false);
+                  void remoteControl.sendAction(next ? 'OPEN_CHAT' : 'CLOSE_CHAT');
+                }
+              : () => {
+                  setShowChat((open) => {
+                    const next = !open;
+                    if (next) setShowParticipants(false);
+                    return next;
+                  });
+                }
+          }
+          onSendReaction={
+            controllingRemote
+              ? (emoji) => void remoteControl.sendAction('SEND_REACTION', { reaction: emoji })
+              : sendReaction
+          }
+          onLeave={() => void handleLeave()}
+          onEndCall={() => void handleEndMeeting()}
+          userName={controllingRemote && controlledPeerName ? controlledPeerName : effectiveName}
+        />
       </div>
 
       {panelOpen ? (
@@ -1172,7 +1204,7 @@ export function LiveMeetingPage() {
               setShowChat(false);
             }}
           />
-          <div className="absolute inset-x-0 bottom-0 flex min-h-[52svh] max-h-[78svh] flex-col rounded-t-2xl border-t border-[#E1E7EE] bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-12px_40px_rgba(15,23,42,0.16)]">
+          <div className="absolute inset-x-0 bottom-[4.75rem] flex min-h-[45svh] max-h-[min(70svh,calc(100dvh-9rem))] flex-col rounded-t-2xl border-t border-[#E1E7EE] bg-white p-3 shadow-[0_-12px_40px_rgba(15,23,42,0.16)] sm:bottom-[5.25rem]">
           {showParticipants ? (
             <div className="min-h-0 flex-1">
             <ParticipantsPanel

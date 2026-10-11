@@ -24,7 +24,9 @@ export function AppShellLayout() {
     <div
       className={cn(
         'samtal-light flex w-full overflow-hidden bg-white',
-        isLiveMeetingRoom ? 'h-[100svh] h-[100dvh]' : 'h-full min-h-0',
+        isLiveMeetingRoom
+          ? 'h-[100svh] h-[100dvh] max-w-[100vw] overflow-x-hidden'
+          : 'h-full min-h-0',
       )}
     >
       {mobileOpen && !isLiveMeetingRoom ? (

@@ -76,7 +76,7 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
       data-meeting-local={participant.isYou ? '1' : '0'}
       data-meeting-screen={isScreenShare ? '1' : '0'}
       className={cn(
-        'relative min-h-0 overflow-hidden rounded-2xl bg-[#E8EEF5] sm:rounded-[22px]',
+        'relative min-h-0 min-w-0 overflow-hidden rounded-2xl bg-[#E8EEF5] sm:rounded-[22px]',
         participant.isSpeaking && 'ring-2 ring-[#076BEE] ring-offset-2 ring-offset-[#EEF2F7]',
         className,
       )}

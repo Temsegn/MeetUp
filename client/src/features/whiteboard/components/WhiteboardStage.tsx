@@ -114,7 +114,7 @@ export const WhiteboardStage: React.FC<WhiteboardStageProps> = ({
       canvasActions: {
         changeViewBackgroundColor: true,
         clearCanvas: true,
-        export: { saveFileToDisk: true },
+        export: false as const,
         loadScene: false,
         saveToActiveFile: false,
         toggleTheme: false,
@@ -123,6 +123,7 @@ export const WhiteboardStage: React.FC<WhiteboardStageProps> = ({
       tools: {
         image: true,
       },
+      dockedSidebarBreakpoint: 768,
     }),
     [],
   );
@@ -136,6 +137,8 @@ export const WhiteboardStage: React.FC<WhiteboardStageProps> = ({
         viewBackgroundColor: '#ffffff',
         currentItemFontFamily: 1,
         theme: 'light' as const,
+        openSidebar: null,
+        openDialog: null,
       },
       scrollToContent: Boolean(initialData.elements?.length),
     };

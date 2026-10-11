@@ -75,10 +75,10 @@ export function MeetingRoomHeader({
   );
 
   return (
-    <div className="flex items-center justify-between gap-2 sm:gap-3">
-      <div className="min-w-0 flex-1">
+    <div className="flex min-w-0 items-center justify-between gap-2 overflow-x-hidden sm:gap-3">
+      <div className="min-w-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
-          <h1 className="truncate text-[15px] font-bold tracking-[-0.02em] text-[#121B29] sm:text-[20px] lg:text-[22px]">
+          <h1 className="truncate text-[14px] font-bold tracking-[-0.02em] text-[#121B29] sm:text-[18px] lg:text-[20px]">
             {title}
           </h1>
           <BadgeCheck className="hidden size-4 shrink-0 text-[#076BEE] sm:block sm:size-5" aria-hidden />
