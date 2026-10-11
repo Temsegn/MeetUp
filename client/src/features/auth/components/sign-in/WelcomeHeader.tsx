@@ -2,7 +2,7 @@ import React from 'react';
 import { SIGN_IN_COPY } from '../../constants/sign-in.constants';
 
 export const WelcomeHeader: React.FC = () => (
-  <header className="mb-7 mt-7 w-full text-center">
+  <header className="mb-7 mt-0 w-full text-center">
     <h1
       id="signin-heading"
       className="m-0 text-[1.75rem] font-bold leading-tight tracking-[-0.03em] text-[#0F172A] sm:text-[1.95rem]"

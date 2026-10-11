@@ -87,10 +87,10 @@ export function LandingNav({ user }: Props) {
             <AppEntryLink className={LP_NAV_PRIMARY}>{copy.nav.openDashboard}</AppEntryLink>
           ) : (
             <>
-              <AuthLink to="/auth" className="px-2.5 text-[13px] font-semibold text-[#5B677A] hover:text-[#0F172A]">
+              <AuthLink to="/sign-in" className="px-2.5 text-[13px] font-semibold text-[#5B677A] hover:text-[#0F172A]">
                 {copy.nav.signIn}
               </AuthLink>
-              <AuthLink to="/auth/sign-up" className={LP_NAV_PRIMARY}>
+              <AuthLink to="/signup" className={LP_NAV_PRIMARY}>
                 {copy.nav.getStarted}
               </AuthLink>
             </>
@@ -157,10 +157,10 @@ export function LandingNav({ user }: Props) {
               </AppEntryLink>
             ) : (
               <>
-                <AuthLink to="/auth" onClick={() => setMobileOpen(false)} className={LP_GHOST}>
+                <AuthLink to="/sign-in" onClick={() => setMobileOpen(false)} className={LP_GHOST}>
                   {copy.nav.signIn}
                 </AuthLink>
-                <AuthLink to="/auth/sign-up" onClick={() => setMobileOpen(false)} className={LP_NAV_PRIMARY}>
+                <AuthLink to="/signup" onClick={() => setMobileOpen(false)} className={LP_NAV_PRIMARY}>
                   {copy.nav.getStarted}
                 </AuthLink>
               </>

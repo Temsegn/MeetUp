@@ -39,7 +39,7 @@ export function LandingHero({ user }: Props) {
                 <ArrowRight className="size-4 rtl:rotate-180" />
               </AppEntryLink>
             ) : (
-              <AuthLink to="/auth/sign-up" className={LP_PRIMARY}>
+              <AuthLink to="/signup" className={LP_PRIMARY}>
                 {primaryLabel}
                 <ArrowRight className="size-4 rtl:rotate-180" />
               </AuthLink>

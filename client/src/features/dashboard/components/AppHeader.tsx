@@ -99,7 +99,7 @@ export function AppHeader({
     setLoggingOut(true);
     try {
       await signOut();
-      navigate('/auth', { replace: true });
+      navigate('/sign-in', { replace: true });
     } finally {
       setLoggingOut(false);
       setMenuOpen(false);

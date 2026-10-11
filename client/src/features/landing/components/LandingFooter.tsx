@@ -31,7 +31,7 @@ export function LandingCta({ user }: Props) {
           </AppEntryLink>
         ) : (
           <AuthLink
-            to="/auth/sign-up"
+            to="/signup"
             className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white px-5 text-[14px] font-semibold text-[#016BE6] transition-colors hover:bg-[#F3F8FF]"
           >
             {label}

@@ -63,7 +63,7 @@ export function PricingTeaser({ user }: Props) {
                 </AppEntryLink>
               ) : (
                 <AuthLink
-                  to="/auth/sign-up"
+                  to="/signup"
                   className={cn('mt-8', tier.highlighted ? LP_PRIMARY : LP_GHOST)}
                 >
                   {tier.cta}

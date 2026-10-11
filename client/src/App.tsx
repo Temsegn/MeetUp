@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { goToFrontend } from './lib/frontendUrl';
 import { NotificationCenterProvider } from './contexts/NotificationCenterContext';
@@ -76,8 +76,20 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
         </div>
       </div>
     );
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user) return <Navigate to="/sign-in" replace />;
   return <>{children}</>;
+};
+
+/** Preserve query/state when migrating old /auth URLs. */
+const RedirectToSignIn: React.FC = () => {
+  const location = useLocation();
+  return (
+    <Navigate
+      to={{ pathname: '/sign-in', search: location.search, hash: location.hash }}
+      replace
+      state={location.state}
+    />
+  );
 };
 
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -121,8 +133,10 @@ function App() {
           <Routes>
             <Route element={<MarketingLayout />}>
               <Route path="/" element={<LandingPage />} />
-              <Route path="/auth" element={<PublicRoute><SignInPage /></PublicRoute>} />
-              <Route path="/auth/sign-up" element={<PublicRoute><SignUpPage /></PublicRoute>} />
+              <Route path="/sign-in" element={<PublicRoute><SignInPage /></PublicRoute>} />
+              <Route path="/signup" element={<PublicRoute><SignUpPage /></PublicRoute>} />
+              <Route path="/auth" element={<RedirectToSignIn />} />
+              <Route path="/auth/sign-up" element={<Navigate to="/signup" replace />} />
               <Route path="/auth/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
             </Route>
             <Route path="/auth/reset-password" element={<ResetPasswordPage />} />

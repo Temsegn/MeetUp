@@ -116,7 +116,7 @@ export function InviteJoinPage() {
             newPassword: password,
           },
         });
-        navigate('/auth', {
+        navigate('/sign-in', {
           replace: true,
           state: { message: 'Invite accepted. Sign in with your new password.' },
         });
@@ -133,7 +133,7 @@ export function InviteJoinPage() {
     setError(null);
     try {
       await workspaceService.joinInvite({ token, password });
-      navigate('/auth', {
+      navigate('/sign-in', {
         replace: true,
         state: { message: 'Invite accepted. Sign in with your email and password.' },
       });

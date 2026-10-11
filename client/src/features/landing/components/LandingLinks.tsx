@@ -8,7 +8,7 @@ export function AuthLink({
   children,
   onClick,
 }: {
-  to: '/auth' | '/auth/sign-up';
+  to: '/sign-in' | '/signup';
   className?: string;
   children: ReactNode;
   onClick?: () => void;

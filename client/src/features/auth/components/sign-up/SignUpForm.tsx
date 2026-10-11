@@ -6,7 +6,7 @@ import type { FieldErrors, SignUpFormValues } from '../../schemas/auth.schemas';
 import { SignUpPasswordField, SignUpTextField } from './SignUpFields';
 import { SignUpTeamSizeSelect } from './SignUpTeamSizeSelect';
 import { SignUpTermsRow } from './SignUpTermsRow';
-import { SignUpSocialButtons } from './SignUpSocialButtons';
+import { JoinMeetingButton } from '../JoinMeetingButton';
 
 type Props = {
   values: SignUpFormValues;
@@ -154,7 +154,7 @@ export const SignUpForm: React.FC<Props> = ({
         {loading ? 'Creating account…' : c.submit}
       </button>
 
-      <SignUpSocialButtons />
+      <JoinMeetingButton />
     </form>
   );
 };

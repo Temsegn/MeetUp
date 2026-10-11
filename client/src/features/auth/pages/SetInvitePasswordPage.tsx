@@ -44,7 +44,7 @@ export function SetInvitePasswordPage() {
       });
       setDone(true);
       window.setTimeout(() => {
-        navigate('/auth', {
+        navigate('/sign-in', {
           replace: true,
           state: { message: 'Password updated. Sign in with your new password.' },
         });
@@ -133,7 +133,7 @@ export function SetInvitePasswordPage() {
           </>
         )}
         <p className="auth-switch">
-          <Link className="auth-link" to="/auth">
+          <Link className="auth-link" to="/sign-in">
             Back to Sign In
           </Link>
         </p>

@@ -75,7 +75,7 @@ export const ResetPasswordPage: React.FC = () => {
           </button>
 
           <p className="auth-switch">
-            <Link className="auth-link" to="/auth">
+            <Link className="auth-link" to="/sign-in">
               Back to Sign In
             </Link>
           </p>

@@ -67,7 +67,7 @@ export const ForgotPasswordPanel: React.FC<Props> = ({
               </div>
               <div className="mt-7 flex justify-center">
                 <Link
-                  to="/auth"
+                  to="/sign-in"
                   className="inline-flex items-center gap-2 text-[15px] font-medium leading-[22px] tracking-[-0.17px] text-brand-link no-underline transition-opacity hover:opacity-80"
                 >
                   <BackArrowIcon />
@@ -130,7 +130,7 @@ export const ForgotPasswordPanel: React.FC<Props> = ({
 
               <div className="mt-7 flex justify-center">
                 <Link
-                  to="/auth"
+                  to="/sign-in"
                   className="inline-flex items-center gap-2 text-[15px] font-medium leading-[22px] tracking-[-0.17px] text-brand-link no-underline transition-opacity hover:opacity-80"
                 >
                   <BackArrowIcon />

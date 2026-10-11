@@ -57,7 +57,7 @@ export function AdminGuard() {
   if (initializing || checking) {
     return <AdminShellSkeleton />;
   }
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user) return <Navigate to="/sign-in" replace />;
   if (!allowed && !isPlatformAdmin(user.platformRole)) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-3 bg-[#F5F7FA] px-6 text-center">

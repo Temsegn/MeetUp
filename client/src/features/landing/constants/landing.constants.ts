@@ -205,8 +205,8 @@ const EN_COPY = {
       { label: 'Recordings', sectionId: 'product' },
     ],
     companyItems: [
-      { label: 'Sign in', to: '/auth' },
-      { label: 'Create an account', to: '/auth/sign-up' },
+      { label: 'Sign in', to: '/sign-in' },
+      { label: 'Create an account', to: '/signup' },
       { label: 'Plans', sectionId: 'pricing' },
     ],
     legalItems: [
@@ -376,8 +376,8 @@ const AR_COPY: LandingCopy = {
       { label: 'التسجيلات', sectionId: 'product' },
     ],
     companyItems: [
-      { label: 'تسجيل الدخول', to: '/auth' },
-      { label: 'إنشاء حساب', to: '/auth/sign-up' },
+      { label: 'تسجيل الدخول', to: '/sign-in' },
+      { label: 'إنشاء حساب', to: '/signup' },
       { label: 'الخطط', sectionId: 'pricing' },
     ],
     legalItems: [

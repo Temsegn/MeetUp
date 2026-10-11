@@ -46,7 +46,7 @@ export function useResetPassword(token: string) {
         confirmPassword: values.confirmPassword,
       });
       setSuccess(true);
-      setTimeout(() => navigate('/auth', { replace: true }), 2000);
+      setTimeout(() => navigate('/sign-in', { replace: true }), 2000);
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setError(err.message || 'Could not reset password. The link may have expired.');

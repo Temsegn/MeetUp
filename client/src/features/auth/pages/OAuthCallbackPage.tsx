@@ -85,7 +85,7 @@ export const OAuthCallbackPage: React.FC = () => {
         <button
           type="button"
           className="rounded-full bg-[#016BE6] px-5 py-2 text-sm font-semibold text-white"
-          onClick={() => navigate('/auth', { replace: true })}
+          onClick={() => navigate('/sign-in', { replace: true })}
         >
           Back to sign in
         </button>

@@ -1,5 +1,4 @@
 import React from 'react';
-import { AuthLogo } from '../AuthShell';
 import { WelcomeHeader } from './WelcomeHeader';
 import { SignInForm } from './SignInForm';
 import { SignUpPrompt } from './SignUpPrompt';
@@ -21,7 +20,7 @@ type Props = {
   resendMessage?: string;
 };
 
-/** Right form — all content centered in the column. */
+/** Right form — all content centered in the column (no brand logo). */
 export const SignInPanel: React.FC<Props> = (props) => (
   <section
     className="flex min-h-0 min-w-0 flex-col overflow-y-auto overflow-x-hidden bg-white"
@@ -29,7 +28,6 @@ export const SignInPanel: React.FC<Props> = (props) => (
   >
     <div className="flex min-h-full flex-col items-center justify-center px-8 py-10 sm:px-12 sm:py-12">
       <div className="flex w-full max-w-[24rem] flex-col items-center">
-        <AuthLogo className="mb-0 h-14 max-w-[15rem] object-contain sm:h-16 sm:max-w-[16rem]" />
         <WelcomeHeader />
         <div className="w-full">
           <SignInForm {...props} />

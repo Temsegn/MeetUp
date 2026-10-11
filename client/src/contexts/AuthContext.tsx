@@ -86,7 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setWorkspaces([]);
       void authService.signOut().catch(() => {});
-      navigate('/auth', { replace: true, state: { message: SESSION_EXPIRED_MESSAGE } });
+      navigate('/sign-in', { replace: true, state: { message: SESSION_EXPIRED_MESSAGE } });
     });
   }, [navigate]);
 

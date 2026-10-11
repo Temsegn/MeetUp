@@ -7,7 +7,7 @@ export const SignUpPrompt: React.FC = () => (
     <span>{SIGN_IN_COPY.noAccount}</span>
     <Link
       className="font-semibold text-[#016BE6] hover:underline"
-      to="/auth/sign-up"
+      to="/signup"
     >
       {SIGN_IN_COPY.signUp}
     </Link>

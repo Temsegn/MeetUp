@@ -90,7 +90,7 @@ export const SecuritySettingsPage: React.FC = () => {
     setLoggingOutAll(true);
     try {
       await signOutAll();
-      navigate('/auth', { replace: true });
+      navigate('/sign-in', { replace: true });
     } catch (err: unknown) {
       setSessionsError(err instanceof Error ? err.message : 'Could not sign out all devices.');
       setLoggingOutAll(false);

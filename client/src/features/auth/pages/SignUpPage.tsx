@@ -1,11 +1,11 @@
 import React from 'react';
-import { SignUpPromoPanel } from '../components/sign-up/SignUpPromoPanel';
+import { AuthShell, AuthMain } from '../components/AuthShell';
+import { ProductShowcase } from '../components/sign-in/ProductShowcase';
 import { SignUpFormPanel } from '../components/sign-up/SignUpFormPanel';
 import { useSignUp } from '../hooks/useSignUp';
-import { SIGN_UP_PAGE_BG } from '../constants/sign-up.constants';
 
 /**
- * Sign Up — login showcase bg (#F1F6FD), compact left promo, floating form card.
+ * Sign Up — same left promo as sign-in; only the right form column differs.
  */
 export const SignUpPage: React.FC = () => {
   const {
@@ -26,12 +26,9 @@ export const SignUpPage: React.FC = () => {
   } = useSignUp();
 
   return (
-    <div
-      className="samtal-light flex h-full min-h-0 w-full flex-1 overflow-hidden font-sans text-[#161E35]"
-      style={{ backgroundColor: SIGN_UP_PAGE_BG }}
-    >
-      <div className="flex min-h-0 w-full flex-1 flex-col lg:flex-row">
-        <SignUpPromoPanel />
+    <AuthShell>
+      <AuthMain>
+        <ProductShowcase />
         <SignUpFormPanel
           values={values}
           fieldErrors={fieldErrors}
@@ -48,7 +45,7 @@ export const SignUpPage: React.FC = () => {
           resendLoading={resendLoading}
           resendMessage={resendMessage}
         />
-      </div>
-    </div>
+      </AuthMain>
+    </AuthShell>
   );
 };

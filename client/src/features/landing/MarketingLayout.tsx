@@ -102,7 +102,10 @@ function MarketingLayoutInner() {
     [scrollTo, goSection, activeId, location.pathname],
   );
 
-  const isAuth = location.pathname.startsWith('/auth');
+  const isAuth =
+    location.pathname.startsWith('/auth') ||
+    location.pathname === '/sign-in' ||
+    location.pathname === '/signup';
 
   return (
     <LandingChromeProvider value={chrome}>
