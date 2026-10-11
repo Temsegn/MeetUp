@@ -94,12 +94,26 @@ export class TransportManager {
     this.transportStates.set(transport.id, state);
 
     metrics.activeTransports.inc();
-    logger.debug('Transport created', {
+    const candidateIps = Array.from(
+      new Set(
+        (transport.iceCandidates ?? []).map((c) => c.ip).filter(Boolean),
+      ),
+    );
+    logger.info('Transport created', {
       roomId,
       participantId,
       transportId: transport.id,
       direction,
+      candidateIps,
+      announcedIp: process.env.MEDIASOUP_ANNOUNCED_IP ?? null,
     });
+    if (candidateIps.some((ip) => ip === '127.0.0.1' || ip === '0.0.0.0')) {
+      logger.error(
+        'Transport ICE candidates include loopback — remote A/V will fail. ' +
+          'Set MEDIASOUP_ANNOUNCED_IP to the VPS public IPv4.',
+        { candidateIps, roomId, participantId },
+      );
+    }
 
     this._attachDtlsHandlers(transport, roomId, participantId, state);
     this._attachIceHandlers(transport, roomId, participantId, state);

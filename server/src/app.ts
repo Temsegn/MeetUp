@@ -84,13 +84,29 @@ export const createApp = (): Express => {
     const mongoOk = isMongoConnected();
     const workersOk = workerManager.hasHealthyWorkers();
     const workerInfo = workerManager.getHealthStatus();
-    const ready = mongoOk && workersOk;
+    const announcedIp = (process.env.MEDIASOUP_ANNOUNCED_IP ?? '').trim();
+    const announcedOk =
+      !!announcedIp &&
+      announcedIp !== '127.0.0.1' &&
+      announcedIp !== '0.0.0.0' &&
+      announcedIp !== 'localhost' &&
+      announcedIp !== '::1';
+    const turnConfigured = Boolean(process.env.TURN_URL?.trim());
+    const ready = mongoOk && workersOk && announcedOk;
 
     res.status(ready ? 200 : 503).json({
       status: ready ? 'ready' : 'not_ready',
       checks: {
         mongodb: mongoOk ? 'ok' : 'error',
         workers: workersOk ? 'ok' : 'error',
+        announcedIp: announcedOk ? 'ok' : 'error',
+      },
+      webrtc: {
+        announcedIp: announcedIp || null,
+        listenIp: process.env.MEDIASOUP_LISTEN_IP ?? null,
+        rtcPorts: `${process.env.MEDIASOUP_MIN_PORT ?? ''}-${process.env.MEDIASOUP_MAX_PORT ?? ''}`,
+        turnConfigured,
+        turnUrl: process.env.TURN_URL ? String(process.env.TURN_URL).replace(/:[^:@/]+@/, ':***@') : null,
       },
       workers: workerInfo,
       metrics: metrics.toJSON(),

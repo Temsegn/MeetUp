@@ -14,13 +14,17 @@ services:
       MEDIASOUP_WORKERS: "2"
       MEDIASOUP_MIN_PORT: "40000"
       MEDIASOUP_MAX_PORT: "40199"
-      MEDIASOUP_ANNOUNCED_IP: ${MEDIASOUP_ANNOUNCED_IP:-127.0.0.1}
       MEDIASOUP_LISTEN_IP: 0.0.0.0
-      FRONTEND_URL: ${FRONTEND_URL:-http://46.246.120.148:8980}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://46.246.120.148:8980,http://localhost,http://localhost:80,http://127.0.0.1}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://46.246.120.148:8980/auth/google/callback}
+      # MEDIASOUP_ANNOUNCED_IP must come from server/.env (or a root .env that
+      # compose interpolates). Never default it to 127.0.0.1 here — that overrides
+      # env_file and breaks remote video/audio.
+      FRONTEND_URL: ${FRONTEND_URL:-https://meet.samtal.cc:8981}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://meet.samtal.cc:8981,http://46.246.120.148:8980,http://localhost,http://localhost:5173}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-https://meet.samtal.cc:8981/auth/google/callback}
     ports:
+      # mediasoup enables UDP + TCP ICE; publish both or TCP fallback cannot work.
       - "40000-40199:40000-40199/udp"
+      - "40000-40199:40000-40199/tcp"
     volumes:
       - server_storage:/app/storage
     healthcheck:
