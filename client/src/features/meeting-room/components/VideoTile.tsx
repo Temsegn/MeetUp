@@ -13,6 +13,8 @@ export type LiveParticipant = {
   isCameraOff?: boolean;
   isHandRaised?: boolean;
   isSpeaking?: boolean;
+  /** Soft-disconnect: connection lost — show paused overlay until they return. */
+  isReconnecting?: boolean;
   avatarUrl?: string | null;
   avatarColor?: string | null;
   isScreenShare?: boolean;
@@ -67,7 +69,7 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
     }
   }, [participant.audioStream, participant.stream, participant.isYou]);
 
-  const showVideo = hasLiveVideo;
+  const showVideo = hasLiveVideo && !participant.isReconnecting;
 
   return (
     <div
@@ -75,9 +77,11 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
       data-participant-name={participant.name}
       data-meeting-local={participant.isYou ? '1' : '0'}
       data-meeting-screen={isScreenShare ? '1' : '0'}
+      data-meeting-reconnecting={participant.isReconnecting ? '1' : '0'}
       className={cn(
         'relative min-h-0 min-w-0 overflow-hidden rounded-2xl bg-[#E8EEF5] sm:rounded-[22px]',
-        participant.isSpeaking && 'ring-2 ring-[#076BEE] ring-offset-2 ring-offset-[#EEF2F7]',
+        participant.isSpeaking && !participant.isReconnecting && 'ring-2 ring-[#076BEE] ring-offset-2 ring-offset-[#EEF2F7]',
+        participant.isReconnecting && 'ring-2 ring-[#F59E0B]/40',
         className,
       )}
     >
@@ -99,8 +103,21 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
           />
         </div>
       )}
-      {!participant.isYou ? <audio ref={audioRef} autoPlay playsInline /> : null}
-      {participant.isSpeaking ? (
+      {!participant.isYou && !participant.isReconnecting ? (
+        <audio ref={audioRef} autoPlay playsInline />
+      ) : null}
+      {participant.isReconnecting ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[rgba(15,23,42,0.55)] px-3 text-center backdrop-blur-[2px]">
+          <div className="h-1 w-16 overflow-hidden rounded-full bg-white/20">
+            <div className="h-full w-1/2 animate-pulse rounded-full bg-[#FBBF24]" />
+          </div>
+          <p className="text-[12px] font-semibold text-white sm:text-[13px]">
+            Paused — connection lost
+          </p>
+          <p className="text-[11px] text-white/80">Waiting to reconnect…</p>
+        </div>
+      ) : null}
+      {participant.isSpeaking && !participant.isReconnecting ? (
         <div className="absolute right-2 top-2 inline-flex size-8 items-center justify-center rounded-full bg-[#076BEE] text-white sm:right-3 sm:top-3 sm:size-10">
           <span className="flex items-end gap-0.5">
             <span className="h-2 w-0.5 animate-pulse rounded-full bg-white" />
@@ -110,10 +127,14 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
         </div>
       ) : null}
       <div className="absolute bottom-2 left-2 inline-flex max-w-[85%] items-center gap-1.5 rounded-xl bg-[rgba(18,27,41,0.72)] px-2 py-1 backdrop-blur-sm sm:bottom-3 sm:left-3 sm:rounded-[13px] sm:px-2.5 sm:py-1.5">
-        {participant.isMuted ? <MicOff className="size-3 shrink-0 text-white/90 sm:size-3.5" /> : null}
+        {participant.isMuted && !participant.isReconnecting ? (
+          <MicOff className="size-3 shrink-0 text-white/90 sm:size-3.5" />
+        ) : null}
         {participant.isHandRaised ? <Hand className="size-3 shrink-0 text-amber-300 sm:size-3.5" /> : null}
         <p className="truncate text-[11px] font-medium text-white sm:text-[13px]">
-          {participant.labelOverride ?? (participant.isYou ? 'Me' : participant.name)}
+          {participant.isReconnecting
+            ? `${participant.name} · reconnecting`
+            : participant.labelOverride ?? (participant.isYou ? 'Me' : participant.name)}
         </p>
       </div>
     </div>

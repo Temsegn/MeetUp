@@ -68,8 +68,10 @@ export function scheduleSoftDisconnect(opts: {
   opts.io.to(opts.roomId).emit('peer-reconnecting', {
     participantId: opts.participantId,
     userId: opts.userId,
+    identityKey: opts.identityKey,
     name: opts.name,
     graceMs: SOFT_DISCONNECT_GRACE_MS,
+    reason: 'connection_lost',
   });
 
   logger.info('Soft-disconnect scheduled', {

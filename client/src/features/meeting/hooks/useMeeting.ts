@@ -28,6 +28,8 @@ export interface PeerInfo {
   isHost?: boolean;
   isMuted?: boolean;
   isCameraOff?: boolean;
+  /** Soft-disconnect: remote lost network; keep seat until grace expires or they resume. */
+  isReconnecting?: boolean;
 }
 
 function peerIdentityMatches(
@@ -41,18 +43,21 @@ function peerIdentityMatches(
   return false;
 }
 
-function migrateRemoteStreams(
+/** Drop stale media for a peer id (ended tracks after a disconnect). */
+function clearPeerStreams(
   prev: Map<string, PeerStreams>,
-  fromId: string | null | undefined,
-  toId: string,
+  peerId: string,
+  opts?: { stop?: boolean },
 ): Map<string, PeerStreams> {
-  if (!fromId || fromId === toId || !prev.has(fromId)) return prev;
+  if (!prev.has(peerId)) return prev;
   const next = new Map(prev);
-  const streams = next.get(fromId);
-  if (streams) {
-    next.delete(fromId);
-    next.set(toId, streams);
+  const streams = next.get(peerId);
+  if (streams && opts?.stop !== false) {
+    streams.camera.getTracks().forEach((t) => t.stop());
+    streams.screen.getTracks().forEach((t) => t.stop());
+    streams.audio.getTracks().forEach((t) => t.stop());
   }
+  next.delete(peerId);
   return next;
 }
 
@@ -200,96 +205,8 @@ export const useMeeting = (
         },
       );
 
-      await new Promise<void>((resolve) => {
-        sock.emit('get-room-state', { roomId }, async (res: any) => {
-          if (!res?.error && res?.peers) {
-            // Derive initial mute/camera state from paused producers so PeerInfo
-            // is correct from the first render — prevents the "stuck avatar" race.
-            const producersByPeer = new Map<string, Array<{ source: string; kind: string; paused: boolean }>>();
-            for (const prod of (res.producers ?? [])) {
-              if (prod.participantId === pid) continue;
-              const list = producersByPeer.get(prod.participantId) ?? [];
-              list.push({
-                source: prod.appData?.source ?? (prod.kind === 'audio' ? 'microphone' : 'camera'),
-                kind: prod.kind,
-                paused: prod.paused ?? false,
-              });
-              producersByPeer.set(prod.participantId, list);
-            }
-
-            const existingPeers: PeerInfo[] = res.peers
-              .filter((p: any) => p.id !== pid)
-              .map((p: any) => {
-                const prods = producersByPeer.get(p.id) ?? [];
-                const audioProds  = prods.filter((pr) => pr.source === 'microphone' || pr.kind === 'audio');
-                const videoProds  = prods.filter((pr) => pr.source === 'camera'     || (pr.kind === 'video' && pr.source !== 'screen'));
-                // Only derive mute/camera-off from producers that already exist.
-                // Missing producers mean "not published yet" (common on simultaneous
-                // join) — leave undefined so VideoTile can show tracks when they arrive.
-                const isMuted =
-                  audioProds.length === 0 ? undefined : audioProds.every((pr) => pr.paused);
-                const isCameraOff =
-                  videoProds.length === 0 ? undefined : videoProds.every((pr) => pr.paused);
-                return {
-                  id:           p.id,
-                  name:         p.name,
-                  userId:       p.userId,
-                  identityKey:  p.identityKey ?? null,
-                  email:        p.email ?? null,
-                  avatarUrl:    p.avatarUrl ?? null,
-                  avatarColor:  p.avatarColor ?? null,
-                  isHost:       p.userId === joinRes.creatorId,
-                  isMuted,
-                  isCameraOff,
-                };
-              });
-            // Dedupe by stable identity in case room-state briefly lists a ghost.
-            const deduped: PeerInfo[] = [];
-            for (const peer of existingPeers) {
-              const idx = deduped.findIndex((p) =>
-                peerIdentityMatches(p, {
-                  id: peer.id,
-                  userId: peer.userId,
-                  identityKey: peer.identityKey,
-                  email: peer.email,
-                }),
-              );
-              if (idx >= 0) deduped[idx] = peer;
-              else deduped.push(peer);
-            }
-            setPeers(deduped);
-
-            for (const prod of (res.producers ?? [])) {
-              if (prod.participantId === pid) continue;
-              try {
-                const consumer = await session.consume(prod.producerId);
-                const source = prod.appData?.source ?? (prod.kind === 'audio' ? 'microphone' : 'camera');
-                _addTrackToStream(prod.participantId, source, consumer.track, setRemoteStreams);
-                if (!prod.paused) {
-                  setPeers((prev) =>
-                    prev.map((p) => {
-                      if (p.id !== prod.participantId) return p;
-                      if (source === 'microphone' || prod.kind === 'audio') {
-                        return { ...p, isMuted: false };
-                      }
-                      if (source === 'camera') return { ...p, isCameraOff: false };
-                      return p;
-                    }),
-                  );
-                }
-              } catch (e) {
-                console.error('Failed to consume existing producer', e);
-              }
-            }
-          }
-          resolve();
-        });
-      });
-
-      sock.emit('get-recording-status', { roomId }, (res: any) => {
-        if (res && !res.error) setIsRecording(!!res.recording);
-      });
-
+      // Mark joined immediately so local UI + mic/camera republish run without
+      // waiting for remote consume (critical for instant reconnect appearance).
       setSocket(sock);
       setWaiting(false);
       setJoined(true);
@@ -298,6 +215,94 @@ export const useMeeting = (
       setMediaEpoch((n) => n + 1);
       autoAttemptRef.current = 0;
       clearAutoRetryTimer();
+
+      sock.emit('get-recording-status', { roomId }, (res: any) => {
+        if (res && !res.error) setIsRecording(!!res.recording);
+      });
+
+      // Pull remote peers/producers in the background — must not block local publish.
+      sock.emit('get-room-state', { roomId }, async (res: any) => {
+        if (res?.error || !res?.peers) return;
+        if (sessionRef.current !== session) return;
+
+        const producersByPeer = new Map<string, Array<{ source: string; kind: string; paused: boolean }>>();
+        for (const prod of (res.producers ?? [])) {
+          if (prod.participantId === pid) continue;
+          const list = producersByPeer.get(prod.participantId) ?? [];
+          list.push({
+            source: prod.appData?.source ?? (prod.kind === 'audio' ? 'microphone' : 'camera'),
+            kind: prod.kind,
+            paused: prod.paused ?? false,
+          });
+          producersByPeer.set(prod.participantId, list);
+        }
+
+        const existingPeers: PeerInfo[] = res.peers
+          .filter((p: any) => p.id !== pid)
+          .map((p: any) => {
+            const prods = producersByPeer.get(p.id) ?? [];
+            const audioProds = prods.filter((pr) => pr.source === 'microphone' || pr.kind === 'audio');
+            const videoProds = prods.filter(
+              (pr) => pr.source === 'camera' || (pr.kind === 'video' && pr.source !== 'screen'),
+            );
+            const isMuted =
+              audioProds.length === 0 ? undefined : audioProds.every((pr) => pr.paused);
+            const isCameraOff =
+              videoProds.length === 0 ? undefined : videoProds.every((pr) => pr.paused);
+            return {
+              id: p.id,
+              name: p.name,
+              userId: p.userId,
+              identityKey: p.identityKey ?? null,
+              email: p.email ?? null,
+              avatarUrl: p.avatarUrl ?? null,
+              avatarColor: p.avatarColor ?? null,
+              isHost: p.userId === joinRes.creatorId,
+              isMuted,
+              isCameraOff,
+              isReconnecting: false,
+            };
+          });
+        const deduped: PeerInfo[] = [];
+        for (const peer of existingPeers) {
+          const idx = deduped.findIndex((p) =>
+            peerIdentityMatches(p, {
+              id: peer.id,
+              userId: peer.userId,
+              identityKey: peer.identityKey,
+              email: peer.email,
+            }),
+          );
+          if (idx >= 0) deduped[idx] = peer;
+          else deduped.push(peer);
+        }
+        setPeers(deduped);
+
+        for (const prod of (res.producers ?? [])) {
+          if (prod.participantId === pid) continue;
+          if (sessionRef.current !== session) return;
+          try {
+            const consumer = await session.consume(prod.producerId);
+            const source =
+              prod.appData?.source ?? (prod.kind === 'audio' ? 'microphone' : 'camera');
+            _addTrackToStream(prod.participantId, source, consumer.track, setRemoteStreams);
+            if (!prod.paused) {
+              setPeers((prev) =>
+                prev.map((p) => {
+                  if (p.id !== prod.participantId) return p;
+                  if (source === 'microphone' || prod.kind === 'audio') {
+                    return { ...p, isMuted: false, isReconnecting: false };
+                  }
+                  if (source === 'camera') return { ...p, isCameraOff: false, isReconnecting: false };
+                  return p;
+                }),
+              );
+            }
+          } catch (e) {
+            console.error('Failed to consume existing producer', e);
+          }
+        }
+      });
     },
     [roomId, addToast, clearAutoRetryTimer],
   );
@@ -704,13 +709,14 @@ function _attachMediaListeners(
       const source = appData?.source ?? (kind === 'audio' ? 'microphone' : 'camera');
       _addTrackToStream(remotePid, source, consumer.track, setRemoteStreams);
 
-      // Clear stale join-time "off" flags now that media is actually publishing.
+      // Clear reconnecting / off flags as soon as fresh media arrives.
       setPeers((prev) =>
         prev.map((p) => {
           if (p.id !== remotePid) return p;
-          if (source === 'microphone' || kind === 'audio') return { ...p, isMuted: false };
-          if (source === 'camera') return { ...p, isCameraOff: false };
-          return p;
+          const next = { ...p, isReconnecting: false };
+          if (source === 'microphone' || kind === 'audio') return { ...next, isMuted: false };
+          if (source === 'camera') return { ...next, isCameraOff: false };
+          return next;
         }),
       );
     } catch (e) {
@@ -741,7 +747,8 @@ function _attachMediaListeners(
         if (matchIdx >= 0) {
           const old = prev[matchIdx]!;
           if (old.id !== newPid) {
-            setRemoteStreams((streams) => migrateRemoteStreams(streams, old.id, newPid));
+            // Drop stale media under the old id; keep anything already at newPid.
+            setRemoteStreams((streams) => clearPeerStreams(streams, old.id));
           }
           const next = [...prev];
           next[matchIdx] = {
@@ -753,6 +760,7 @@ function _attachMediaListeners(
             email: email ?? old.email,
             avatarUrl: avatarUrl ?? old.avatarUrl,
             avatarColor: avatarColor ?? old.avatarColor,
+            isReconnecting: false,
           };
           return next;
         }
@@ -767,6 +775,7 @@ function _attachMediaListeners(
             email: email ?? null,
             avatarUrl: avatarUrl ?? null,
             avatarColor: avatarColor ?? null,
+            isReconnecting: false,
           },
         ];
       });
@@ -777,23 +786,20 @@ function _attachMediaListeners(
     setPeers((prev) => {
       const peer = prev.find((p) => p.id === leftPid);
       if (peer && reason !== 'reconnect') addToast?.(`${peer.name} left`);
-      // Keep the roster row briefly on reconnect so peer-reconnected can swap ids.
-      if (reason === 'reconnect') return prev;
+      // Keep the seat briefly on reconnect replace so peer-reconnected can swap ids.
+      if (reason === 'reconnect') {
+        return prev.map((p) =>
+          p.id === leftPid ? { ...p, isReconnecting: true } : p,
+        );
+      }
       return prev.filter((p) => p.id !== leftPid);
     });
-    // Reconnect: leave streams keyed by old id for peer-reconnected to migrate.
-    if (reason === 'reconnect') return;
-    setRemoteStreams((prev) => {
-      const next = new Map(prev);
-      const streams = next.get(leftPid);
-      if (streams) {
-        streams.camera.getTracks().forEach((t) => t.stop());
-        streams.screen.getTracks().forEach((t) => t.stop());
-        streams.audio.getTracks().forEach((t) => t.stop());
-      }
-      next.delete(leftPid);
-      return next;
-    });
+    if (reason === 'reconnect') {
+      // Drop dead media immediately; new-producer will refill under the new id.
+      setRemoteStreams((prev) => clearPeerStreams(prev, leftPid));
+      return;
+    }
+    setRemoteStreams((prev) => clearPeerStreams(prev, leftPid));
   });
 
   socket.on('producer-closed', ({ participantId: closedPid, producerId, source, kind }: any) => {
@@ -899,11 +905,23 @@ function _attachMediaListeners(
     });
   });
 
-  socket.on('peer-reconnecting', ({ participantId: remotePid, name }: any) => {
+  socket.on('peer-reconnecting', ({ participantId: remotePid, name, userId, identityKey, email }: any) => {
     setPeers((prev) =>
-      prev.map((p) => (p.id === remotePid ? { ...p, isMuted: p.isMuted, isCameraOff: p.isCameraOff } : p)),
+      prev.map((p) => {
+        const match =
+          p.id === remotePid ||
+          peerIdentityMatches(p, { userId, identityKey, email });
+        if (!match) return p;
+        return {
+          ...p,
+          isReconnecting: true,
+          isMuted: true,
+          isCameraOff: true,
+        };
+      }),
     );
-    if (name) addToast?.(`${name} is reconnecting…`);
+    setRemoteStreams((prev) => clearPeerStreams(prev, remotePid));
+    if (name) addToast?.(`${name}'s connection paused`);
   });
 
   socket.on(
@@ -918,6 +936,12 @@ function _attachMediaListeners(
       avatarUrl,
       avatarColor,
     }: any) => {
+      // Drop stale media under the old id immediately. Keep anything already
+      // under newPid (new-producer can race ahead of this event).
+      if (previousParticipantId && previousParticipantId !== newPid) {
+        setRemoteStreams((streams) => clearPeerStreams(streams, previousParticipantId));
+      }
+
       setPeers((prev) => {
         const matchIdx = prev.findIndex((p) =>
           peerIdentityMatches(p, {
@@ -929,10 +953,6 @@ function _attachMediaListeners(
         );
         if (matchIdx >= 0) {
           const old = prev[matchIdx]!;
-          const fromId = previousParticipantId || old.id;
-          if (fromId !== newPid) {
-            setRemoteStreams((streams) => migrateRemoteStreams(streams, fromId, newPid));
-          }
           const next = [...prev];
           next[matchIdx] = {
             ...old,
@@ -943,8 +963,10 @@ function _attachMediaListeners(
             email: email ?? old.email,
             avatarUrl: avatarUrl ?? old.avatarUrl,
             avatarColor: avatarColor ?? old.avatarColor,
+            isReconnecting: false,
+            isMuted: undefined,
+            isCameraOff: undefined,
           };
-          // Drop any other duplicates for the same identity.
           return next.filter(
             (p, i) =>
               i === matchIdx ||
@@ -966,6 +988,7 @@ function _attachMediaListeners(
             email: email ?? null,
             avatarUrl: avatarUrl ?? null,
             avatarColor: avatarColor ?? null,
+            isReconnecting: false,
           },
         ];
       });

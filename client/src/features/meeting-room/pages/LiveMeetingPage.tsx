@@ -716,14 +716,21 @@ export function LiveMeetingPage() {
       return {
         id: p.id,
         name: p.name,
-        stream: showingScreen ? remote!.screen : cameraHasVideo ? remote!.camera : null,
-        audioStream: remote?.audio || null,
-        isMuted: p.isMuted === true,
-        isCameraOff: resolvedCameraOff,
+        stream: p.isReconnecting
+          ? null
+          : showingScreen
+            ? remote!.screen
+            : cameraHasVideo
+              ? remote!.camera
+              : null,
+        audioStream: p.isReconnecting ? null : remote?.audio || null,
+        isMuted: p.isReconnecting ? true : p.isMuted === true,
+        isCameraOff: p.isReconnecting ? true : resolvedCameraOff,
         isHandRaised: raisedHands.has(p.id),
+        isReconnecting: Boolean(p.isReconnecting),
         avatarUrl: p.avatarUrl,
         avatarColor: p.avatarColor,
-        isScreenShare: showingScreen,
+        isScreenShare: showingScreen && !p.isReconnecting,
       };
     });
     return [local, ...remotes];
@@ -737,10 +744,17 @@ export function LiveMeetingPage() {
           (t.isYou && isHost) ||
           (!!peer?.userId && !!creatorId && peer.userId === creatorId) ||
           peer?.isHost;
+        const reconnecting = Boolean(peer?.isReconnecting);
         return {
           id: t.id,
           name: t.name,
-          role: host ? 'Host' : t.isYou ? 'You' : 'Participant',
+          role: reconnecting
+            ? 'Connection paused'
+            : host
+              ? 'Host'
+              : t.isYou
+                ? 'You'
+                : 'Participant',
           muted: t.isMuted,
           isYou: t.isYou,
           avatarUrl: t.avatarUrl,
