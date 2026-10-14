@@ -2,8 +2,10 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AUTO_RECOVERY_MAX_ATTEMPTS,
+  AUTO_RECOVERY_MAX_DELAY_MS,
   classifyJoinError,
   nextRecoveryDelayMs,
+  RECONNECT_DEADLINE_MS,
   recoveryBannerCopy,
   shouldContinueAutoRecovery,
 } from './connection-recovery';
@@ -29,8 +31,12 @@ describe('connection recovery policy', () => {
     const d3 = nextRecoveryDelayMs(3, { random: () => 0.5 });
     assert.ok(d0 >= 650 && d0 <= 1_400);
     assert.ok(d3 > d0);
-    const capped = nextRecoveryDelayMs(20, { random: () => 0.5, maxMs: 12_000 });
-    assert.ok(capped <= 12_000 * 1.35);
+    const capped = nextRecoveryDelayMs(20, { random: () => 0.5, maxMs: AUTO_RECOVERY_MAX_DELAY_MS });
+    assert.ok(capped <= AUTO_RECOVERY_MAX_DELAY_MS * 1.35);
+  });
+
+  it('aligns reconnect deadline with a 20s soft-disconnect window', () => {
+    assert.equal(RECONNECT_DEADLINE_MS, 20_000);
   });
 
   it('shows Rejoin meeting copy only for recoverable failures', () => {

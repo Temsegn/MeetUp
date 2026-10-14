@@ -6,6 +6,7 @@ import {
   AUTO_RECOVERY_MAX_ATTEMPTS,
   classifyJoinError,
   nextRecoveryDelayMs,
+  RECONNECT_DEADLINE_MS,
   shouldContinueAutoRecovery,
   type RecoveryOutcome,
 } from '../lib/connection-recovery';
@@ -106,6 +107,8 @@ export const useMeeting = (
   const intentionalLeaveRef = useRef(false);
   const autoAttemptRef = useRef(0);
   const autoRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectDeadlineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectStartedAtRef = useRef<number | null>(null);
   const participantIdRef = useRef('');
   const creatorIdRef = useRef<string | null>(null);
   const displayNameRef = useRef(displayName);
@@ -125,11 +128,39 @@ export const useMeeting = (
     }
   }, []);
 
+  const clearReconnectDeadline = useCallback(() => {
+    if (reconnectDeadlineTimerRef.current) {
+      clearTimeout(reconnectDeadlineTimerRef.current);
+      reconnectDeadlineTimerRef.current = null;
+    }
+    reconnectStartedAtRef.current = null;
+  }, []);
+
+  /** After RECONNECT_DEADLINE_MS still reconnecting → show Rejoin (aligned with server 20s grace). */
+  const armReconnectDeadline = useCallback(() => {
+    if (intentionalLeaveRef.current) return;
+    if (reconnectDeadlineTimerRef.current) return;
+    reconnectStartedAtRef.current = Date.now();
+    reconnectDeadlineTimerRef.current = setTimeout(() => {
+      reconnectDeadlineTimerRef.current = null;
+      if (intentionalLeaveRef.current) return;
+      setConnectionState((prev) => {
+        if (prev !== 'reconnecting') return prev;
+        setRecoveryOutcome((o) => o ?? 'network_failed');
+        clearAutoRetryTimer();
+        recoveringRef.current = false;
+        addToast?.('Connection timed out. You can rejoin the meeting.');
+        return 'failed';
+      });
+    }, RECONNECT_DEADLINE_MS);
+  }, [addToast, clearAutoRetryTimer]);
+
   const leaveMeeting = useCallback(async () => {
     intentionalLeaveRef.current = true;
     recoveringRef.current = false;
     autoAttemptRef.current = 0;
     clearAutoRetryTimer();
+    clearReconnectDeadline();
     const sock = socketRef.current;
     if (sock) {
       sock.io.off('reconnect');
@@ -157,8 +188,19 @@ export const useMeeting = (
     participantIdRef.current = '';
     creatorIdRef.current = null;
     joiningRef.current = false;
-  }, [roomId, clearAutoRetryTimer]);
+  }, [roomId, clearAutoRetryTimer, clearReconnectDeadline]);
   leaveMeetingRef.current = leaveMeeting;
+
+  // Keep local "Reconnecting…" within the same 20s window remotes use for the paused tile.
+  useEffect(() => {
+    if (connectionState === 'reconnecting') {
+      armReconnectDeadline();
+      return;
+    }
+    if (connectionState === 'connected' || connectionState === 'idle' || connectionState === 'failed') {
+      clearReconnectDeadline();
+    }
+  }, [connectionState, armReconnectDeadline, clearReconnectDeadline]);
 
   const enterMediaSession = useCallback(
     async (
@@ -215,6 +257,7 @@ export const useMeeting = (
       setMediaEpoch((n) => n + 1);
       autoAttemptRef.current = 0;
       clearAutoRetryTimer();
+      clearReconnectDeadline();
 
       sock.emit('get-recording-status', { roomId }, (res: any) => {
         if (res && !res.error) setIsRecording(!!res.recording);
@@ -304,7 +347,7 @@ export const useMeeting = (
         }
       });
     },
-    [roomId, addToast, clearAutoRetryTimer],
+    [roomId, addToast, clearAutoRetryTimer, clearReconnectDeadline],
   );
 
   const scheduleAutoRecovery = useCallback(() => {

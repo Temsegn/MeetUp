@@ -6,8 +6,14 @@
 
 export const AUTO_RECOVERY_MAX_ATTEMPTS = 5;
 export const AUTO_RECOVERY_BASE_DELAY_MS = 1_000;
-export const AUTO_RECOVERY_MAX_DELAY_MS = 12_000;
+export const AUTO_RECOVERY_MAX_DELAY_MS = 6_000;
 export const AUTO_RECOVERY_JITTER = 0.35;
+
+/**
+ * Max time the local user stays on "Reconnecting…" before we show Rejoin.
+ * Aligned with server soft-disconnect grace (20s) so seats and UI match.
+ */
+export const RECONNECT_DEADLINE_MS = 20_000;
 
 export type RecoveryOutcome =
   | 'success'

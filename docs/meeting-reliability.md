@@ -10,9 +10,11 @@
 
 ## What we changed
 
-### Soft disconnect (45s grace)
+### Soft disconnect (20s grace)
 
-On unexpected socket disconnect the server schedules cleanup instead of removing the peer immediately, and emits `peer-reconnecting`. Remotes show that tile as **Paused — connection lost** (no frozen A/V). If the same identity rejoins within the grace window, the old media peer is replaced and `peer-reconnected` is emitted — the seat updates immediately and fresh `new-producer` events refill A/V. If grace expires, `peer-left` removes them from everyone’s roster. Explicit **Leave** still cleans up immediately. Local reconnect marks `joined` before remote consume so the rejoining user’s own UI and publish resume without waiting on others.
+On unexpected socket disconnect the server schedules cleanup instead of removing the peer immediately, and emits `peer-reconnecting`. Remotes show that tile as **Paused — connection lost** for **20 seconds** (no frozen A/V). If the same identity rejoins within the grace window, the old media peer is replaced and `peer-reconnected` is emitted — the seat updates immediately and fresh `new-producer` events refill A/V. If grace expires, `peer-left` removes them from everyone’s roster. Explicit **Leave** still cleans up immediately.
+
+The disconnected user also gets at most **20 seconds** of **Reconnecting…**; if still offline they see **Connection lost** + **Rejoin meeting** (aligned with the remote grace). Local reconnect marks `joined` before remote consume so the rejoining user’s own UI and publish resume without waiting on others.
 
 ### Persistent admission (`MeetingAdmission`)
 

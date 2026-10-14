@@ -1,8 +1,10 @@
 import { Server, Socket } from 'socket.io';
 import { logger } from '../infrastructure/logging/logger';
 
-/** How long a peer may remain soft-disconnected before hard cleanup. */
-export const SOFT_DISCONNECT_GRACE_MS = 45_000;
+/** How long a peer may remain soft-disconnected before hard cleanup.
+ * Remotes keep showing "Paused — connection lost" for this window, then remove them.
+ */
+export const SOFT_DISCONNECT_GRACE_MS = 20_000;
 
 type PendingDisconnect = {
   roomId: string;
