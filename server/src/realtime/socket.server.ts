@@ -12,6 +12,9 @@ import { metrics } from '../infrastructure/metrics/metrics.service';
 import { startMeetingDurationJob } from '../modules/meetings/meeting-duration.job';
 import { startMeetingReminderJob } from '../modules/meetings/meeting-reminder.job';
 import { startMeetingInviteDeliveryJob } from '../modules/meetings/meeting-invite-delivery.job';
+import { buildAdmissionIdentityKey } from '../database/models/MeetingAdmission.model';
+import { scheduleSoftDisconnect } from './soft-disconnect';
+import { removeWaitingBySocket } from './waiting-room';
 
 export const setupSocketServer = (io: SocketIOServer): void => {
   bindRemoteControlIo(io);
@@ -25,13 +28,19 @@ export const setupSocketServer = (io: SocketIOServer): void => {
 
   // ── Connection handler ─────────────────────────────────────────────────────
   io.on('connection', (socket: Socket) => {
-    const user = socket.data.user as { userId: string; name: string };
+    const user = socket.data.user as {
+      userId: string;
+      name: string;
+      email?: string;
+      isGuest?: boolean;
+      guestEmail?: string;
+    };
     metrics.socketConnections.inc();
 
     logger.info('Socket connected', {
       socketId: socket.id,
-      userId:   user.userId,
-      name:     user.name,
+      userId: user.userId,
+      name: user.name,
     });
 
     // Register all domain handlers
@@ -51,18 +60,82 @@ export const setupSocketServer = (io: SocketIOServer): void => {
 
       logger.info('Socket disconnected', {
         socketId: socket.id,
-        userId:   user.userId,
+        userId: user.userId,
         reason,
       });
 
-      // Clean up media state if the peer was in a room
+      // Waiting lobby: drop request immediately (they can re-queue on reconnect).
+      const waiting = removeWaitingBySocket(socket.id);
+      if (waiting) {
+        delete socket.data.waitingRequest;
+        io.to(waiting.roomId).emit('waiting-request-resolved', {
+          requestId: waiting.requestId,
+          admitted: false,
+        });
+      }
+
       const current = socket.data.currentRoom as
-        | { roomId: string; participantId: string }
+        | {
+            roomId: string;
+            participantId: string;
+            joinedAt?: Date;
+            workspaceId?: string | null;
+            sessionId?: string | null;
+            identityKey?: string;
+          }
         | undefined;
 
-      if (current) {
-        _cleanupPeer(io, socket, current.roomId, current.participantId);
-      }
+      if (!current) return;
+
+      // Explicit leave already cleaned up and cleared currentRoom.
+      if (socket.data.softDisconnect === false && !socket.data.currentRoom) return;
+
+      const identityKey =
+        current.identityKey ||
+        buildAdmissionIdentityKey({
+          userId: user.userId,
+          isGuest: Boolean(user.isGuest) || user.userId.startsWith('guest_'),
+          email: user.guestEmail || user.email || null,
+        });
+
+      // Soft disconnect: keep admission; delay hard media cleanup so brief
+      // Wi-Fi↔mobile / sleep blips can resume without "left" for everyone.
+      socket.data.softDisconnect = true;
+      scheduleSoftDisconnect({
+        io,
+        roomId: current.roomId,
+        participantId: current.participantId,
+        userId: user.userId,
+        identityKey,
+        name: user.name,
+        socketId: socket.id,
+        joinedAt: current.joinedAt,
+        workspaceId: current.workspaceId,
+        sessionId: current.sessionId,
+        onExpire: () => {
+          try {
+            // Restore room meta so metering / cleanup can finish correctly.
+            socket.data.currentRoom = {
+              roomId: current.roomId,
+              participantId: current.participantId,
+              joinedAt: current.joinedAt,
+              workspaceId: current.workspaceId,
+              sessionId: current.sessionId,
+              identityKey,
+            };
+            _cleanupPeer(io, socket, current.roomId, current.participantId);
+          } catch (err) {
+            logger.warn('Hard cleanup after soft-disconnect grace failed', {
+              roomId: current.roomId,
+              participantId: current.participantId,
+              err: err instanceof Error ? err.message : String(err),
+            });
+          }
+        },
+      });
+
+      // Keep currentRoom on the dead socket for grace-expire metering, but mark soft.
+      // A new socket will take over via join-room + takeSoftDisconnect.
     });
 
     // ── Error handler ─────────────────────────────────────────────────────────

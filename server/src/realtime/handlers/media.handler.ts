@@ -60,11 +60,20 @@ import { whiteboardRoomService, onWhiteboardPeerLeft } from '../../modules/white
 import {
   addWaitingRequest,
   findHostSockets,
-  getWaiting,
   listWaiting,
   removeWaitingBySocket,
   removeWaitingRequest,
 } from '../waiting-room';
+import {
+  evaluateAdmission,
+  markAdmitted,
+  markDenied,
+} from '../../modules/meetings/services/meeting-admission.service';
+import { buildAdmissionIdentityKey } from '../../database/models/MeetingAdmission.model';
+import {
+  cancelSoftDisconnect,
+  takeSoftDisconnect,
+} from '../soft-disconnect';
 
 type Callback = (res: unknown) => void;
 
@@ -166,11 +175,60 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
         }
       }
 
-      // Guests always request. Members request only when meeting waiting room is on.
+      // Guests / waiting-room members need host admit — unless already admitted (or kicked).
       const waitingRoomEnabled = Boolean(workspaceMeeting?.settings?.waitingRoom);
-      const requiresAdmit = !isHost && (isGuest || waitingRoomEnabled);
+      const meetingId = workspaceMeeting?._id ? String(workspaceMeeting._id) : '';
+      const guestEmail = user.guestEmail || user.email || null;
 
-      if (requiresAdmit) {
+      if (meetingId) {
+        const decision = await evaluateAdmission({
+          meetingId,
+          roomId,
+          userId: user.userId,
+          isGuest,
+          email: guestEmail,
+          isHost,
+          waitingRoomEnabled,
+        });
+        if (!decision.allow && decision.code !== 'WAITING_REQUIRED') {
+          return callback({ error: decision.reason, code: decision.code });
+        }
+        if (!decision.allow && decision.code === 'WAITING_REQUIRED') {
+          const requestId = randomUUID();
+          const waiting = {
+            requestId,
+            roomId,
+            socketId: socket.id,
+            userId: user.userId,
+            name,
+            avatarUrl: user.avatarUrl ?? null,
+            avatarColor: user.avatarColor ?? null,
+            isGuest,
+            email: guestEmail,
+            requestedAt: Date.now(),
+          };
+          addWaitingRequest(waiting);
+          socket.data.waitingRequest = { roomId, requestId, name };
+
+          for (const hostSock of findHostSockets(io, roomId, creatorId ?? '')) {
+            hostSock.emit('waiting-join-request', waiting);
+          }
+
+          logger.info('Peer waiting for admit', {
+            roomId,
+            requestId,
+            userId: user.userId,
+            isGuest,
+            waitingRoomEnabled,
+          });
+          return callback({
+            status: 'waiting',
+            requestId,
+            message: decision.reason,
+          });
+        }
+      } else if (!isHost && (isGuest || waitingRoomEnabled)) {
+        // Instant / non-workspace room without Meeting doc — keep legacy wait for guests.
         const requestId = randomUUID();
         const waiting = {
           requestId,
@@ -185,18 +243,9 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
         };
         addWaitingRequest(waiting);
         socket.data.waitingRequest = { roomId, requestId, name };
-
         for (const hostSock of findHostSockets(io, roomId, creatorId ?? '')) {
           hostSock.emit('waiting-join-request', waiting);
         }
-
-        logger.info('Peer waiting for admit', {
-          roomId,
-          requestId,
-          userId: user.userId,
-          isGuest,
-          waitingRoomEnabled,
-        });
         return callback({
           status: 'waiting',
           requestId,
@@ -212,6 +261,10 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
         avatarColor: user.avatarColor ?? null,
         creatorId,
         muteOnEntry: Boolean(workspaceMeeting?.settings?.muteOnEntry),
+        isGuest,
+        email: guestEmail,
+        meetingId: meetingId || null,
+        reconnect: true,
       });
       callback(joinResult);
     } catch (err: unknown) {
@@ -245,6 +298,23 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
 
       try {
         const workspaceMeeting = await Meeting.findOne({ roomId }).lean();
+        const meetingId = workspaceMeeting?._id ? String(workspaceMeeting._id) : '';
+        const waitingEmail =
+          (waiting as { email?: string | null }).email ||
+          (target.data.user as { guestEmail?: string; email?: string } | undefined)?.guestEmail ||
+          (target.data.user as { email?: string } | undefined)?.email ||
+          null;
+        if (meetingId) {
+          await markAdmitted({
+            meetingId,
+            roomId,
+            userId: waiting.userId,
+            isGuest: waiting.isGuest,
+            email: waitingEmail,
+            displayName: waiting.name,
+            admittedBy: user.userId,
+          });
+        }
         const joinResult = await _completeJoin(io, target, {
           roomId,
           userId: waiting.userId,
@@ -253,6 +323,11 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
           avatarColor: waiting.avatarColor ?? null,
           creatorId,
           muteOnEntry: Boolean(workspaceMeeting?.settings?.muteOnEntry),
+          isGuest: waiting.isGuest,
+          email: waitingEmail,
+          meetingId: meetingId || null,
+          admittedBy: user.userId,
+          reconnect: false,
         });
         delete target.data.waitingRequest;
         target.emit('waiting-admitted', joinResult);
@@ -288,6 +363,18 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
 
       const waiting = removeWaitingRequest(roomId, requestId);
       if (!waiting) return callback?.({ error: 'Request not found', code: 'NOT_FOUND' });
+
+      const meetingDoc = await Meeting.findOne({ roomId }).select('_id').lean();
+      if (meetingDoc) {
+        await markDenied({
+          meetingId: String(meetingDoc._id),
+          roomId,
+          userId: waiting.userId,
+          isGuest: waiting.isGuest,
+          email: (waiting as { email?: string | null }).email || null,
+          revokedBy: user.userId,
+        });
+      }
 
       const target = io.sockets.sockets.get(waiting.socketId);
       if (target) {
@@ -332,6 +419,14 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
       const { participantId } = socket.data.currentRoom ?? {};
       if (!participantId) return callback?.({ error: 'Not in room', code: 'NOT_IN_ROOM' });
 
+      // Explicit leave — cancel any soft-disconnect and hard-clean immediately.
+      const identityKey = buildAdmissionIdentityKey({
+        userId: user.userId,
+        isGuest: Boolean(user.isGuest) || user.userId.startsWith('guest_'),
+        email: user.guestEmail || user.email || null,
+      });
+      cancelSoftDisconnect(roomId, identityKey);
+      socket.data.softDisconnect = false;
       _cleanupPeer(io, socket, roomId, participantId);
       callback?.({ success: true });
     } catch (err: unknown) {
@@ -958,9 +1053,45 @@ async function _completeJoin(
     avatarColor: string | null;
     creatorId: string | null;
     muteOnEntry?: boolean;
+    isGuest?: boolean;
+    email?: string | null;
+    meetingId?: string | null;
+    admittedBy?: string;
+    reconnect?: boolean;
   },
 ) {
-  const { roomId, userId, name, avatarUrl, avatarColor, creatorId, muteOnEntry = false } = opts;
+  const {
+    roomId,
+    userId,
+    name,
+    avatarUrl,
+    avatarColor,
+    creatorId,
+    muteOnEntry = false,
+    isGuest = false,
+    email = null,
+    meetingId = null,
+    admittedBy,
+    reconnect = false,
+  } = opts;
+
+  const identityKey = buildAdmissionIdentityKey({ userId, isGuest, email });
+
+  // If this identity was soft-disconnected, hard-clean the old media peer first
+  // (mediasoup transports cannot be reused across sockets / network changes).
+  const pending = takeSoftDisconnect(roomId, identityKey);
+  if (pending) {
+    try {
+      mediaEngine.removePeer(roomId, pending.participantId);
+      io.to(roomId).emit('peer-left', { participantId: pending.participantId, reason: 'reconnect' });
+    } catch (err) {
+      logger.warn('Failed to clean soft-disconnected peer on resume', {
+        roomId,
+        participantId: pending.participantId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   const rtpCapabilities = await mediaEngine.getOrCreateRoom(roomId);
   const participantId = randomUUID();
@@ -981,14 +1112,37 @@ async function _completeJoin(
     ? null
     : await resolveWorkspaceId(userId);
   const { sessionId } = await onParticipantJoin({ roomId, userId, workspaceId });
-  socket.data.currentRoom = { roomId, participantId, joinedAt: new Date(), workspaceId, sessionId };
+  socket.data.currentRoom = {
+    roomId,
+    participantId,
+    joinedAt: new Date(),
+    workspaceId,
+    sessionId,
+    identityKey,
+  };
+  socket.data.softDisconnect = false;
 
-  socket.to(roomId).emit('peer-joined', {
+  // Persist admission so reconnect/refresh skips waiting room.
+  if (meetingId) {
+    await markAdmitted({
+      meetingId,
+      roomId,
+      userId,
+      isGuest,
+      email,
+      displayName: name,
+      admittedBy: admittedBy || (creatorId === userId ? userId : userId),
+    });
+  }
+
+  const isResume = Boolean(pending) || reconnect;
+  socket.to(roomId).emit(isResume && pending ? 'peer-reconnected' : 'peer-joined', {
     participantId,
     name,
     userId,
     avatarUrl,
     avatarColor,
+    resumed: Boolean(pending),
   });
 
   // Host just joined — push any pending waiting requests
@@ -998,7 +1152,13 @@ async function _completeJoin(
     }
   }
 
-  logger.info('Peer joined room', { roomId, participantId, userId });
+  logger.info('Peer joined room', {
+    roomId,
+    participantId,
+    userId,
+    identityKey,
+    resumed: Boolean(pending),
+  });
 
   return {
     status: 'joined' as const,
@@ -1008,6 +1168,7 @@ async function _completeJoin(
     avatarUrl,
     avatarColor,
     muteOnEntry,
+    resumed: Boolean(pending),
     simulcastEncodings: mediasoupConfig.simulcastEncodings,
     screenShareEncodings: mediasoupConfig.screenShareEncodings,
   };

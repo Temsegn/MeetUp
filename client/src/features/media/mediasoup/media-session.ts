@@ -159,7 +159,7 @@ export class MediaSession {
 
           transport.on('connectionstatechange', (state) => {
             console.log(`[MediaSession] ${direction} transport state: ${state}`);
-            if (state === 'connected' || state === 'completed') {
+            if (state === 'connected') {
               iceRestarts = 0;
               return;
             }
@@ -276,9 +276,11 @@ export class MediaSession {
               producerId: res.params.producerId,
               kind: res.params.kind,
               rtpParameters: res.params.rtpParameters,
-              // Keep local consumer paused until the server consumer is resumed.
-              paused: true,
             });
+            // Keep local consumer paused until the server consumer is resumed.
+            try {
+              await consumer.pause();
+            } catch { /* ignore */ }
             this.consumers.set(consumer.id, consumer);
             this.consumedProducerIds.add(producerId);
 
@@ -407,14 +409,17 @@ export class MediaSession {
 
   // ── Cleanup ────────────────────────────────────────────────────────────────
 
-  public async cleanup(): Promise<void> {
+  /**
+   * Close local mediasoup objects without leaving the meeting or disconnecting
+   * the socket — used during network recovery / soft rejoin.
+   */
+  public async softCleanup(): Promise<void> {
     this.socket.off('ice-restart');
     this.iceHandlerAttached = false;
 
-    for (const [id, producer] of this.producers.entries()) {
+    for (const [, producer] of this.producers.entries()) {
       try {
         if (!producer.closed) producer.close();
-        this.socket.emit('close-producer', { roomId: this.roomId, producerId: id });
       } catch { /* best-effort */ }
     }
     this.producers.clear();
@@ -433,9 +438,17 @@ export class MediaSession {
     if (this.recvTransport && !this.recvTransport.closed) this.recvTransport.close();
     this.sendTransport = null;
     this.recvTransport = null;
+  }
 
-    this.socket.emit('leave-room', { roomId: this.roomId });
-    this.socket.disconnect();
+  public async cleanup(): Promise<void> {
+    await this.softCleanup();
+
+    try {
+      this.socket.emit('leave-room', { roomId: this.roomId });
+    } catch { /* best-effort */ }
+    try {
+      this.socket.disconnect();
+    } catch { /* best-effort */ }
   }
 
   private _emitAck(event: string, payload: object): Promise<void> {

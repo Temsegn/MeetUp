@@ -156,6 +156,11 @@ export function LiveMeetingPage() {
     participantId,
     joinMeeting,
     leaveMeeting,
+    rejoinMeeting,
+    connectionState,
+    recoveryOutcome,
+    rejoinBusy,
+    mediaEpoch,
     session,
     peers,
     remoteStreams,
@@ -301,12 +306,14 @@ export function LiveMeetingPage() {
     }
   };
 
-  // After admitted / host join — publish local media (once per track id)
+  // After admitted / host join / media recovery — publish local media (once per track id per epoch)
   useEffect(() => {
     if (!joined) {
       publishedTrackIdsRef.current.clear();
       return;
     }
+    // New MediaSession after reconnect — allow republish of the same track ids.
+    publishedTrackIdsRef.current.clear();
     const sess = session.current;
     const stream = localStream;
     if (!sess || !stream) return;
@@ -316,7 +323,11 @@ export function LiveMeetingPage() {
           if (publishedTrackIdsRef.current.has(track.id)) continue;
           publishedTrackIdsRef.current.add(track.id);
           try {
-            await sess.produce(track, 'microphone');
+            const producer = await sess.produce(track, 'microphone');
+            // Preserve user mute preference across recovery.
+            if (isMuted && producer) {
+              await sess.pauseProducer(producer.id);
+            }
           } catch (err) {
             publishedTrackIdsRef.current.delete(track.id);
             throw err;
@@ -326,7 +337,10 @@ export function LiveMeetingPage() {
           if (publishedTrackIdsRef.current.has(track.id)) continue;
           publishedTrackIdsRef.current.add(track.id);
           try {
-            await sess.produce(track, 'camera', true);
+            const producer = await sess.produce(track, 'camera', true);
+            if (isCameraOff && producer) {
+              await sess.pauseProducer(producer.id);
+            }
           } catch (err) {
             publishedTrackIdsRef.current.delete(track.id);
             throw err;
@@ -336,7 +350,9 @@ export function LiveMeetingPage() {
         addToast('Could not publish camera/microphone');
       }
     })();
-  }, [joined, localStream, session, addToast]);
+    // mediaEpoch intentionally included so soft reconnect republishes on a new session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isMuted/isCameraOff applied at publish time only
+  }, [joined, localStream, session, addToast, mediaEpoch]);
 
   // Host waiting-room requests
   useEffect(() => {
@@ -858,6 +874,38 @@ export function LiveMeetingPage() {
       data-room-id={roomId}
       className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden overflow-x-hidden bg-[#F7F9FC]"
     >
+      {connectionState === 'reconnecting' || connectionState === 'failed' ? (
+        <div
+          role="status"
+          className={
+            connectionState === 'failed'
+              ? 'flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[#FECACA] bg-[#FEF2F2] px-3 py-2.5 text-[13px] text-[#991B1B] sm:px-4'
+              : 'flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[#FDE68A] bg-[#FFFBEB] px-3 py-2.5 text-[13px] text-[#92400E] sm:px-4'
+          }
+        >
+          <span className="min-w-0 font-semibold">
+            {connectionState === 'reconnecting'
+              ? 'Reconnecting… Stay on this page. Your admission is saved.'
+              : recoveryOutcome === 'auth_denied'
+                ? 'You no longer have access to this meeting.'
+                : recoveryOutcome === 'meeting_ended'
+                  ? 'This meeting has ended.'
+                  : 'Connection lost. You can rejoin the meeting.'}
+          </span>
+          {connectionState === 'failed' &&
+          recoveryOutcome !== 'auth_denied' &&
+          recoveryOutcome !== 'meeting_ended' ? (
+            <button
+              type="button"
+              disabled={rejoinBusy}
+              onClick={() => void rejoinMeeting()}
+              className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-[#016BE6] px-4 text-[12px] font-bold text-white shadow-sm hover:bg-[#0056EF] disabled:opacity-60"
+            >
+              {rejoinBusy ? 'Rejoining…' : 'Rejoin meeting'}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {/* Band 1 — compact header (overflow visible so invite/copy menu is not clipped) */}
       <header className="relative z-40 flex shrink-0 items-center gap-2 overflow-visible px-2 pt-2 sm:gap-3 sm:px-4 sm:pt-3 lg:px-5">
         <div className="relative z-40 min-w-0 flex-1 overflow-visible">

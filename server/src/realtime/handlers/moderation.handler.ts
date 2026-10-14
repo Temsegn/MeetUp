@@ -5,6 +5,7 @@ import { WorkspaceMember } from '../../database/models/WorkspaceMember.model';
 import { participantManager } from '../../media/managers/participant-manager';
 import { logger } from '../../infrastructure/logging/logger';
 import { Types } from 'mongoose';
+import { markKicked } from '../../modules/meetings/services/meeting-admission.service';
 
 const ModerateSchema = z.object({
   roomId: z.string().min(1),
@@ -61,6 +62,25 @@ export function registerModerationHandlers(io: SocketIOServer, socket: Socket): 
       if (!target?.socketId) {
         callback?.({ error: 'Participant not found' });
         return;
+      }
+
+      if (action === 'kick') {
+        const meeting = await Meeting.findOne({ roomId }).select('_id').lean();
+        if (meeting) {
+          const targetSock = io.sockets.sockets.get(target.socketId);
+          const targetUser = targetSock?.data?.user as
+            | { email?: string; guestEmail?: string; isGuest?: boolean }
+            | undefined;
+          const email = targetUser?.guestEmail || targetUser?.email || null;
+          await markKicked({
+            meetingId: String(meeting._id),
+            roomId,
+            userId: target.userId,
+            isGuest: target.userId.startsWith('guest_') || Boolean(targetUser?.isGuest),
+            email,
+            revokedBy: user.userId,
+          });
+        }
       }
 
       io.to(target.socketId).emit('moderation-command', {

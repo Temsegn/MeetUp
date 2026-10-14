@@ -1,19 +1,18 @@
 import { io, Socket } from 'socket.io-client';
 import { API_URL } from '../../lib/apiUrl';
 
-
 let currentSocket: Socket | null = null;
 
 /**
  * Create a fresh, authenticated Socket.IO client for a meeting session.
  *
- * The socket is NOT a singleton — each meeting session creates one and
- * destroys it on leave. This prevents stale state from leaking between sessions.
- *
- * @param token - JWT token from auth (sent in handshake for server auth middleware)
+ * Reconnection is aggressive (bounded) so Wi-Fi↔mobile handovers recover
+ * without abandoning the meeting UI. Media is rebuilt via join-room after
+ * signaling recovers; admission is persisted server-side.
  */
 export function createSocketClient(token: string): Socket {
   if (currentSocket) {
+    currentSocket.removeAllListeners();
     currentSocket.disconnect();
   }
 
@@ -21,9 +20,11 @@ export function createSocketClient(token: string): Socket {
     transports: ['websocket'],
     auth: { token: `Bearer ${token}` },
     reconnection: true,
-    reconnectionAttempts: 5,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
+    reconnectionAttempts: 40,
+    reconnectionDelay: 800,
+    reconnectionDelayMax: 12_000,
+    randomizationFactor: 0.4,
+    timeout: 20_000,
   });
 
   currentSocket = socket;
@@ -38,7 +39,9 @@ export function createSocketClient(token: string): Socket {
 
   socket.on('disconnect', (reason) => {
     console.warn('[Socket] Disconnected', reason);
-    if (currentSocket === socket) {
+    // Keep currentSocket reference while Manager may still reconnect.
+    // Only clear when the client intentionally disconnects.
+    if (reason === 'io client disconnect' && currentSocket === socket) {
       currentSocket = null;
     }
   });
@@ -50,4 +53,3 @@ export const socketClient = {
   getSocket: () => currentSocket,
   createSocketClient,
 };
-

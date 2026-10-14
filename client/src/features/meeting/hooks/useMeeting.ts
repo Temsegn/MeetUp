@@ -2,6 +2,13 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import { createSocketClient } from '../../../services/socket/socket-client';
 import { MediaSession } from '../../media/mediasoup/media-session';
+import {
+  AUTO_RECOVERY_MAX_ATTEMPTS,
+  classifyJoinError,
+  nextRecoveryDelayMs,
+  shouldContinueAutoRecovery,
+  type RecoveryOutcome,
+} from '../lib/connection-recovery';
 
 export interface PeerStreams {
   camera: MediaStream;
@@ -31,6 +38,13 @@ function emptyPeerStreams(): PeerStreams {
   };
 }
 
+export type MeetingConnectionState =
+  | 'idle'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'failed';
+
 export const useMeeting = (
   roomId: string,
   token: string,
@@ -46,20 +60,49 @@ export const useMeeting = (
   const [remoteStreams, setRemoteStreams]  = useState<Map<string, PeerStreams>>(new Map());
   const [isRecording,   setIsRecording]   = useState(false);
   const [socket,        setSocket]        = useState<Socket | null>(null);
+  const [connectionState, setConnectionState] = useState<MeetingConnectionState>('idle');
+  const [recoveryOutcome, setRecoveryOutcome] = useState<RecoveryOutcome | null>(null);
+  /** Bumps each time a MediaSession is (re)built so the UI can republish local tracks. */
+  const [mediaEpoch, setMediaEpoch] = useState(0);
+  const [rejoinBusy, setRejoinBusy] = useState(false);
 
   const socketRef  = useRef<Socket | null>(null);
   const sessionRef = useRef<MediaSession | null>(null);
   const joiningRef = useRef(false);
+  const recoveringRef = useRef(false);
+  const intentionalLeaveRef = useRef(false);
+  const autoAttemptRef = useRef(0);
+  const autoRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const participantIdRef = useRef('');
   const creatorIdRef = useRef<string | null>(null);
   const displayNameRef = useRef(displayName);
   displayNameRef.current = displayName;
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
   const joinMeetingRef = useRef<() => Promise<void>>(async () => {});
   const leaveMeetingRef = useRef<() => Promise<void>>(async () => {});
+  const recoverAfterSignalRef = useRef<(opts?: { manual?: boolean }) => Promise<void>>(
+    async () => {},
+  );
+
+  const clearAutoRetryTimer = useCallback(() => {
+    if (autoRetryTimerRef.current) {
+      clearTimeout(autoRetryTimerRef.current);
+      autoRetryTimerRef.current = null;
+    }
+  }, []);
 
   const leaveMeeting = useCallback(async () => {
+    intentionalLeaveRef.current = true;
+    recoveringRef.current = false;
+    autoAttemptRef.current = 0;
+    clearAutoRetryTimer();
     const sock = socketRef.current;
     if (sock) {
+      sock.io.off('reconnect');
+      sock.io.off('reconnect_attempt');
+      sock.io.off('reconnect_failed');
+      sock.off('disconnect');
       sock.emit('leave-room', { roomId });
     }
     const session = sessionRef.current;
@@ -75,10 +118,13 @@ export const useMeeting = (
     setRemoteStreams(new Map());
     setParticipantId('');
     setIsRecording(false);
+    setConnectionState('idle');
+    setRecoveryOutcome(null);
+    setRejoinBusy(false);
     participantIdRef.current = '';
     creatorIdRef.current = null;
     joiningRef.current = false;
-  }, [roomId]);
+  }, [roomId, clearAutoRetryTimer]);
   leaveMeetingRef.current = leaveMeeting;
 
   const enterMediaSession = useCallback(
@@ -117,8 +163,7 @@ export const useMeeting = (
         setRemoteStreams,
         setIsRecording,
         async () => {
-          await leaveMeetingRef.current();
-          await joinMeetingRef.current();
+          await recoverAfterSignalRef.current();
         },
       );
 
@@ -196,32 +241,130 @@ export const useMeeting = (
         if (res && !res.error) setIsRecording(!!res.recording);
       });
 
-      sock.io.off('reconnect');
-      sock.io.on('reconnect', async () => {
-        addToast?.('Reconnected — rejoining meeting...');
-        try {
-          await leaveMeeting();
-          await joinMeetingRef.current();
-        } catch {
-          addToast?.('Failed to rejoin — please refresh.');
-        }
-      });
-
       setSocket(sock);
       setWaiting(false);
       setJoined(true);
+      setConnectionState('connected');
+      setRecoveryOutcome(null);
+      setMediaEpoch((n) => n + 1);
+      autoAttemptRef.current = 0;
+      clearAutoRetryTimer();
     },
-    [roomId, addToast, leaveMeeting],
+    [roomId, addToast, clearAutoRetryTimer],
   );
+
+  const scheduleAutoRecovery = useCallback(() => {
+    if (intentionalLeaveRef.current) return;
+    if (!shouldContinueAutoRecovery(autoAttemptRef.current)) {
+      setConnectionState('failed');
+      setRecoveryOutcome((prev) => prev ?? 'network_failed');
+      return;
+    }
+    clearAutoRetryTimer();
+    const delay = nextRecoveryDelayMs(autoAttemptRef.current);
+    autoAttemptRef.current += 1;
+    setConnectionState('reconnecting');
+    autoRetryTimerRef.current = setTimeout(() => {
+      void recoverAfterSignalRef.current({ manual: false }).catch(() => undefined);
+    }, delay);
+  }, [clearAutoRetryTimer]);
+
+  /** Soft recovery after signaling reconnect — keep page, rebuild media, skip leave. */
+  const recoverAfterSignal = useCallback(
+    async (opts?: { manual?: boolean }) => {
+      if (intentionalLeaveRef.current) return;
+      if (recoveringRef.current) return;
+      recoveringRef.current = true;
+      setConnectionState('reconnecting');
+      if (opts?.manual) {
+        autoAttemptRef.current = 0;
+        clearAutoRetryTimer();
+      }
+
+      try {
+        const sock = socketRef.current;
+        if (!sock || !sock.connected) {
+          throw new Error('Socket not connected');
+        }
+
+        if (sessionRef.current) {
+          try {
+            await sessionRef.current.softCleanup();
+          } catch { /* ignore */ }
+          sessionRef.current = null;
+        }
+        setRemoteStreams(new Map());
+        setPeers([]);
+
+        const joinRes = await new Promise<any>((resolve, reject) => {
+          const t = setTimeout(() => reject(new Error('rejoin timed out')), JOIN_TIMEOUT_MS);
+          sock.emit(
+            'join-room',
+            { roomId, displayName: displayNameRef.current || undefined },
+            (res: any) => {
+              clearTimeout(t);
+              if (res?.error) return reject(new Error(res.error));
+              resolve(res);
+            },
+          );
+        });
+
+        if (joinRes.status === 'waiting') {
+          setWaiting(true);
+          setJoined(false);
+          setConnectionState('connected');
+          setRecoveryOutcome('waiting');
+          addToast?.('Waiting for the host to let you back in…');
+          return;
+        }
+
+        await enterMediaSession(sock, joinRes);
+        if (!opts?.manual) {
+          addToast?.('Connection restored');
+        } else {
+          addToast?.('Rejoined the meeting');
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to restore media';
+        const outcome = classifyJoinError(message);
+        setRecoveryOutcome(outcome);
+
+        if (outcome === 'auth_denied' || outcome === 'meeting_ended') {
+          setConnectionState('failed');
+          addToast?.(message);
+          return;
+        }
+
+        if (!opts?.manual && shouldContinueAutoRecovery(autoAttemptRef.current)) {
+          addToast?.(`Reconnecting… (attempt ${autoAttemptRef.current + 1}/${AUTO_RECOVERY_MAX_ATTEMPTS})`);
+          recoveringRef.current = false;
+          scheduleAutoRecovery();
+          return;
+        }
+
+        setConnectionState('failed');
+        if (opts?.manual) {
+          addToast?.(message);
+        }
+        throw err;
+      } finally {
+        recoveringRef.current = false;
+      }
+    },
+    [roomId, addToast, enterMediaSession, clearAutoRetryTimer, scheduleAutoRecovery],
+  );
+  recoverAfterSignalRef.current = recoverAfterSignal;
 
   const joinMeeting = useCallback(async (tokenOverride?: string) => {
     if (joiningRef.current) return;
     joiningRef.current = true;
+    intentionalLeaveRef.current = false;
+    setConnectionState('connecting');
 
     try {
       if (sessionRef.current) {
         try {
-          await sessionRef.current.cleanup();
+          await sessionRef.current.softCleanup();
         } catch { /* ignore */ }
         sessionRef.current = null;
       }
@@ -230,6 +373,38 @@ export const useMeeting = (
       if (!authToken) throw new Error('Not signed in');
       const sock = createSocketClient(authToken);
       socketRef.current = sock;
+
+      const attachReconnectHandlers = (s: Socket) => {
+        s.io.off('reconnect');
+        s.io.off('reconnect_attempt');
+        s.io.off('reconnect_failed');
+        s.off('disconnect');
+
+        s.on('disconnect', (reason) => {
+          if (intentionalLeaveRef.current) return;
+          if (reason === 'io client disconnect') return;
+          setRecoveryOutcome(null);
+          setConnectionState('reconnecting');
+        });
+
+        s.io.on('reconnect_attempt', () => {
+          if (intentionalLeaveRef.current) return;
+          setConnectionState('reconnecting');
+        });
+
+        s.io.on('reconnect', () => {
+          if (intentionalLeaveRef.current) return;
+          // Signaling is back — media must still be rebuilt (bounded auto attempts).
+          void recoverAfterSignalRef.current({ manual: false }).catch(() => undefined);
+        });
+
+        s.io.on('reconnect_failed', () => {
+          if (intentionalLeaveRef.current) return;
+          setRecoveryOutcome('network_failed');
+          setConnectionState('failed');
+        });
+      };
+      attachReconnectHandlers(sock);
 
       await new Promise<void>((resolve, reject) => {
         if (sock.connected) { resolve(); return; }
@@ -287,12 +462,98 @@ export const useMeeting = (
       }
 
       await enterMediaSession(sock, joinRes);
+      setConnectionState('connected');
+    } catch (err) {
+      setConnectionState((prev) => (prev === 'connected' ? prev : 'failed'));
+      throw err;
     } finally {
       joiningRef.current = false;
     }
   }, [roomId, token, addToast, enterMediaSession]);
 
   joinMeetingRef.current = joinMeeting;
+
+  // Browser online/offline hints — never treat offline as meeting ended.
+  useEffect(() => {
+    const onOffline = () => {
+      if (!joined || intentionalLeaveRef.current) return;
+      setConnectionState('reconnecting');
+    };
+    const onOnline = () => {
+      if (!joined || intentionalLeaveRef.current) return;
+      const sock = socketRef.current;
+      if (sock && !sock.connected) {
+        sock.connect();
+      } else if (sock?.connected && connectionState !== 'connected') {
+        void recoverAfterSignalRef.current().catch(() => undefined);
+      }
+    };
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('online', onOnline);
+    return () => {
+      window.removeEventListener('offline', onOffline);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [joined, connectionState]);
+
+  /**
+   * Manual "Rejoin meeting" after automatic recovery is exhausted.
+   * Reuses server-side admission; does not require host approval when still authorized.
+   */
+  const rejoinMeeting = useCallback(async () => {
+    if (intentionalLeaveRef.current) return;
+    if (rejoinBusy) return;
+    setRejoinBusy(true);
+    setRecoveryOutcome(null);
+    setConnectionState('reconnecting');
+    autoAttemptRef.current = 0;
+    clearAutoRetryTimer();
+
+    try {
+      const sock = socketRef.current;
+      if (sock && !sock.connected) {
+        await new Promise<void>((resolve, reject) => {
+          const t = setTimeout(() => reject(new Error('Reconnect timed out')), JOIN_TIMEOUT_MS);
+          sock.once('connect', () => {
+            clearTimeout(t);
+            resolve();
+          });
+          sock.once('connect_error', (e) => {
+            clearTimeout(t);
+            reject(e);
+          });
+          sock.connect();
+        });
+        await recoverAfterSignalRef.current({ manual: true });
+        return;
+      }
+
+      if (sock?.connected) {
+        await recoverAfterSignalRef.current({ manual: true });
+        return;
+      }
+
+      // No usable socket — full soft rejoin with a fresh connection (no leave-room).
+      if (sessionRef.current) {
+        try {
+          await sessionRef.current.softCleanup();
+        } catch { /* ignore */ }
+        sessionRef.current = null;
+      }
+      await joinMeetingRef.current();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not rejoin';
+      const outcome = classifyJoinError(message);
+      setRecoveryOutcome(outcome);
+      setConnectionState('failed');
+      addToast?.(message);
+    } finally {
+      setRejoinBusy(false);
+    }
+  }, [rejoinBusy, clearAutoRetryTimer, addToast]);
+
+  /** @deprecated alias — prefer rejoinMeeting */
+  const retryConnection = rejoinMeeting;
 
   // Cleanup listeners when leaving
   useEffect(() => {
@@ -345,6 +606,12 @@ export const useMeeting = (
     participantId,
     joinMeeting,
     leaveMeeting,
+    rejoinMeeting,
+    retryConnection,
+    connectionState,
+    recoveryOutcome,
+    rejoinBusy,
+    mediaEpoch,
     session: sessionRef,
     peers,
     remoteStreams,
@@ -379,6 +646,8 @@ function _attachMediaListeners(
   socket.off('worker-died');
   socket.off('recording-started');
   socket.off('recording-stopped');
+  socket.off('peer-reconnecting');
+  socket.off('peer-reconnected');
 
   socket.on('new-producer', async ({ producerId, participantId: remotePid, kind, appData }: any) => {
     try {
@@ -417,10 +686,10 @@ function _attachMediaListeners(
     });
   });
 
-  socket.on('peer-left', ({ participantId: leftPid }: any) => {
+  socket.on('peer-left', ({ participantId: leftPid, reason }: any) => {
     setPeers((prev) => {
       const peer = prev.find((p) => p.id === leftPid);
-      if (peer) addToast?.(`${peer.name} left`);
+      if (peer && reason !== 'reconnect') addToast?.(`${peer.name} left`);
       return prev.filter((p) => p.id !== leftPid);
     });
     setRemoteStreams((prev) => {
@@ -526,14 +795,53 @@ function _attachMediaListeners(
   });
 
   socket.on('transport-failed', ({ reason }: any) => {
-    addToast?.(`Connection issue (${reason}) — rejoining...`);
+    addToast?.(`Connection issue (${reason}) — recovering media…`);
     void recoverMedia().catch(() => {
-      addToast?.('Failed to recover media — please refresh.');
+      addToast?.('Failed to recover media — please tap Retry.');
     });
   });
 
   socket.on('worker-died', ({ message }: any) => {
-    addToast?.(message || 'Server error — please rejoin.');
+    addToast?.(message || 'Media server restarted — recovering…');
+    void recoverMedia().catch(() => {
+      addToast?.('Server error — please tap Retry or refresh.');
+    });
+  });
+
+  socket.on('peer-reconnecting', ({ participantId: remotePid, name }: any) => {
+    setPeers((prev) =>
+      prev.map((p) => (p.id === remotePid ? { ...p, isMuted: p.isMuted, isCameraOff: p.isCameraOff } : p)),
+    );
+    if (name) addToast?.(`${name} is reconnecting…`);
+  });
+
+  socket.on('peer-reconnected', ({ participantId: newPid, name, userId: newUserId, avatarUrl, avatarColor }: any) => {
+    setPeers((prev) => {
+      if (prev.some((p) => p.id === newPid || p.userId === newUserId)) {
+        return prev.map((p) =>
+          p.userId === newUserId
+            ? {
+                ...p,
+                id: newPid,
+                name: name || p.name,
+                avatarUrl: avatarUrl ?? p.avatarUrl,
+                avatarColor: avatarColor ?? p.avatarColor,
+              }
+            : p,
+        );
+      }
+      addToast?.(`${name} reconnected`);
+      return [
+        ...prev,
+        {
+          id: newPid,
+          name,
+          userId: newUserId,
+          avatarUrl: avatarUrl ?? null,
+          avatarColor: avatarColor ?? null,
+        },
+      ];
+    });
   });
 
   socket.on('recording-started', () => {

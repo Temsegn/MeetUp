@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "test:remote-control": "tsx --test src/features/remote-control/commands/commandDispatcher.test.ts",
     "test:auth": "node --test src/features/auth/schemas/auth.schemas.test.mjs",
-    "test:whiteboard": "tsx --test src/features/whiteboard/utils/sceneMerge.test.ts"
+    "test:whiteboard": "tsx --test src/features/whiteboard/utils/sceneMerge.test.ts",
+    "test:meeting-recovery": "tsx --test src/features/meeting/lib/connection-recovery.test.ts"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "file:excalidraw.tgz",
