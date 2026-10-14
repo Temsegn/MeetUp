@@ -1,6 +1,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { socketAuthMiddleware } from './middleware/socket.auth';
-import { registerMediaHandlers, _cleanupPeer } from './handlers/media.handler';
+import { registerMediaHandlers } from './handlers/media.handler';
 import { registerChatHandlers, clearSocketRateLimit } from './handlers/chat.handler';
 import { registerReactionHandlers } from './handlers/reaction.handler';
 import { registerModerationHandlers } from './handlers/moderation.handler';
@@ -12,8 +12,7 @@ import { metrics } from '../infrastructure/metrics/metrics.service';
 import { startMeetingDurationJob } from '../modules/meetings/meeting-duration.job';
 import { startMeetingReminderJob } from '../modules/meetings/meeting-reminder.job';
 import { startMeetingInviteDeliveryJob } from '../modules/meetings/meeting-invite-delivery.job';
-import { buildAdmissionIdentityKey } from '../database/models/MeetingAdmission.model';
-import { scheduleSoftDisconnect } from './soft-disconnect';
+import { beginSoftDisconnect } from './begin-soft-disconnect';
 import { removeWaitingBySocket } from './waiting-room';
 
 export const setupSocketServer = (io: SocketIOServer): void => {
@@ -90,52 +89,15 @@ export const setupSocketServer = (io: SocketIOServer): void => {
       // Explicit leave already cleaned up and cleared currentRoom.
       if (socket.data.softDisconnect === false && !socket.data.currentRoom) return;
 
-      const identityKey =
-        current.identityKey ||
-        buildAdmissionIdentityKey({
-          userId: user.userId,
-          isGuest: Boolean(user.isGuest) || user.userId.startsWith('guest_'),
-          email: user.guestEmail || user.email || null,
-        });
+      // Soft disconnect: remotes see "Paused — connection lost" immediately;
+      // hard leave after grace. Keep currentRoom for expire metering.
+      beginSoftDisconnect(io, socket);
+    });
 
-      // Soft disconnect: keep admission; delay hard media cleanup so brief
-      // Wi-Fi↔mobile / sleep blips can resume without "left" for everyone.
-      socket.data.softDisconnect = true;
-      scheduleSoftDisconnect({
-        io,
-        roomId: current.roomId,
-        participantId: current.participantId,
-        userId: user.userId,
-        identityKey,
-        name: user.name,
-        socketId: socket.id,
-        joinedAt: current.joinedAt,
-        workspaceId: current.workspaceId,
-        sessionId: current.sessionId,
-        onExpire: () => {
-          try {
-            // Restore room meta so metering / cleanup can finish correctly.
-            socket.data.currentRoom = {
-              roomId: current.roomId,
-              participantId: current.participantId,
-              joinedAt: current.joinedAt,
-              workspaceId: current.workspaceId,
-              sessionId: current.sessionId,
-              identityKey,
-            };
-            _cleanupPeer(io, socket, current.roomId, current.participantId);
-          } catch (err) {
-            logger.warn('Hard cleanup after soft-disconnect grace failed', {
-              roomId: current.roomId,
-              participantId: current.participantId,
-              err: err instanceof Error ? err.message : String(err),
-            });
-          }
-        },
-      });
-
-      // Keep currentRoom on the dead socket for grace-expire metering, but mark soft.
-      // A new socket will take over via join-room + takeSoftDisconnect.
+    // Client still has a socket briefly (e.g. browser offline) — announce early
+    // so remotes show paused without waiting for ping timeout.
+    socket.on('announce-connection-lost', () => {
+      beginSoftDisconnect(io, socket);
     });
 
     // ── Error handler ─────────────────────────────────────────────────────────

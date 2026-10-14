@@ -99,6 +99,8 @@ export const useMeeting = (
   /** Bumps each time a MediaSession is (re)built so the UI can republish local tracks. */
   const [mediaEpoch, setMediaEpoch] = useState(0);
   const [rejoinBusy, setRejoinBusy] = useState(false);
+  /** After 20s timeout — full rejoin screen (not in-call UI / not meetings list). */
+  const [needsRejoinScreen, setNeedsRejoinScreen] = useState(false);
 
   const socketRef  = useRef<Socket | null>(null);
   const sessionRef = useRef<MediaSession | null>(null);
@@ -136,7 +138,61 @@ export const useMeeting = (
     reconnectStartedAtRef.current = null;
   }, []);
 
-  /** After RECONNECT_DEADLINE_MS still reconnecting → show Rejoin (aligned with server 20s grace). */
+  /** Tell remotes "Paused — connection lost" as soon as we still can. */
+  const announceConnectionLost = useCallback(() => {
+    const sock = socketRef.current;
+    if (!sock?.connected) return;
+    try {
+      sock.emit('announce-connection-lost');
+    } catch {
+      /* best-effort */
+    }
+  }, []);
+
+  /**
+   * Exit the live call UI after the 20s window — keep admission, show rejoin screen.
+   * Does not navigate to the meetings list.
+   */
+  const exitToRejoinScreen = useCallback(async () => {
+    intentionalLeaveRef.current = true;
+    recoveringRef.current = false;
+    autoAttemptRef.current = 0;
+    clearAutoRetryTimer();
+    clearReconnectDeadline();
+
+    const sock = socketRef.current;
+    if (sock) {
+      sock.io.off('reconnect');
+      sock.io.off('reconnect_attempt');
+      sock.io.off('reconnect_failed');
+      sock.off('disconnect');
+      try {
+        sock.disconnect();
+      } catch { /* ignore */ }
+    }
+    if (sessionRef.current) {
+      try {
+        await sessionRef.current.softCleanup();
+      } catch { /* ignore */ }
+      sessionRef.current = null;
+    }
+    socketRef.current = null;
+    setSocket(null);
+    setJoined(false);
+    setWaiting(false);
+    setPeers([]);
+    setRemoteStreams(new Map());
+    setParticipantId('');
+    setIsRecording(false);
+    setConnectionState('failed');
+    setRecoveryOutcome((o) => o ?? 'network_failed');
+    setRejoinBusy(false);
+    setNeedsRejoinScreen(true);
+    participantIdRef.current = '';
+    joiningRef.current = false;
+  }, [clearAutoRetryTimer, clearReconnectDeadline]);
+
+  /** After RECONNECT_DEADLINE_MS still reconnecting → dedicated rejoin screen. */
   const armReconnectDeadline = useCallback(() => {
     if (intentionalLeaveRef.current) return;
     if (reconnectDeadlineTimerRef.current) return;
@@ -144,16 +200,14 @@ export const useMeeting = (
     reconnectDeadlineTimerRef.current = setTimeout(() => {
       reconnectDeadlineTimerRef.current = null;
       if (intentionalLeaveRef.current) return;
-      setConnectionState((prev) => {
-        if (prev !== 'reconnecting') return prev;
+      void (async () => {
         setRecoveryOutcome((o) => o ?? 'network_failed');
         clearAutoRetryTimer();
         recoveringRef.current = false;
-        addToast?.('Connection timed out. You can rejoin the meeting.');
-        return 'failed';
-      });
+        await exitToRejoinScreen();
+      })();
     }, RECONNECT_DEADLINE_MS);
-  }, [addToast, clearAutoRetryTimer]);
+  }, [clearAutoRetryTimer, exitToRejoinScreen]);
 
   const leaveMeeting = useCallback(async () => {
     intentionalLeaveRef.current = true;
@@ -185,6 +239,7 @@ export const useMeeting = (
     setConnectionState('idle');
     setRecoveryOutcome(null);
     setRejoinBusy(false);
+    setNeedsRejoinScreen(false);
     participantIdRef.current = '';
     creatorIdRef.current = null;
     joiningRef.current = false;
@@ -226,6 +281,7 @@ export const useMeeting = (
       });
       session.setOnFatalTransportFailure(() => {
         if (intentionalLeaveRef.current) return;
+        announceConnectionLost();
         setConnectionState('reconnecting');
         void recoverAfterSignalRef.current({ manual: false }).catch(() => undefined);
       });
@@ -258,6 +314,8 @@ export const useMeeting = (
       autoAttemptRef.current = 0;
       clearAutoRetryTimer();
       clearReconnectDeadline();
+      setNeedsRejoinScreen(false);
+      intentionalLeaveRef.current = false;
 
       sock.emit('get-recording-status', { roomId }, (res: any) => {
         if (res && !res.error) setIsRecording(!!res.recording);
@@ -347,7 +405,7 @@ export const useMeeting = (
         }
       });
     },
-    [roomId, addToast, clearAutoRetryTimer, clearReconnectDeadline],
+    [roomId, addToast, clearAutoRetryTimer, clearReconnectDeadline, announceConnectionLost],
   );
 
   const scheduleAutoRecovery = useCallback(() => {
@@ -498,7 +556,7 @@ export const useMeeting = (
         s.io.on('reconnect_failed', () => {
           if (intentionalLeaveRef.current) return;
           setRecoveryOutcome('network_failed');
-          setConnectionState('failed');
+          void exitToRejoinScreen();
         });
       };
       attachReconnectHandlers(sock);
@@ -566,7 +624,7 @@ export const useMeeting = (
     } finally {
       joiningRef.current = false;
     }
-  }, [roomId, token, addToast, enterMediaSession]);
+  }, [roomId, token, addToast, enterMediaSession, exitToRejoinScreen]);
 
   joinMeetingRef.current = joinMeeting;
 
@@ -574,10 +632,12 @@ export const useMeeting = (
   useEffect(() => {
     const onOffline = () => {
       if (!joined || intentionalLeaveRef.current) return;
+      // Announce while the socket may still be briefly alive.
+      announceConnectionLost();
       setConnectionState('reconnecting');
     };
     const onOnline = () => {
-      if (!joined || intentionalLeaveRef.current) return;
+      if (!joined || intentionalLeaveRef.current || needsRejoinScreen) return;
       const sock = socketRef.current;
       if (sock && !sock.connected) {
         sock.connect();
@@ -591,20 +651,28 @@ export const useMeeting = (
       window.removeEventListener('offline', onOffline);
       window.removeEventListener('online', onOnline);
     };
-  }, [joined, connectionState]);
+  }, [joined, connectionState, announceConnectionLost, needsRejoinScreen]);
+
+  // When we enter reconnecting with a live socket, notify remotes immediately.
+  useEffect(() => {
+    if (connectionState !== 'reconnecting') return;
+    announceConnectionLost();
+  }, [connectionState, announceConnectionLost]);
 
   /**
    * Manual "Rejoin meeting" after automatic recovery is exhausted.
    * Reuses server-side admission; does not require host approval when still authorized.
    */
   const rejoinMeeting = useCallback(async () => {
-    if (intentionalLeaveRef.current) return;
     if (rejoinBusy) return;
+    intentionalLeaveRef.current = false;
+    setNeedsRejoinScreen(false);
     setRejoinBusy(true);
     setRecoveryOutcome(null);
     setConnectionState('reconnecting');
     autoAttemptRef.current = 0;
     clearAutoRetryTimer();
+    clearReconnectDeadline();
 
     try {
       const sock = socketRef.current;
@@ -642,12 +710,18 @@ export const useMeeting = (
       const message = err instanceof Error ? err.message : 'Could not rejoin';
       const outcome = classifyJoinError(message);
       setRecoveryOutcome(outcome);
-      setConnectionState('failed');
+      if (outcome === 'auth_denied' || outcome === 'meeting_ended') {
+        setConnectionState('failed');
+        setNeedsRejoinScreen(false);
+      } else {
+        setNeedsRejoinScreen(true);
+        setConnectionState('failed');
+      }
       addToast?.(message);
     } finally {
       setRejoinBusy(false);
     }
-  }, [rejoinBusy, clearAutoRetryTimer, addToast]);
+  }, [rejoinBusy, clearAutoRetryTimer, clearReconnectDeadline, addToast]);
 
   /** @deprecated alias — prefer rejoinMeeting */
   const retryConnection = rejoinMeeting;
@@ -708,6 +782,7 @@ export const useMeeting = (
     connectionState,
     recoveryOutcome,
     rejoinBusy,
+    needsRejoinScreen,
     mediaEpoch,
     session: sessionRef,
     peers,

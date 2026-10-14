@@ -23,9 +23,9 @@ const startServer = async () => {
     },
     // Whiteboard + DM call signaling / small payloads.
     maxHttpBufferSize: 8e6,
-    // Ping/pong detects stale connections; tune to your expected network latency
-    pingTimeout:  20_000,
-    pingInterval: 25_000,
+    // Detect dead sockets quickly so remotes see "Paused" without a long delay.
+    pingTimeout:  8_000,
+    pingInterval: 10_000,
   });
 
   // Connect to MongoDB

@@ -25,6 +25,7 @@ import {
 import type { CommandHandlerMap } from '../../remote-control/types';
 import { cn } from '../../../lib/cn';
 import { MeetingPreJoinScreen } from '../components/MeetingPreJoinScreen';
+import { MeetingRejoinScreen } from '../components/MeetingRejoinScreen';
 import { MeetingRoomHeader } from '../components/MeetingRoomHeader';
 import { VideoTile, type LiveParticipant } from '../components/VideoTile';
 import { ConferenceControlBar } from '../components/ConferenceControlBar';
@@ -190,6 +191,7 @@ export function LiveMeetingPage() {
     connectionState,
     recoveryOutcome,
     rejoinBusy,
+    needsRejoinScreen,
     mediaEpoch,
     session,
     peers,
@@ -924,6 +926,47 @@ export function LiveMeetingPage() {
     );
   }
 
+  if (needsRejoinScreen) {
+    return (
+      <MeetingRejoinScreen
+        title={meetingTitle}
+        displayName={effectiveName}
+        isRejoining={rejoinBusy || isJoining}
+        error={
+          recoveryOutcome === 'auth_denied'
+            ? 'You no longer have access to this meeting.'
+            : recoveryOutcome === 'meeting_ended'
+              ? 'This meeting has ended.'
+              : joinError
+        }
+        onRejoin={() => {
+          setJoinError(null);
+          void (async () => {
+            if (!guestToken && !getAccessToken()) {
+              setIsJoining(true);
+              try {
+                await handleJoin();
+              } finally {
+                setIsJoining(false);
+              }
+              return;
+            }
+            await rejoinMeeting();
+          })();
+        }}
+        onLeave={() => {
+          allowLeaveRef.current = true;
+          void (async () => {
+            localStream?.getTracks().forEach((t) => t.stop());
+            screenStream?.getTracks().forEach((t) => t.stop());
+            await leaveMeeting();
+            navigate(user ? '/app/meetings' : '/');
+          })();
+        }}
+      />
+    );
+  }
+
   if (!joined) {
     return (
       <MeetingPreJoinScreen
@@ -962,36 +1005,14 @@ export function LiveMeetingPage() {
       data-room-id={roomId}
       className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden overflow-x-hidden bg-[#F7F9FC]"
     >
-      {connectionState === 'reconnecting' || connectionState === 'failed' ? (
+      {connectionState === 'reconnecting' ? (
         <div
           role="status"
-          className={
-            connectionState === 'failed'
-              ? 'flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[#FECACA] bg-[#FEF2F2] px-3 py-2.5 text-[13px] text-[#991B1B] sm:px-4'
-              : 'flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[#FDE68A] bg-[#FFFBEB] px-3 py-2.5 text-[13px] text-[#92400E] sm:px-4'
-          }
+          className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[#FDE68A] bg-[#FFFBEB] px-3 py-2.5 text-[13px] text-[#92400E] sm:px-4"
         >
           <span className="min-w-0 font-semibold">
-            {
-              recoveryBannerCopy(
-                connectionState === 'reconnecting' ? 'reconnecting' : 'failed',
-                recoveryOutcome,
-              ).title
-            }
+            {recoveryBannerCopy('reconnecting').title}
           </span>
-          {connectionState === 'failed' &&
-          recoveryBannerCopy('failed', recoveryOutcome).actionLabel ? (
-            <button
-              type="button"
-              disabled={rejoinBusy}
-              onClick={() => void rejoinMeeting()}
-              className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-[#016BE6] px-4 text-[12px] font-bold text-white shadow-sm hover:bg-[#0056EF] disabled:opacity-60"
-            >
-              {rejoinBusy
-                ? 'Rejoining…'
-                : recoveryBannerCopy('failed', recoveryOutcome).actionLabel}
-            </button>
-          ) : null}
         </div>
       ) : null}
       {/* Band 1 — compact header (overflow visible so invite/copy menu is not clipped) */}
