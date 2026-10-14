@@ -57,7 +57,7 @@ export function recoveryBannerCopy(state: 'reconnecting' | 'failed', outcome?: R
 } {
   if (state === 'reconnecting') {
     return {
-      title: 'Reconnecting… Stay on this page. Your admission is saved.',
+      title: 'Reconnecting…',
       actionLabel: null,
     };
   }

@@ -30,6 +30,8 @@ export class ParticipantManager {
     name: string,
     avatarUrl?: string | null,
     avatarColor?: string | null,
+    identityKey?: string | null,
+    email?: string | null,
   ): Peer {
     if (!this.roomPeers.has(roomId)) {
       this.roomPeers.set(roomId, new Map());
@@ -46,6 +48,8 @@ export class ParticipantManager {
       id:                  participantId,
       userId,
       name,
+      identityKey: identityKey ?? null,
+      email: email ? String(email).trim().toLowerCase() : null,
       avatarUrl: avatarUrl ?? null,
       avatarColor: avatarColor ?? null,
       roomId,

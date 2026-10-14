@@ -109,8 +109,32 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
     const { roomId, displayName } = v.data;
 
     try {
+      // Same-socket media rebuild (ICE/network recovery): drop the old peer and continue.
+      // Soft-disconnect resumes use a new socket and never hit this branch.
       if (socket.data.currentRoom) {
-        return callback({ error: 'Already in a room. Leave first.', code: 'ALREADY_JOINED' });
+        const prev = socket.data.currentRoom as {
+          roomId: string;
+          participantId: string;
+        };
+        if (prev.roomId === roomId && prev.participantId) {
+          try {
+            mediaEngine.removePeer(roomId, prev.participantId);
+            socket.to(roomId).emit('peer-left', {
+              participantId: prev.participantId,
+              reason: 'reconnect',
+            });
+            socket.leave(roomId);
+          } catch (err) {
+            logger.warn('Failed to clear same-socket peer before rejoin', {
+              roomId,
+              participantId: prev.participantId,
+              err: err instanceof Error ? err.message : String(err),
+            });
+          }
+          delete socket.data.currentRoom;
+        } else {
+          return callback({ error: 'Already in a room. Leave first.', code: 'ALREADY_JOINED' });
+        }
       }
       if (socket.data.waitingRequest) {
         return callback({ error: 'Already waiting to join.', code: 'ALREADY_WAITING' });
@@ -480,6 +504,8 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
           id: p.id,
           name: p.name,
           userId: p.userId,
+          identityKey: p.identityKey ?? null,
+          email: p.email ?? null,
           avatarUrl: p.avatarUrl ?? null,
           avatarColor: p.avatarColor ?? null,
         }));
@@ -1072,26 +1098,42 @@ async function _completeJoin(
     email = null,
     meetingId = null,
     admittedBy,
-    reconnect = false,
+    reconnect: _reconnect = false,
   } = opts;
+  void _reconnect;
 
   const identityKey = buildAdmissionIdentityKey({ userId, isGuest, email });
+  const normalizedEmail = email ? String(email).trim().toLowerCase() : null;
 
-  // If this identity was soft-disconnected, hard-clean the old media peer first
-  // (mediasoup transports cannot be reused across sockets / network changes).
+  // Replace any prior live peer for this identity (soft-disconnect pending OR
+  // a leftover mediasoup peer). Prevents duplicate tiles when guest_* churns.
   const pending = takeSoftDisconnect(roomId, identityKey);
-  if (pending) {
+  const previousParticipantIds: string[] = [];
+  if (pending?.participantId) {
+    previousParticipantIds.push(pending.participantId);
+  }
+  for (const peer of mediaEngine.getPeersInRoom(roomId)) {
+    const sameIdentity =
+      (peer.identityKey && peer.identityKey === identityKey) ||
+      peer.userId === userId ||
+      (normalizedEmail && peer.email && peer.email === normalizedEmail);
+    if (sameIdentity && !previousParticipantIds.includes(peer.id)) {
+      previousParticipantIds.push(peer.id);
+    }
+  }
+  for (const oldId of previousParticipantIds) {
     try {
-      mediaEngine.removePeer(roomId, pending.participantId);
-      io.to(roomId).emit('peer-left', { participantId: pending.participantId, reason: 'reconnect' });
+      mediaEngine.removePeer(roomId, oldId);
+      io.to(roomId).emit('peer-left', { participantId: oldId, reason: 'reconnect' });
     } catch (err) {
-      logger.warn('Failed to clean soft-disconnected peer on resume', {
+      logger.warn('Failed to clean prior peer on resume', {
         roomId,
-        participantId: pending.participantId,
+        participantId: oldId,
         err: err instanceof Error ? err.message : String(err),
       });
     }
   }
+  const replacedPrior = previousParticipantIds.length > 0;
 
   const rtpCapabilities = await mediaEngine.getOrCreateRoom(roomId);
   const participantId = randomUUID();
@@ -1104,6 +1146,8 @@ async function _completeJoin(
     name,
     avatarUrl,
     avatarColor,
+    identityKey,
+    normalizedEmail,
   );
 
   socket.join(roomId);
@@ -1135,14 +1179,17 @@ async function _completeJoin(
     });
   }
 
-  const isResume = Boolean(pending) || reconnect;
-  socket.to(roomId).emit(isResume && pending ? 'peer-reconnected' : 'peer-joined', {
+  const event = replacedPrior || pending ? 'peer-reconnected' : 'peer-joined';
+  socket.to(roomId).emit(event, {
     participantId,
+    previousParticipantId: previousParticipantIds[0] ?? null,
     name,
     userId,
+    email: normalizedEmail,
+    identityKey,
     avatarUrl,
     avatarColor,
-    resumed: Boolean(pending),
+    resumed: replacedPrior || Boolean(pending),
   });
 
   // Host just joined — push any pending waiting requests
@@ -1157,7 +1204,9 @@ async function _completeJoin(
     participantId,
     userId,
     identityKey,
-    resumed: Boolean(pending),
+    resumed: replacedPrior || Boolean(pending),
+    replacedPrior,
+    event,
   });
 
   return {
@@ -1168,7 +1217,7 @@ async function _completeJoin(
     avatarUrl,
     avatarColor,
     muteOnEntry,
-    resumed: Boolean(pending),
+    resumed: replacedPrior || Boolean(pending),
     simulcastEncodings: mediasoupConfig.simulcastEncodings,
     screenShareEncodings: mediasoupConfig.screenShareEncodings,
   };

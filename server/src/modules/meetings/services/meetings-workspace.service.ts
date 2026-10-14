@@ -1,5 +1,9 @@
 import { Types } from 'mongoose';
 import { Meeting, IMeeting } from '../../../database/models/Meeting.model';
+import {
+  MeetingAdmission,
+  buildAdmissionIdentityKey,
+} from '../../../database/models/MeetingAdmission.model';
 import { User } from '../../../database/models/User.model';
 import { ParticipantMinuteLog } from '../../../database/models/ParticipantMinuteLog.model';
 import { NotFoundError, ForbiddenError, ValidationError, AppError } from '../../../shared/errors/AppError';
@@ -1127,7 +1131,10 @@ export async function removeMeetingInvite(
   return withRoster(await attachHostAvatar(toJson(m as unknown as MeetingDoc)));
 }
 
-export async function getPublicJoinStatus(roomId: string): Promise<{
+export async function getPublicJoinStatus(
+  roomId: string,
+  opts?: { email?: string | null },
+): Promise<{
   roomId: string;
   title: string;
   status: string;
@@ -1135,6 +1142,8 @@ export async function getPublicJoinStatus(roomId: string): Promise<{
   code: string | null;
   message: string | null;
   scheduledAt: string | null;
+  previousDisplayName: string | null;
+  previouslyAdmitted: boolean;
 }> {
   await promoteDueMeetings();
   const m = await Meeting.findOne({ roomId });
@@ -1147,6 +1156,29 @@ export async function getPublicJoinStatus(roomId: string): Promise<{
     await m.save();
   }
 
+  let previousDisplayName: string | null = null;
+  let previouslyAdmitted = false;
+  const email = opts?.email ? String(opts.email).trim().toLowerCase() : '';
+  if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    const identityKey = buildAdmissionIdentityKey({
+      userId: 'guest_lookup',
+      isGuest: true,
+      email,
+    });
+    const admission = await MeetingAdmission.findOne({
+      roomId: m.roomId,
+      identityKey,
+      status: 'admitted',
+    })
+      .select('displayName status')
+      .lean();
+    if (admission) {
+      previouslyAdmitted = true;
+      const name = String(admission.displayName || '').trim();
+      previousDisplayName = name || null;
+    }
+  }
+
   return {
     roomId: m.roomId,
     title: m.title || 'Meeting',
@@ -1155,6 +1187,8 @@ export async function getPublicJoinStatus(roomId: string): Promise<{
     code: block?.code ?? null,
     message: block?.message ?? null,
     scheduledAt: m.scheduledAt ? m.scheduledAt.toISOString() : null,
+    previousDisplayName,
+    previouslyAdmitted,
   };
 }
 

@@ -83,9 +83,14 @@ const CreateWorkspaceMeetingBody = z
   });
 
 // Public join gate for /join/:roomId (guests + invite links) — no auth.
+// Optional ?email= returns previousDisplayName when that guest was already admitted.
 router.get('/join-status/:roomId', async (req, res) => {
   try {
-    const data = await getPublicJoinStatus(String(req.params['roomId'] ?? ''));
+    const email =
+      typeof req.query.email === 'string' ? req.query.email : null;
+    const data = await getPublicJoinStatus(String(req.params['roomId'] ?? ''), {
+      email,
+    });
     res.json(data);
   } catch (err) {
     if (isAppError(err)) {

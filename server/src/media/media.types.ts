@@ -107,6 +107,9 @@ export interface Peer {
   id: string;
   userId: string;
   name: string;
+  /** Stable admission key (`user:…` / `email:…`) — survives guest_* churn. */
+  identityKey?: string | null;
+  email?: string | null;
   avatarUrl?: string | null;
   avatarColor?: string | null;
   roomId: string;

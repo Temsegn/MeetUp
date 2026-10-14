@@ -34,10 +34,7 @@ describe('connection recovery policy', () => {
   });
 
   it('shows Rejoin meeting copy only for recoverable failures', () => {
-    assert.equal(
-      recoveryBannerCopy('reconnecting').title.includes('Reconnecting'),
-      true,
-    );
+    assert.equal(recoveryBannerCopy('reconnecting').title, 'Reconnecting…');
     const failed = recoveryBannerCopy('failed', 'network_failed');
     assert.equal(failed.title, 'Connection lost. You can rejoin the meeting.');
     assert.equal(failed.actionLabel, 'Rejoin meeting');

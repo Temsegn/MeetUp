@@ -27,6 +27,7 @@ export class MediaSession {
   private simulcastEncodings?: object[];
   private screenShareEncodings?: object[];
   private iceHandlerAttached = false;
+  private onFatalTransportFailure: ((direction: 'send' | 'recv') => void) | null = null;
 
   constructor(
     private readonly socket: Socket,
@@ -42,6 +43,11 @@ export class MediaSession {
   }): void {
     this.simulcastEncodings = opts.simulcastEncodings;
     this.screenShareEncodings = opts.screenShareEncodings;
+  }
+
+  /** Called after ICE restart budget is exhausted — trigger full media recovery. */
+  public setOnFatalTransportFailure(cb: ((direction: 'send' | 'recv') => void) | null): void {
+    this.onFatalTransportFailure = cb;
   }
 
   // ── Initialization ─────────────────────────────────────────────────────────
@@ -154,6 +160,7 @@ export class MediaSession {
           let iceRestarts = 0;
           let iceRestartInFlight = false;
           let lastIceRestartAt = 0;
+          let fatalNotified = false;
           const MAX_ICE_RESTARTS = 3;
           const ICE_RESTART_COOLDOWN_MS = 8_000;
 
@@ -161,6 +168,7 @@ export class MediaSession {
             console.log(`[MediaSession] ${direction} transport state: ${state}`);
             if (state === 'connected') {
               iceRestarts = 0;
+              fatalNotified = false;
               return;
             }
             if (state !== 'failed') return;
@@ -171,11 +179,13 @@ export class MediaSession {
               iceRestarts >= MAX_ICE_RESTARTS ||
               now - lastIceRestartAt < ICE_RESTART_COOLDOWN_MS
             ) {
-              if (iceRestarts >= MAX_ICE_RESTARTS) {
+              if (iceRestarts >= MAX_ICE_RESTARTS && !fatalNotified) {
+                fatalNotified = true;
                 console.error(
                   `[MediaSession] ${direction} ICE failed after ${MAX_ICE_RESTARTS} restarts — ` +
-                    'check coturn external-ip (public/private) and UDP 40000-40199',
+                    'rebuilding media session',
                 );
+                this.onFatalTransportFailure?.(direction);
               }
               return;
             }

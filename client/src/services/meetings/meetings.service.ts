@@ -148,7 +148,10 @@ export const meetingsService = {
   },
 
   /** Public join gate (no workspace auth) — for /join/:roomId and invite links. */
-  async getJoinStatus(roomId: string): Promise<{
+  async getJoinStatus(
+    roomId: string,
+    opts?: { email?: string | null },
+  ): Promise<{
     roomId: string;
     title: string;
     status: string;
@@ -156,9 +159,15 @@ export const meetingsService = {
     code: string | null;
     message: string | null;
     scheduledAt: string | null;
+    previousDisplayName: string | null;
+    previouslyAdmitted: boolean;
   }> {
+    const qs =
+      opts?.email && String(opts.email).trim()
+        ? `?email=${encodeURIComponent(String(opts.email).trim().toLowerCase())}`
+        : '';
     const res = await fetch(
-      `${API_URL}/workspace-meetings/join-status/${encodeURIComponent(roomId)}`,
+      `${API_URL}/workspace-meetings/join-status/${encodeURIComponent(roomId)}${qs}`,
       { credentials: 'include' },
     );
     const data = await res.json().catch(() => ({}));
@@ -173,6 +182,8 @@ export const meetingsService = {
       code: string | null;
       message: string | null;
       scheduledAt: string | null;
+      previousDisplayName: string | null;
+      previouslyAdmitted: boolean;
     };
   },
 

@@ -7,6 +7,11 @@ import { getAccessToken } from '../../../services/auth/auth.service';
 import { meetingsService, type Meeting } from '../../../services/meetings/meetings.service';
 import { useLiveMeetingShell } from '../../dashboard/layouts/LiveMeetingShellContext';
 import { useMeeting } from '../../meeting/hooks/useMeeting';
+import { recoveryBannerCopy } from '../../meeting/lib/connection-recovery';
+import {
+  loadGuestDisplayName,
+  saveGuestDisplayName,
+} from '../../meeting/lib/guest-display-name';
 import { useLocalMedia } from '../../media/hooks/useLocalMedia';
 import { useReactions } from '../../collaboration/hooks/useReactions';
 import { ReactionOverlay } from '../../collaboration/components/ReactionOverlay/ReactionOverlay';
@@ -39,7 +44,12 @@ export function LiveMeetingPage() {
   const navigate = useNavigate();
   const { user, activeWorkspace } = useAuth();
   const meetingShell = useLiveMeetingShell();
-  const [displayName, setDisplayName] = useState(user?.name ?? '');
+  const [displayName, setDisplayName] = useState(() => {
+    if (user?.name) return user.name;
+    const email = searchParams.get('email')?.trim().toLowerCase() ?? '';
+    if (roomId && email) return loadGuestDisplayName(roomId, email) ?? '';
+    return '';
+  });
   const [guestEmail, setGuestEmail] = useState(() => {
     const fromQuery = searchParams.get('email')?.trim().toLowerCase() ?? '';
     return fromQuery;
@@ -47,6 +57,12 @@ export function LiveMeetingPage() {
   const guestEmailLocked = Boolean(searchParams.get('email')?.trim());
   const [guestToken, setGuestToken] = useState<string | null>(null);
   const [guestUserId, setGuestUserId] = useState<string | null>(null);
+  const [nameRemembered, setNameRemembered] = useState(() => {
+    if (user?.name) return true;
+    const email = searchParams.get('email')?.trim().toLowerCase() ?? '';
+    return Boolean(roomId && email && loadGuestDisplayName(roomId, email));
+  });
+  const autoJoinAttemptedRef = useRef(false);
   const [waitingList, setWaitingList] = useState<
     { requestId: string; name: string; avatarUrl?: string | null; avatarColor?: string | null; isGuest?: boolean }[]
   >([]);
@@ -90,8 +106,9 @@ export function LiveMeetingPage() {
   useEffect(() => {
     if (!roomId) return;
     let cancelled = false;
+    const emailForLookup = guestEmail.trim().toLowerCase() || null;
     meetingsService
-      .getJoinStatus(roomId)
+      .getJoinStatus(roomId, { email: emailForLookup })
       .then((s) => {
         if (cancelled) return;
         setJoinGate({
@@ -101,6 +118,19 @@ export function LiveMeetingPage() {
           code: s.code,
           status: s.status,
         });
+        if (!user && s.previousDisplayName) {
+          setDisplayName((prev) => prev.trim() || s.previousDisplayName!);
+          setNameRemembered(true);
+          if (emailForLookup) {
+            saveGuestDisplayName(roomId, emailForLookup, s.previousDisplayName);
+          }
+        } else if (!user && s.previouslyAdmitted && emailForLookup) {
+          const local = loadGuestDisplayName(roomId, emailForLookup);
+          if (local) {
+            setDisplayName((prev) => prev.trim() || local);
+            setNameRemembered(true);
+          }
+        }
       })
       .catch(() => {
         if (!cancelled) setJoinGate(null);
@@ -108,7 +138,7 @@ export function LiveMeetingPage() {
     return () => {
       cancelled = true;
     };
-  }, [roomId]);
+  }, [roomId, guestEmail, user]);
 
   useEffect(() => {
     if (!activeWorkspace?.workspaceId || !roomId) return;
@@ -265,11 +295,11 @@ export function LiveMeetingPage() {
     };
   }, [socket, leaveMeeting, navigate, addToast, localStream, screenStream]);
 
-  const handleJoin = async () => {
+  const handleJoin = async (): Promise<boolean> => {
     setJoinError(null);
     if (!displayName.trim()) {
       setJoinError('Please enter your name to join.');
-      return;
+      return false;
     }
     setIsJoining(true);
     try {
@@ -279,7 +309,7 @@ export function LiveMeetingPage() {
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           throw new Error('Enter the email you were invited with.');
         }
-                const res = await fetch(`${API_URL}/auth/guest`, {
+        const res = await fetch(`${API_URL}/auth/guest`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -290,6 +320,8 @@ export function LiveMeetingPage() {
         token = data.tokens?.accessToken as string;
         setGuestToken(token);
         setGuestUserId(data.user?.id ?? null);
+        saveGuestDisplayName(roomId, email, displayName.trim());
+        setNameRemembered(true);
       }
 
       const stream = localStream ?? (await startLocalMedia());
@@ -299,12 +331,40 @@ export function LiveMeetingPage() {
         );
       }
       await joinMeeting(token);
+      return true;
     } catch (err: unknown) {
       setJoinError(err instanceof Error ? err.message : 'Failed to join. Is the backend running?');
+      return false;
     } finally {
       setIsJoining(false);
     }
   };
+
+  // Returning invite guests: skip the name prompt and enter the meeting automatically.
+  useEffect(() => {
+    if (joined || waiting || isJoining) return;
+    if (!nameRemembered || !displayName.trim()) return;
+    if (user || !guestEmailLocked) return;
+    if (joinGate && !joinGate.joinable) return;
+    if (!localStream) return;
+    if (autoJoinAttemptedRef.current) return;
+    autoJoinAttemptedRef.current = true;
+    void handleJoin().then((ok) => {
+      if (!ok) autoJoinAttemptedRef.current = false;
+    });
+    // handleJoin closes over latest state; run once when media + remembered name are ready.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    joined,
+    waiting,
+    isJoining,
+    nameRemembered,
+    displayName,
+    user,
+    guestEmailLocked,
+    joinGate,
+    localStream,
+  ]);
 
   // After admitted / host join / media recovery — publish local media (once per track id per epoch)
   useEffect(() => {
@@ -315,11 +375,21 @@ export function LiveMeetingPage() {
     // New MediaSession after reconnect — allow republish of the same track ids.
     publishedTrackIdsRef.current.clear();
     const sess = session.current;
-    const stream = localStream;
-    if (!sess || !stream) return;
+    let stream = localStream;
+    if (!sess) return;
+
     void (async () => {
       try {
+        // Network handovers often end getUserMedia tracks — refresh before produce.
+        const liveCount = stream?.getTracks().filter((t) => t.readyState === 'live').length ?? 0;
+        if (!stream || liveCount === 0) {
+          stream = await startLocalMedia();
+          if (!stream || stream.getTracks().filter((t) => t.readyState === 'live').length === 0) {
+            throw new Error('No live media tracks');
+          }
+        }
         for (const track of stream.getAudioTracks()) {
+          if (track.readyState !== 'live') continue;
           if (publishedTrackIdsRef.current.has(track.id)) continue;
           publishedTrackIdsRef.current.add(track.id);
           try {
@@ -334,6 +404,7 @@ export function LiveMeetingPage() {
           }
         }
         for (const track of stream.getVideoTracks()) {
+          if (track.readyState !== 'live') continue;
           if (publishedTrackIdsRef.current.has(track.id)) continue;
           publishedTrackIdsRef.current.add(track.id);
           try {
@@ -352,7 +423,7 @@ export function LiveMeetingPage() {
     })();
     // mediaEpoch intentionally included so soft reconnect republishes on a new session.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- isMuted/isCameraOff applied at publish time only
-  }, [joined, localStream, session, addToast, mediaEpoch]);
+  }, [joined, localStream, session, addToast, mediaEpoch, startLocalMedia]);
 
   // Host waiting-room requests
   useEffect(() => {
@@ -844,9 +915,12 @@ export function LiveMeetingPage() {
       <MeetingPreJoinScreen
         roomId={roomId}
         userName={displayName}
-        onUserNameChange={setDisplayName}
-        nameEditable
-        requireName={isGuestJoin || !displayName.trim()}
+        onUserNameChange={(name) => {
+          setDisplayName(name);
+          if (name.trim()) setNameRemembered(false);
+        }}
+        nameEditable={!nameRemembered || !displayName.trim()}
+        requireName={!nameRemembered && (isGuestJoin || !displayName.trim())}
         guestEmail={guestEmail}
         onGuestEmailChange={guestEmailLocked ? undefined : setGuestEmail}
         guestEmailLocked={guestEmailLocked}
@@ -884,24 +958,24 @@ export function LiveMeetingPage() {
           }
         >
           <span className="min-w-0 font-semibold">
-            {connectionState === 'reconnecting'
-              ? 'Reconnecting… Stay on this page. Your admission is saved.'
-              : recoveryOutcome === 'auth_denied'
-                ? 'You no longer have access to this meeting.'
-                : recoveryOutcome === 'meeting_ended'
-                  ? 'This meeting has ended.'
-                  : 'Connection lost. You can rejoin the meeting.'}
+            {
+              recoveryBannerCopy(
+                connectionState === 'reconnecting' ? 'reconnecting' : 'failed',
+                recoveryOutcome,
+              ).title
+            }
           </span>
           {connectionState === 'failed' &&
-          recoveryOutcome !== 'auth_denied' &&
-          recoveryOutcome !== 'meeting_ended' ? (
+          recoveryBannerCopy('failed', recoveryOutcome).actionLabel ? (
             <button
               type="button"
               disabled={rejoinBusy}
               onClick={() => void rejoinMeeting()}
               className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-[#016BE6] px-4 text-[12px] font-bold text-white shadow-sm hover:bg-[#0056EF] disabled:opacity-60"
             >
-              {rejoinBusy ? 'Rejoining…' : 'Rejoin meeting'}
+              {rejoinBusy
+                ? 'Rejoining…'
+                : recoveryBannerCopy('failed', recoveryOutcome).actionLabel}
             </button>
           ) : null}
         </div>

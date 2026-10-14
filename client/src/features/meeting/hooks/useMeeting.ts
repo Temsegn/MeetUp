@@ -21,11 +21,39 @@ export interface PeerInfo {
   id: string;
   name: string;
   userId: string;
+  identityKey?: string | null;
+  email?: string | null;
   avatarUrl?: string | null;
   avatarColor?: string | null;
   isHost?: boolean;
   isMuted?: boolean;
   isCameraOff?: boolean;
+}
+
+function peerIdentityMatches(
+  peer: PeerInfo,
+  opts: { id?: string; userId?: string; identityKey?: string | null; email?: string | null },
+): boolean {
+  if (opts.id && peer.id === opts.id) return true;
+  if (opts.identityKey && peer.identityKey && peer.identityKey === opts.identityKey) return true;
+  if (opts.email && peer.email && peer.email === opts.email) return true;
+  if (opts.userId && peer.userId && peer.userId === opts.userId) return true;
+  return false;
+}
+
+function migrateRemoteStreams(
+  prev: Map<string, PeerStreams>,
+  fromId: string | null | undefined,
+  toId: string,
+): Map<string, PeerStreams> {
+  if (!fromId || fromId === toId || !prev.has(fromId)) return prev;
+  const next = new Map(prev);
+  const streams = next.get(fromId);
+  if (streams) {
+    next.delete(fromId);
+    next.set(toId, streams);
+  }
+  return next;
 }
 
 const JOIN_TIMEOUT_MS = 10_000;
@@ -149,6 +177,11 @@ export const useMeeting = (
         simulcastEncodings: joinRes.simulcastEncodings,
         screenShareEncodings: joinRes.screenShareEncodings,
       });
+      session.setOnFatalTransportFailure(() => {
+        if (intentionalLeaveRef.current) return;
+        setConnectionState('reconnecting');
+        void recoverAfterSignalRef.current({ manual: false }).catch(() => undefined);
+      });
       sessionRef.current = session;
 
       await session.initialize(joinRes.rtpCapabilities);
@@ -201,6 +234,8 @@ export const useMeeting = (
                   id:           p.id,
                   name:         p.name,
                   userId:       p.userId,
+                  identityKey:  p.identityKey ?? null,
+                  email:        p.email ?? null,
                   avatarUrl:    p.avatarUrl ?? null,
                   avatarColor:  p.avatarColor ?? null,
                   isHost:       p.userId === joinRes.creatorId,
@@ -208,7 +243,21 @@ export const useMeeting = (
                   isCameraOff,
                 };
               });
-            setPeers(existingPeers);
+            // Dedupe by stable identity in case room-state briefly lists a ghost.
+            const deduped: PeerInfo[] = [];
+            for (const peer of existingPeers) {
+              const idx = deduped.findIndex((p) =>
+                peerIdentityMatches(p, {
+                  id: peer.id,
+                  userId: peer.userId,
+                  identityKey: peer.identityKey,
+                  email: peer.email,
+                }),
+              );
+              if (idx >= 0) deduped[idx] = peer;
+              else deduped.push(peer);
+            }
+            setPeers(deduped);
 
             for (const prod of (res.producers ?? [])) {
               if (prod.participantId === pid) continue;
@@ -669,29 +718,71 @@ function _attachMediaListeners(
     }
   });
 
-  socket.on('peer-joined', ({ participantId: newPid, name, userId: newUserId, avatarUrl, avatarColor }: any) => {
-    setPeers((prev) => {
-      if (prev.some((p) => p.id === newPid)) return prev;
-      addToast?.(`${name} joined`);
-      return [
-        ...prev,
-        {
-          id: newPid,
-          name,
-          userId: newUserId,
-          avatarUrl: avatarUrl ?? null,
-          avatarColor: avatarColor ?? null,
-        },
-      ];
-    });
-  });
+  socket.on(
+    'peer-joined',
+    ({
+      participantId: newPid,
+      name,
+      userId: newUserId,
+      identityKey,
+      email,
+      avatarUrl,
+      avatarColor,
+    }: any) => {
+      setPeers((prev) => {
+        const matchIdx = prev.findIndex((p) =>
+          peerIdentityMatches(p, {
+            id: newPid,
+            userId: newUserId,
+            identityKey,
+            email,
+          }),
+        );
+        if (matchIdx >= 0) {
+          const old = prev[matchIdx]!;
+          if (old.id !== newPid) {
+            setRemoteStreams((streams) => migrateRemoteStreams(streams, old.id, newPid));
+          }
+          const next = [...prev];
+          next[matchIdx] = {
+            ...old,
+            id: newPid,
+            name: name || old.name,
+            userId: newUserId || old.userId,
+            identityKey: identityKey ?? old.identityKey,
+            email: email ?? old.email,
+            avatarUrl: avatarUrl ?? old.avatarUrl,
+            avatarColor: avatarColor ?? old.avatarColor,
+          };
+          return next;
+        }
+        addToast?.(`${name} joined`);
+        return [
+          ...prev,
+          {
+            id: newPid,
+            name,
+            userId: newUserId,
+            identityKey: identityKey ?? null,
+            email: email ?? null,
+            avatarUrl: avatarUrl ?? null,
+            avatarColor: avatarColor ?? null,
+          },
+        ];
+      });
+    },
+  );
 
   socket.on('peer-left', ({ participantId: leftPid, reason }: any) => {
     setPeers((prev) => {
       const peer = prev.find((p) => p.id === leftPid);
       if (peer && reason !== 'reconnect') addToast?.(`${peer.name} left`);
+      // Keep the roster row briefly on reconnect so peer-reconnected can swap ids.
+      if (reason === 'reconnect') return prev;
       return prev.filter((p) => p.id !== leftPid);
     });
+    // Reconnect: leave streams keyed by old id for peer-reconnected to migrate.
+    if (reason === 'reconnect') return;
     setRemoteStreams((prev) => {
       const next = new Map(prev);
       const streams = next.get(leftPid);
@@ -815,34 +906,71 @@ function _attachMediaListeners(
     if (name) addToast?.(`${name} is reconnecting…`);
   });
 
-  socket.on('peer-reconnected', ({ participantId: newPid, name, userId: newUserId, avatarUrl, avatarColor }: any) => {
-    setPeers((prev) => {
-      if (prev.some((p) => p.id === newPid || p.userId === newUserId)) {
-        return prev.map((p) =>
-          p.userId === newUserId
-            ? {
-                ...p,
-                id: newPid,
-                name: name || p.name,
-                avatarUrl: avatarUrl ?? p.avatarUrl,
-                avatarColor: avatarColor ?? p.avatarColor,
-              }
-            : p,
+  socket.on(
+    'peer-reconnected',
+    ({
+      participantId: newPid,
+      previousParticipantId,
+      name,
+      userId: newUserId,
+      identityKey,
+      email,
+      avatarUrl,
+      avatarColor,
+    }: any) => {
+      setPeers((prev) => {
+        const matchIdx = prev.findIndex((p) =>
+          peerIdentityMatches(p, {
+            id: previousParticipantId || newPid,
+            userId: newUserId,
+            identityKey,
+            email,
+          }),
         );
-      }
-      addToast?.(`${name} reconnected`);
-      return [
-        ...prev,
-        {
-          id: newPid,
-          name,
-          userId: newUserId,
-          avatarUrl: avatarUrl ?? null,
-          avatarColor: avatarColor ?? null,
-        },
-      ];
-    });
-  });
+        if (matchIdx >= 0) {
+          const old = prev[matchIdx]!;
+          const fromId = previousParticipantId || old.id;
+          if (fromId !== newPid) {
+            setRemoteStreams((streams) => migrateRemoteStreams(streams, fromId, newPid));
+          }
+          const next = [...prev];
+          next[matchIdx] = {
+            ...old,
+            id: newPid,
+            name: name || old.name,
+            userId: newUserId || old.userId,
+            identityKey: identityKey ?? old.identityKey,
+            email: email ?? old.email,
+            avatarUrl: avatarUrl ?? old.avatarUrl,
+            avatarColor: avatarColor ?? old.avatarColor,
+          };
+          // Drop any other duplicates for the same identity.
+          return next.filter(
+            (p, i) =>
+              i === matchIdx ||
+              !peerIdentityMatches(p, {
+                userId: newUserId,
+                identityKey,
+                email,
+              }),
+          );
+        }
+        addToast?.(`${name} reconnected`);
+        return [
+          ...prev,
+          {
+            id: newPid,
+            name,
+            userId: newUserId,
+            identityKey: identityKey ?? null,
+            email: email ?? null,
+            avatarUrl: avatarUrl ?? null,
+            avatarColor: avatarColor ?? null,
+          },
+        ];
+      });
+    },
+  );
 
   socket.on('recording-started', () => {
     setIsRecording(true);

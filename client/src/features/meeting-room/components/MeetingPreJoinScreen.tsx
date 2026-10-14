@@ -269,7 +269,11 @@ export function MeetingPreJoinScreen({
                 localStream ? 'mt-3' : 'mt-2'
               }`}
             >
-              {isJoining ? 'Connecting…' : isHostJoining ? 'Join meeting' : 'Ask to join'}
+              {isJoining
+                ? 'Connecting…'
+                : isHostJoining || (!nameEditable && userName.trim())
+                  ? 'Join meeting'
+                  : 'Ask to join'}
             </button>
           </div>
         </div>

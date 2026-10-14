@@ -35,10 +35,14 @@ Reconnect / refresh / network handover reuses admission and skips the waiting ro
 - Socket.IO: more reconnect attempts + jittered backoff
 - Stay on the meeting page with a **Reconnecting…** banner while auto-recovery runs
 - Soft media rebuild (no intentional leave) after signaling recovers — Socket.IO alone is not enough
+- Send/recv ICE failure after restart budget also triggers the same rebuild (Wi‑Fi↔mobile)
+- Same-socket `join-room` replaces the old mediasoup peer (no `ALREADY_JOINED` dead-end)
+- Identity-keyed peer replace (`email:` / `user:`) so reconnect never duplicates the roster
 - Bounded automatic media recovery (5 attempts, exponential backoff + jitter)
 - If auto-recovery fails: **Connection lost. You can rejoin the meeting.** + **Rejoin meeting** button
 - Manual Rejoin revalidates authorization server-side; previously admitted users skip waiting room
 - Mute / camera-off preferences are re-applied when local tracks are republished
+- Invite guests: `join-status?email=` returns `previousDisplayName` / `previouslyAdmitted` so returning guests skip the name prompt and auto-join
 - `online` / `offline` treated as hints, not meeting-ended
 - Auth denial / meeting-ended show an error without a Rejoin button
 

@@ -149,6 +149,8 @@ export class MediaEngine {
     name: string,
     avatarUrl?: string | null,
     avatarColor?: string | null,
+    identityKey?: string | null,
+    email?: string | null,
   ): void {
     participantManager.addPeer(
       roomId,
@@ -158,6 +160,8 @@ export class MediaEngine {
       name,
       avatarUrl,
       avatarColor,
+      identityKey,
+      email,
     );
     metrics.activeParticipants.inc();
     metrics.participantsJoined.inc();
