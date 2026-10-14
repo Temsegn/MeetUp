@@ -6,18 +6,32 @@ import { logger } from '../../../infrastructure/logging/logger';
  * Email delivery.
  *
  *  - When SMTP_HOST is configured: real delivery via nodemailer.
- *  - Otherwise: a console transport that logs the full rendered email
- *    (including verification/reset links) so every flow is exercisable in
- *    development without a mail server.
+ *  - Otherwise: a console transport that logs a short summary
+ *    so every flow is exercisable in development without a mail server.
  *
  * Callers should await `send` and handle failures for invite-critical mail.
  */
+
+export interface EmailAttachment {
+  filename: string;
+  content: string | Buffer;
+  contentType?: string;
+}
+
+export interface EmailIcalEvent {
+  method: 'REQUEST' | 'CANCEL' | 'PUBLISH' | 'REPLY';
+  content: string;
+  filename?: string;
+}
 
 export interface EmailMessage {
   to: string;
   subject: string;
   text: string;
   html?: string;
+  attachments?: EmailAttachment[];
+  /** Nodemailer calendar MIME part (text/calendar; method=…). */
+  icalEvent?: EmailIcalEvent;
 }
 
 export class EmailDeliveryError extends Error {
@@ -56,13 +70,17 @@ export function isSmtpConfigured(): boolean {
 }
 
 export const emailService = {
-  async send(message: EmailMessage): Promise<{ delivered: boolean; mode: 'smtp' | 'console' }> {
+  async send(
+    message: EmailMessage,
+  ): Promise<{ delivered: boolean; mode: 'smtp' | 'console'; messageId?: string }> {
     const t = getTransporter();
     if (!t) {
       logger.info('📧 [dev email transport — set SMTP_HOST/SMTP_USER/SMTP_PASS for real mail]', {
         to: message.to,
         subject: message.subject,
-        text: message.text,
+        hasIcal: Boolean(message.icalEvent),
+        attachmentCount: message.attachments?.length ?? 0,
+        textPreview: message.text.slice(0, 240),
       });
       return { delivered: false, mode: 'console' };
     }
@@ -73,13 +91,26 @@ export const emailService = {
         subject: message.subject,
         text: message.text,
         html: message.html,
+        attachments: message.attachments?.map((a) => ({
+          filename: a.filename,
+          content: a.content,
+          contentType: a.contentType,
+        })),
+        icalEvent: message.icalEvent
+          ? {
+              method: message.icalEvent.method,
+              content: message.icalEvent.content,
+              filename: message.icalEvent.filename ?? 'invite.ics',
+            }
+          : undefined,
       });
       logger.info('Email sent', {
         to: message.to,
         subject: message.subject,
         messageId: info.messageId,
+        hasIcal: Boolean(message.icalEvent),
       });
-      return { delivered: true, mode: 'smtp' };
+      return { delivered: true, mode: 'smtp', messageId: info.messageId };
     } catch (err) {
       const raw = err instanceof Error ? err.message : String(err);
       const code = (err as { code?: string })?.code;

@@ -13,6 +13,34 @@ import { UserAvatar } from '../../../components/ui/UserAvatar';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const COMMON_TIMEZONES = [
+  'UTC',
+  'Africa/Addis_Ababa',
+  'Africa/Cairo',
+  'Africa/Johannesburg',
+  'Asia/Dubai',
+  'Asia/Riyadh',
+  'Asia/Kolkata',
+  'Europe/London',
+  'Europe/Berlin',
+  'America/New_York',
+  'America/Chicago',
+  'America/Los_Angeles',
+];
+
+function browserTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+function timezoneOptions(): string[] {
+  const browser = browserTimezone();
+  return [...new Set([browser, ...COMMON_TIMEZONES])];
+}
+
 export function CreateMeetingMenu() {
   const navigate = useNavigate();
   const { activeWorkspace, user } = useAuth();
@@ -23,6 +51,8 @@ export function CreateMeetingMenu() {
   const [title, setTitle] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
   const [duration, setDuration] = useState(30);
+  const [timezone, setTimezone] = useState(browserTimezone);
+  const [location, setLocation] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [members, setMembers] = useState<WorkspaceDirectoryMember[]>([]);
   const [teammateIds, setTeammateIds] = useState<Set<string>>(new Set());
@@ -82,10 +112,28 @@ export function CreateMeetingMenu() {
     [members, teammateIds],
   );
 
+  const computedEndLabel = useMemo(() => {
+    if (!scheduledAt || createOpen !== 'scheduled') return null;
+    const start = new Date(scheduledAt);
+    if (Number.isNaN(start.getTime())) return null;
+    const end = new Date(start.getTime() + Math.max(1, duration) * 60_000);
+    try {
+      return end.toLocaleString(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: timezone,
+      });
+    } catch {
+      return end.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    }
+  }, [scheduledAt, duration, timezone, createOpen]);
+
   const reset = () => {
     setTitle('');
     setScheduledAt('');
     setDuration(30);
+    setTimezone(browserTimezone());
+    setLocation('');
     setError(null);
     setSelectedIds([]);
     setGuestEmails([]);
@@ -128,6 +176,21 @@ export function CreateMeetingMenu() {
       }
       if (!emails.includes(draft)) emails.push(draft);
     }
+    if (createOpen === 'scheduled') {
+      const start = new Date(scheduledAt);
+      if (Number.isNaN(start.getTime())) {
+        setError('Enter a valid date and time.');
+        return;
+      }
+      if (start.getTime() < Date.now() - 60_000) {
+        setError('Start time must be in the future.');
+        return;
+      }
+      if (duration < 1 || duration > 480) {
+        setError('Duration must be between 1 and 480 minutes.');
+        return;
+      }
+    }
     setSaving(true);
     setError(null);
     setLiveWarning(null);
@@ -138,19 +201,25 @@ export function CreateMeetingMenu() {
         title: title.trim(),
         scheduledAt: createOpen === 'scheduled' ? new Date(scheduledAt).toISOString() : undefined,
         duration,
+        timezone,
+        location: location.trim() || undefined,
         participantIds: selectedIds,
         guestEmails: emails,
         agenda: agenda.length > 0 ? agenda : undefined,
       });
-      const inviteBits = [
-        selectedIds.length > 0 ? `${selectedIds.length} member` : null,
-        emails.length > 0 ? `${emails.length} guest email` : null,
-      ].filter(Boolean);
+      const inv = meeting.invitations;
+      const inviteMsg = inv
+        ? inv.sent > 0
+          ? `Calendar invites accepted by mail server for ${inv.sent} recipient${inv.sent === 1 ? '' : 's'}.`
+          : inv.failed > 0
+            ? `Meeting saved, but ${inv.failed} invitation${inv.failed === 1 ? '' : 's'} failed to send.`
+            : emails.length + selectedIds.length > 0
+              ? 'Meeting saved. Invitation delivery is pending.'
+              : 'Meeting saved.'
+        : `${meeting.title} is ready.`;
       pushLocalNotification(
         createOpen === 'scheduled' ? 'Meeting scheduled' : 'Meeting created',
-        inviteBits.length > 0
-          ? `${meeting.title} is ready · invited ${inviteBits.join(' · ')}.`
-          : `${meeting.title} is ready.`,
+        inviteMsg,
         {
           kind: 'meeting',
           href:
@@ -327,15 +396,31 @@ export function CreateMeetingMenu() {
                 />
               </label>
               {createOpen === 'scheduled' ? (
-                <label className="block text-[12px] font-semibold text-[#475569]">
-                  Date & time
-                  <input
-                    type="datetime-local"
-                    value={scheduledAt}
-                    onChange={(e) => setScheduledAt(e.target.value)}
-                    className="mt-1 h-12 w-full rounded-lg border border-[#E1E7EE] px-3 text-[16px] outline-none sm:h-10 sm:text-[13px]"
-                  />
-                </label>
+                <>
+                  <label className="block text-[12px] font-semibold text-[#475569]">
+                    Date & time
+                    <input
+                      type="datetime-local"
+                      value={scheduledAt}
+                      onChange={(e) => setScheduledAt(e.target.value)}
+                      className="mt-1 h-12 w-full rounded-lg border border-[#E1E7EE] px-3 text-[16px] outline-none sm:h-10 sm:text-[13px]"
+                    />
+                  </label>
+                  <label className="block text-[12px] font-semibold text-[#475569]">
+                    Time zone
+                    <select
+                      value={timezone}
+                      onChange={(e) => setTimezone(e.target.value)}
+                      className="mt-1 h-12 w-full rounded-lg border border-[#E1E7EE] bg-white px-3 text-[16px] outline-none sm:h-10 sm:text-[13px]"
+                    >
+                      {timezoneOptions().map((tz) => (
+                        <option key={tz} value={tz}>
+                          {tz}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
               ) : null}
               <label className="block text-[12px] font-semibold text-[#475569]">
                 Duration (minutes)
@@ -348,6 +433,23 @@ export function CreateMeetingMenu() {
                   className="mt-1 h-12 w-full rounded-lg border border-[#E1E7EE] px-3 text-[16px] outline-none sm:h-10 sm:text-[13px]"
                 />
               </label>
+              {computedEndLabel ? (
+                <p className="text-[11px] text-[#6F7B8C]">
+                  Ends at <span className="font-semibold text-[#334155]">{computedEndLabel}</span>
+                </p>
+              ) : null}
+              {createOpen === 'scheduled' ? (
+                <label className="block text-[12px] font-semibold text-[#475569]">
+                  Location (optional)
+                  <input
+                    type="text"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    className="mt-1 h-12 w-full rounded-lg border border-[#E1E7EE] px-3 text-[16px] outline-none sm:h-10 sm:text-[13px]"
+                    placeholder="Office / Samtal MeetUp"
+                  />
+                </label>
+              ) : null}
 
               <div>
                 <div className="flex items-center justify-between gap-2">

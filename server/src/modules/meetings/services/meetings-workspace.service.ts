@@ -18,14 +18,26 @@ import {
   removeMeetingParticipant,
 } from './meeting-participants.service';
 import { assertCanAccessMeeting, buildMeetingVisibilityFilter, listTeammateUserIds } from './meeting-join-authz.service';
-import { emailService } from '../../auth/services/email.service';
-import { meetingInviteEmail } from '../../auth/templates/meeting-invite-email';
 import { sendMeetingStartReminderForRoom } from '../meeting-reminder.job';
 import {
   getMeetingJoinBlock,
   isMeetingJoinable,
   scheduleWindowEndsAt,
 } from '../meeting-joinability';
+import {
+  calendarLinksForMeeting,
+  collectMeetingInviteEmails,
+  queueAndSendMeetingInvites,
+  retryFailedMeetingInvites,
+  summarizeDeliveries,
+  buildMeetingIcsForDownload,
+  type InvitationSummary,
+} from './meeting-invite-delivery.service';
+import {
+  ensureCalendarUid,
+  isValidIanaTimezone,
+  meetingEndAt,
+} from '../calendar/meeting-ics';
 
 export type MeetingStatusFilter = 'scheduled' | 'upcoming' | 'live' | 'ended' | 'cancelled' | 'all';
 export { isMeetingJoinable };
@@ -65,6 +77,9 @@ export interface CreateMeetingOptions {
   agenda?: string[];
   scheduledAt?: Date;
   duration?: number;
+  timezone?: string;
+  location?: string;
+  description?: string;
   settings?: {
     waitingRoom?: boolean;
     autoRecord?: boolean;
@@ -136,6 +151,10 @@ function toJson(m: MeetingDoc | null) {
   if (!m) return null;
   const peak = Math.max(1, Number(m.peakParticipants ?? m.participantCount ?? 1) || 1);
   const count = Math.max(1, Number(m.participantCount ?? 1) || 1);
+  const links = calendarLinksForMeeting(m);
+  const start = m.scheduledAt ?? m.startedAt ?? null;
+  const endsAt =
+    start && m.duration != null ? meetingEndAt(start, m.duration).toISOString() : null;
   return {
     id: String(m._id),
     roomId: m.roomId,
@@ -149,15 +168,24 @@ function toJson(m: MeetingDoc | null) {
     title: m.title,
     agenda: m.agenda,
     scheduledAt: m.scheduledAt?.toISOString(),
+    endsAt,
     startedAt: m.startedAt?.toISOString(),
     endedAt: m.endedAt?.toISOString(),
     duration: m.duration,
+    timezone: m.timezone || 'UTC',
+    location: m.location || '',
+    description: m.description || '',
+    calendarUid: m.calendarUid || ensureCalendarUid(String(m._id), m.calendarUid),
+    calendarSequence: Number(m.calendarSequence ?? 0),
     participantCount: count,
     peakParticipants: peak,
     participants: peak,
     registeredParticipantCount: count,
     settings: m.settings,
     guestEmails: Array.isArray(m.guestEmails) ? m.guestEmails : [],
+    joinUrl: links.joinUrl,
+    googleCalendarUrl: links.googleCalendarUrl,
+    outlookCalendarUrl: links.outlookCalendarUrl,
     createdAt: m.createdAt.toISOString(),
   };
 }
@@ -165,6 +193,16 @@ function toJson(m: MeetingDoc | null) {
 type MeetingJson = NonNullable<ReturnType<typeof toJson>> & {
   participantList?: Awaited<ReturnType<typeof listMeetingParticipants>>;
 };
+
+type MeetingJsonWithInvites = MeetingJson & {
+  invitations?: InvitationSummary;
+};
+
+async function withInvitations(m: MeetingJson | null): Promise<MeetingJsonWithInvites | null> {
+  if (!m) return null;
+  const invitations = await summarizeDeliveries(m.id);
+  return { ...m, invitations };
+}
 
 async function attachHostAvatars<T extends MeetingJson | null>(meetings: T[]): Promise<T[]> {
   const ids = [...new Set(meetings.filter(Boolean).map((m) => (m as MeetingJson).createdBy))];
@@ -408,7 +446,7 @@ export async function getMeeting(
       workspaceRole: viewer.role,
     });
   }
-  return withRoster(await attachHostAvatar(toJson(m as unknown as MeetingDoc)));
+  return withInvitations(await withRoster(await attachHostAvatar(toJson(m as unknown as MeetingDoc))));
 }
 
 export async function getMeetingByRoomId(
@@ -541,10 +579,30 @@ export async function getMeetingStats(
 
 export async function createWorkspaceMeeting(opts: CreateMeetingOptions) {
   const existing = await Meeting.findOne({ roomId: opts.roomId });
-  if (existing) return withRoster(await attachHostAvatar(toJson(existing)));
+  if (existing) {
+    return withInvitations(await withRoster(await attachHostAvatar(toJson(existing))));
+  }
   const title = (opts.title ?? '').trim();
   if (!title) throw new ValidationError('Meeting title is required.');
   const isInstant = (opts.type ?? 'instant') === 'instant';
+
+  if (!isInstant) {
+    if (!opts.scheduledAt || Number.isNaN(opts.scheduledAt.getTime())) {
+      throw new ValidationError('scheduledAt must be a valid date for scheduled meetings.');
+    }
+  }
+
+  const duration =
+    opts.duration ??
+    undefined;
+  if (duration !== undefined && (!Number.isFinite(duration) || duration < 1 || duration > 480)) {
+    throw new ValidationError('duration must be between 1 and 480 minutes.');
+  }
+
+  const timezoneRaw = (opts.timezone || 'UTC').trim();
+  if (!isValidIanaTimezone(timezoneRaw)) {
+    throw new ValidationError('timezone must be a valid IANA time zone.');
+  }
 
   const workspace = await workspaceRepository.findById(opts.workspaceId);
   const wsSettings = workspace?.settings;
@@ -560,8 +618,8 @@ export async function createWorkspaceMeeting(opts: CreateMeetingOptions) {
     joinBeforeHost: opts.settings?.joinBeforeHost ?? inherited.joinBeforeHost,
     muteOnEntry: opts.settings?.muteOnEntry ?? inherited.muteOnEntry,
   };
-  const duration =
-    opts.duration ??
+  const resolvedDuration =
+    duration ??
     wsSettings?.maxMeetingDurationMinutes ??
     30;
 
@@ -571,6 +629,7 @@ export async function createWorkspaceMeeting(opts: CreateMeetingOptions) {
       .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)),
   )].slice(0, 50);
 
+  // Placeholder UID; replaced with meetingId-based UID after create.
   const m = (await Meeting.create({
     workspaceId: new Types.ObjectId(opts.workspaceId),
     createdBy: new Types.ObjectId(opts.userId),
@@ -582,8 +641,11 @@ export async function createWorkspaceMeeting(opts: CreateMeetingOptions) {
     agenda: opts.agenda,
     scheduledAt: opts.scheduledAt ?? (isInstant ? new Date() : undefined),
     startedAt: isInstant ? new Date() : undefined,
-    duration,
-    // Host is a participant from the moment the meeting is created
+    duration: resolvedDuration,
+    timezone: timezoneRaw,
+    location: (opts.location || '').trim().slice(0, 500),
+    description: (opts.description || '').trim().slice(0, 4000),
+    calendarSequence: 0,
     participantCount: 1,
     peakParticipants: 1,
     settings,
@@ -591,14 +653,15 @@ export async function createWorkspaceMeeting(opts: CreateMeetingOptions) {
   })) as unknown as MeetingDoc;
 
   const meetingId = String(m._id);
+  m.calendarUid = ensureCalendarUid(meetingId, m.calendarUid);
+  await m.save();
+
   await ensureHostParticipant({
     meetingId,
     workspaceId: opts.workspaceId,
     userId: opts.userId,
   });
 
-  // Creator's teammates are listed as registered as soon as the meeting is created
-  // (no separate invite / register step for people on the host's teams).
   const teammateIds = (await listTeammateUserIds(opts.workspaceId, opts.userId)).filter(
     (id) => id !== opts.userId,
   );
@@ -646,39 +709,6 @@ export async function createWorkspaceMeeting(opts: CreateMeetingOptions) {
       excludeUserId: opts.userId,
       onlyUserIds: explicitInviteIds,
     });
-    const invitedUsers = await User.find({
-      _id: { $in: explicitInviteIds.filter((id) => Types.ObjectId.isValid(id)) },
-    })
-      .select('email')
-      .lean();
-    const memberEmails = invitedUsers
-      .map((u) => String(u.email || '').trim().toLowerCase())
-      .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
-    if (memberEmails.length > 0) {
-      const companyName = await workspaceCompanyName(opts.workspaceId);
-      void sendGuestInviteEmails({
-        emails: memberEmails,
-        meetingTitle: title,
-        hostName: opts.userName,
-        companyName,
-        roomId: opts.roomId,
-        scheduledAt: m.scheduledAt ?? m.startedAt ?? null,
-        isLive: isInstant,
-      });
-    }
-  }
-
-  if (guestEmails.length > 0) {
-    const companyName = await workspaceCompanyName(opts.workspaceId);
-    void sendGuestInviteEmails({
-      emails: guestEmails,
-      meetingTitle: title,
-      hostName: opts.userName,
-      companyName,
-      roomId: opts.roomId,
-      scheduledAt: opts.scheduledAt ?? (isInstant ? new Date() : null),
-      isLive: isInstant,
-    });
   }
 
   const registeredCount = await countMeetingParticipants(meetingId);
@@ -688,7 +718,23 @@ export async function createWorkspaceMeeting(opts: CreateMeetingOptions) {
     await m.save();
   }
 
-  return withRoster(await attachHostAvatar(toJson(m)));
+  // Calendar emails for guests + teammates + explicit invitees (anyone with an email).
+  const hostUser = await User.findById(opts.userId).select('email').lean();
+  const hostEmail = String(hostUser?.email || '').trim().toLowerCase();
+  const emails = await collectMeetingInviteEmails(m, guestEmails, {
+    excludeHostEmail: hostEmail,
+  });
+  const companyName = await workspaceCompanyName(opts.workspaceId);
+  const invitations = await queueAndSendMeetingInvites({
+    meeting: m,
+    emails,
+    kind: 'invite',
+    companyName,
+    bumpSequence: false,
+  });
+
+  const json = await withRoster(await attachHostAvatar(toJson(m)));
+  return json ? { ...json, invitations } : json;
 }
 
 export async function cancelMeeting(
@@ -698,7 +744,9 @@ export async function cancelMeeting(
   if (!Types.ObjectId.isValid(id)) throw new NotFoundError('Meeting');
   const m = await Meeting.findById(id);
   if (!m) throw new NotFoundError('Meeting');
-  if (m.status === 'cancelled') return attachHostAvatar(toJson(m as unknown as MeetingDoc));
+  if (m.status === 'cancelled') {
+    return withInvitations(await attachHostAvatar(toJson(m as unknown as MeetingDoc)));
+  }
   if (m.status === 'ended') throw new ForbiddenError('Meeting already ended.');
   if (String(m.createdBy) !== actor.id && !hasMinRole(actor.role, 'admin')) {
     throw new ForbiddenError(
@@ -707,8 +755,26 @@ export async function cancelMeeting(
   }
   m.status = 'cancelled';
   if (!m.endedAt) m.endedAt = new Date();
+  if (!m.calendarUid) m.calendarUid = ensureCalendarUid(String(m._id), m.calendarUid);
   await m.save();
-  return attachHostAvatar(toJson(m as unknown as MeetingDoc));
+
+  const hostUser = await User.findById(m.createdBy).select('email').lean();
+  const emails = await collectMeetingInviteEmails(m, [], {
+    excludeHostEmail: String(hostUser?.email || '').trim().toLowerCase(),
+  });
+  const companyName = m.workspaceId
+    ? await workspaceCompanyName(String(m.workspaceId))
+    : 'a team';
+  const invitations = await queueAndSendMeetingInvites({
+    meeting: m,
+    emails,
+    kind: 'cancel',
+    companyName,
+    bumpSequence: true,
+  });
+
+  const json = await attachHostAvatar(toJson(m as unknown as MeetingDoc));
+  return json ? { ...json, invitations } : json;
 }
 
 export async function patchMeeting(
@@ -719,6 +785,9 @@ export async function patchMeeting(
     agenda?: string[];
     scheduledAt?: string;
     duration?: number;
+    timezone?: string;
+    location?: string;
+    description?: string;
     settings?: {
       waitingRoom?: boolean;
       autoRecord?: boolean;
@@ -733,18 +802,77 @@ export async function patchMeeting(
   if (String(m.createdBy) !== actor.id && !hasMinRole(actor.role, 'admin')) {
     throw new ForbiddenError('Only the host or an admin can edit this meeting.');
   }
-  if (patch.title !== undefined) m.title = patch.title;
+  if (m.status === 'cancelled') throw new ForbiddenError('Cannot edit a cancelled meeting.');
+  if (m.status === 'ended') throw new ForbiddenError('Cannot edit an ended meeting.');
+
+  const calendarRelevant =
+    patch.title !== undefined ||
+    patch.scheduledAt !== undefined ||
+    patch.duration !== undefined ||
+    patch.timezone !== undefined ||
+    patch.location !== undefined ||
+    patch.description !== undefined ||
+    patch.agenda !== undefined;
+
+  if (patch.title !== undefined) {
+    const t = String(patch.title).trim();
+    if (!t) throw new ValidationError('Meeting title is required.');
+    m.title = t;
+  }
   if (patch.agenda !== undefined) m.agenda = patch.agenda;
-  if (patch.scheduledAt) m.scheduledAt = new Date(patch.scheduledAt);
-  if (patch.duration !== undefined) m.duration = patch.duration;
+  if (patch.scheduledAt) {
+    const d = new Date(patch.scheduledAt);
+    if (Number.isNaN(d.getTime())) throw new ValidationError('scheduledAt must be a valid date.');
+    m.scheduledAt = d;
+  }
+  if (patch.duration !== undefined) {
+    if (!Number.isFinite(patch.duration) || patch.duration < 1 || patch.duration > 480) {
+      throw new ValidationError('duration must be between 1 and 480 minutes.');
+    }
+    m.duration = patch.duration;
+  }
+  if (patch.timezone !== undefined) {
+    const tz = patch.timezone.trim();
+    if (!isValidIanaTimezone(tz)) {
+      throw new ValidationError('timezone must be a valid IANA time zone.');
+    }
+    m.timezone = tz;
+  }
+  if (patch.location !== undefined) m.location = String(patch.location).trim().slice(0, 500);
+  if (patch.description !== undefined) {
+    m.description = String(patch.description).trim().slice(0, 4000);
+  }
   if (patch.settings?.waitingRoom !== undefined) m.settings.waitingRoom = patch.settings.waitingRoom;
   if (patch.settings?.autoRecord !== undefined) m.settings.autoRecord = patch.settings.autoRecord;
   if (patch.settings?.joinBeforeHost !== undefined) {
     m.settings.joinBeforeHost = patch.settings.joinBeforeHost;
   }
   if (patch.settings?.muteOnEntry !== undefined) m.settings.muteOnEntry = patch.settings.muteOnEntry;
+  if (!m.calendarUid) m.calendarUid = ensureCalendarUid(String(m._id), m.calendarUid);
   await m.save();
-  return attachHostAvatar(toJson(m as unknown as MeetingDoc));
+
+  let invitations: InvitationSummary | undefined;
+  if (calendarRelevant && m.type === 'scheduled') {
+    const hostUser = await User.findById(m.createdBy).select('email').lean();
+    const emails = await collectMeetingInviteEmails(m, [], {
+      excludeHostEmail: String(hostUser?.email || '').trim().toLowerCase(),
+    });
+    const companyName = m.workspaceId
+      ? await workspaceCompanyName(String(m.workspaceId))
+      : 'a team';
+    invitations = await queueAndSendMeetingInvites({
+      meeting: m,
+      emails,
+      kind: 'update',
+      companyName,
+      bumpSequence: true,
+    });
+  }
+
+  const json = await attachHostAvatar(toJson(m as unknown as MeetingDoc));
+  if (!json) return json;
+  if (invitations) return { ...json, invitations };
+  return withInvitations(json);
 }
 
 export async function joinMeeting(
@@ -813,7 +941,7 @@ export async function registerForMeeting(
     m.peakParticipants = Math.max(m.peakParticipants ?? 1, registeredCount);
     await m.save();
   }
-  return withRoster(await attachHostAvatar(toJson(m as unknown as MeetingDoc)));
+  return withInvitations(await withRoster(await attachHostAvatar(toJson(m as unknown as MeetingDoc))));
 }
 
 function assertCanManageInvites(
@@ -826,39 +954,6 @@ function assertCanManageInvites(
   if (String(m.createdBy) !== actor.id) {
     throw new ForbiddenError('Only the meeting host can manage invitations.');
   }
-}
-
-async function sendGuestInviteEmails(opts: {
-  emails: string[];
-  meetingTitle: string;
-  hostName: string;
-  companyName: string;
-  roomId: string;
-  scheduledAt?: Date | string | null;
-  isLive?: boolean;
-}) {
-  await Promise.all(
-    opts.emails.map(async (email) => {
-      try {
-        const msg = meetingInviteEmail({
-          inviteeEmail: email,
-          meetingTitle: opts.meetingTitle,
-          hostName: opts.hostName,
-          companyName: opts.companyName,
-          roomId: opts.roomId,
-          scheduledAt: opts.scheduledAt,
-          isLive: opts.isLive,
-        });
-        await emailService.send({ to: email, ...msg });
-      } catch (err) {
-        logger.warn('Failed to send meeting invite email', {
-          email,
-          roomId: opts.roomId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }),
-  );
 }
 
 async function workspaceCompanyName(workspaceId: string): Promise<string> {
@@ -880,6 +975,7 @@ export async function addMeetingInvites(
   const workspaceId = String(m.workspaceId);
   const meetingId = String(m._id);
   const inviteIds = [...new Set((input.userIds ?? []).filter((uid) => uid && uid !== actor.id))];
+  const newMemberEmails: string[] = [];
 
   if (inviteIds.length > 0) {
     await registerMeetingParticipants({
@@ -906,20 +1002,9 @@ export async function addMeetingInvites(
     })
       .select('email')
       .lean();
-    const memberEmails = invitedUsers
-      .map((u) => String(u.email || '').trim().toLowerCase())
-      .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
-    if (memberEmails.length > 0) {
-      const companyName = await workspaceCompanyName(workspaceId);
-      void sendGuestInviteEmails({
-        emails: memberEmails,
-        meetingTitle: m.title || m.roomId,
-        hostName: actor.name,
-        companyName,
-        roomId: m.roomId,
-        scheduledAt: m.scheduledAt ?? m.startedAt ?? null,
-        isLive,
-      });
+    for (const u of invitedUsers) {
+      const e = String(u.email || '').trim().toLowerCase();
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) newMemberEmails.push(e);
     }
   }
 
@@ -941,22 +1026,66 @@ export async function addMeetingInvites(
   const registeredCount = await countMeetingParticipants(meetingId);
   m.participantCount = Math.max(1, registeredCount);
   m.peakParticipants = Math.max(m.peakParticipants ?? 1, registeredCount);
+  if (!m.calendarUid) m.calendarUid = ensureCalendarUid(meetingId, m.calendarUid);
   await m.save();
 
-  if (freshlyAddedGuests.length > 0) {
+  const emailsToInvite = [...new Set([...newMemberEmails, ...freshlyAddedGuests])];
+  let invitations: InvitationSummary | undefined;
+  if (emailsToInvite.length > 0) {
     const companyName = await workspaceCompanyName(workspaceId);
-    void sendGuestInviteEmails({
-      emails: freshlyAddedGuests,
-      meetingTitle: m.title || m.roomId,
-      hostName: actor.name,
+    invitations = await queueAndSendMeetingInvites({
+      meeting: m,
+      emails: emailsToInvite,
+      kind: 'invite',
       companyName,
-      roomId: m.roomId,
-      scheduledAt: m.scheduledAt ?? m.startedAt ?? null,
-      isLive: m.status === 'live',
+      bumpSequence: false,
     });
   }
 
-  return withRoster(await attachHostAvatar(toJson(m as unknown as MeetingDoc)));
+  const json = await withRoster(await attachHostAvatar(toJson(m as unknown as MeetingDoc)));
+  if (!json) return json;
+  if (invitations) return { ...json, invitations };
+  return withInvitations(json);
+}
+
+export async function retryMeetingInvitations(
+  id: string,
+  actor: { id: string; role: WorkspaceRole },
+) {
+  if (!Types.ObjectId.isValid(id)) throw new NotFoundError('Meeting');
+  const m = await Meeting.findById(id);
+  if (!m) throw new NotFoundError('Meeting');
+  if (String(m.createdBy) !== actor.id && !hasMinRole(actor.role, 'admin')) {
+    throw new ForbiddenError('Only the host or an admin can retry invitations.');
+  }
+  const companyName = m.workspaceId
+    ? await workspaceCompanyName(String(m.workspaceId))
+    : 'a team';
+  const invitations = await retryFailedMeetingInvites(String(m._id), companyName);
+  const json = await withRoster(await attachHostAvatar(toJson(m as unknown as MeetingDoc)));
+  return json ? { ...json, invitations } : json;
+}
+
+export async function getMeetingCalendarIcs(
+  id: string,
+  viewer: { userId: string; email?: string | null; role?: WorkspaceRole | null },
+): Promise<{ filename: string; content: string; contentType: string }> {
+  if (!Types.ObjectId.isValid(id)) throw new NotFoundError('Meeting');
+  const m = await Meeting.findById(id);
+  if (!m) throw new NotFoundError('Meeting');
+  await assertCanAccessMeeting({
+    meeting: m,
+    joinerUserId: viewer.userId,
+    guestEmail: viewer.email,
+    workspaceRole: viewer.role,
+  });
+  const host = await User.findById(m.createdBy).select('email name').lean();
+  const organizer = {
+    email: String(host?.email || 'noreply@meet.samtal.cc').trim().toLowerCase(),
+    name: (host?.name || m.createdByName || 'Host').trim() || 'Host',
+  };
+  const attendee = String(viewer.email || organizer.email).trim().toLowerCase();
+  return buildMeetingIcsForDownload(m, organizer, attendee);
 }
 
 export async function removeMeetingInvite(

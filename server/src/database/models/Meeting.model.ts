@@ -26,6 +26,14 @@ export interface IMeeting extends Document {
   };
   /** External guest invite emails (lowercase). */
   guestEmails: string[];
+  /** IANA timezone for display and calendar invites (e.g. Africa/Addis_Ababa). */
+  timezone?: string;
+  location?: string;
+  description?: string;
+  /** Stable RFC 5545 UID — never changes across reschedule/cancel. */
+  calendarUid?: string;
+  /** RFC 5545 SEQUENCE — increments on update/cancel. */
+  calendarSequence?: number;
   /** When start-time reminder emails were sent (once). */
   startReminderSentAt?: Date | null;
   createdAt: Date;
@@ -54,6 +62,11 @@ const meetingSchema = new Schema<IMeeting>(
       muteOnEntry: { type: Boolean, default: false },
     },
     guestEmails: { type: [String], default: [] },
+    timezone: { type: String, default: 'UTC' },
+    location: { type: String, default: '' },
+    description: { type: String, default: '' },
+    calendarUid: { type: String, default: null, index: true },
+    calendarSequence: { type: Number, default: 0, min: 0 },
     startReminderSentAt: { type: Date, default: null },
   },
   { timestamps: true }

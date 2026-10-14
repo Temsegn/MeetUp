@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { requireWorkspace } from '../workspace/workspace.middleware';
 import { AuthRequest } from '../auth/auth.types';
@@ -16,14 +17,70 @@ import {
   addMeetingInvites,
   removeMeetingInvite,
   getPublicJoinStatus,
+  retryMeetingInvitations,
+  getMeetingCalendarIcs,
 } from './services/meetings-workspace.service';
 import {
   listUserNotifications,
   markNotificationsRead,
 } from './services/meeting-participants.service';
 import { isAppError } from '../../shared/errors/AppError';
+import { isValidIanaTimezone } from './calendar/meeting-ics';
 
 const router = Router();
+
+const inviteRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 40,
+  standardHeaders: true,
+  message: { error: 'Too many invitation requests. Please try again later.', code: 'RATE_LIMITED' },
+});
+
+const createMeetingRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  message: { error: 'Too many meeting create requests. Please try again later.', code: 'RATE_LIMITED' },
+});
+
+const CreateWorkspaceMeetingBody = z
+  .object({
+    roomId: z.string().trim().min(1).max(100).optional(),
+    type: z.enum(['instant', 'scheduled']).optional(),
+    title: z.string().trim().min(1).max(200),
+    agenda: z.array(z.string().trim().max(500)).max(20).optional(),
+    scheduledAt: z.string().optional(),
+    duration: z.number().int().min(1).max(480).optional(),
+    timezone: z.string().trim().max(80).optional(),
+    location: z.string().trim().max(500).optional(),
+    description: z.string().trim().max(4000).optional(),
+    settings: z
+      .object({
+        waitingRoom: z.boolean().optional(),
+        autoRecord: z.boolean().optional(),
+      })
+      .optional(),
+    participantIds: z.array(z.string().trim().min(1)).max(100).optional(),
+    guestEmails: z.array(z.string().trim().email().max(320)).max(50).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if ((data.type ?? 'instant') === 'scheduled') {
+      if (!data.scheduledAt || Number.isNaN(Date.parse(data.scheduledAt))) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['scheduledAt'],
+          message: 'scheduledAt must be a valid date for scheduled meetings.',
+        });
+      }
+    }
+    if (data.timezone && !isValidIanaTimezone(data.timezone)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['timezone'],
+        message: 'timezone must be a valid IANA time zone.',
+      });
+    }
+  });
 
 // Public join gate for /join/:roomId (guests + invite links) — no auth.
 router.get('/join-status/:roomId', async (req, res) => {
@@ -86,21 +143,13 @@ router.get('/by-room/:roomId', requireWorkspace('member'), async (req: AuthReque
   res.json(m);
 });
 
-router.post('/', requireWorkspace('member'), async (req: AuthRequest, res) => {
-  const body = req.body as {
-    roomId?: string;
-    type?: 'instant' | 'scheduled';
-    title?: string;
-    agenda?: string[];
-    scheduledAt?: string;
-    duration?: number;
-    settings?: { waitingRoom?: boolean; autoRecord?: boolean };
-    participantIds?: string[];
-    guestEmails?: string[];
-  };
-  if (!body.title?.trim()) {
-    return res.status(400).json({ error: 'Meeting title is required.', code: 'VALIDATION_ERROR' });
+router.post('/', createMeetingRateLimiter, requireWorkspace('member'), async (req: AuthRequest, res) => {
+  const parsed = CreateWorkspaceMeetingBody.safeParse(req.body);
+  if (!parsed.success) {
+    const msg = parsed.error.issues[0]?.message || 'Invalid meeting payload.';
+    return res.status(400).json({ error: msg, code: 'VALIDATION_ERROR' });
   }
+  const body = parsed.data;
   const { randomUUID } = await import('crypto');
   const roomId = body.roomId || randomUUID();
   const m = await createWorkspaceMeeting({
@@ -113,6 +162,9 @@ router.post('/', requireWorkspace('member'), async (req: AuthRequest, res) => {
     agenda: body.agenda,
     scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : undefined,
     duration: body.duration,
+    timezone: body.timezone,
+    location: body.location,
+    description: body.description,
     settings: body.settings,
     participantIds: body.participantIds,
     guestEmails: body.guestEmails,
@@ -130,14 +182,43 @@ router.post('/:id/register', requireWorkspace('member'), async (req: AuthRequest
   res.json(m);
 });
 
-router.post('/:id/participants', requireWorkspace('member'), async (req: AuthRequest, res) => {
-  const body = req.body as { userIds?: string[]; guestEmails?: string[] };
-  const m = await addMeetingInvites(
-    String(req.params['id'] ?? ''),
-    { id: req.user!.id, role: req.workspaceRole!, name: req.user!.name },
-    body,
-  );
-  res.json(m);
+router.post(
+  '/:id/participants',
+  inviteRateLimiter,
+  requireWorkspace('member'),
+  async (req: AuthRequest, res) => {
+    const body = req.body as { userIds?: string[]; guestEmails?: string[] };
+    const m = await addMeetingInvites(
+      String(req.params['id'] ?? ''),
+      { id: req.user!.id, role: req.workspaceRole!, name: req.user!.name },
+      body,
+    );
+    res.json(m);
+  },
+);
+
+router.post(
+  '/:id/invitations/retry',
+  inviteRateLimiter,
+  requireWorkspace('member'),
+  async (req: AuthRequest, res) => {
+    const m = await retryMeetingInvitations(String(req.params['id'] ?? ''), {
+      id: req.user!.id,
+      role: req.workspaceRole!,
+    });
+    res.json(m);
+  },
+);
+
+router.get('/:id/calendar.ics', requireWorkspace('member'), async (req: AuthRequest, res) => {
+  const ics = await getMeetingCalendarIcs(String(req.params['id'] ?? ''), {
+    userId: req.user!.id,
+    email: req.user!.email,
+    role: req.workspaceRole,
+  });
+  res.setHeader('Content-Type', ics.contentType);
+  res.setHeader('Content-Disposition', `attachment; filename="${ics.filename}"`);
+  res.send(ics.content);
 });
 
 router.delete('/:id/participants/:userId', requireWorkspace('member'), async (req: AuthRequest, res) => {
@@ -169,10 +250,26 @@ router.get('/:id', requireWorkspace('member'), async (req: AuthRequest, res) => 
 });
 
 router.patch('/:id', requireWorkspace('member'), async (req: AuthRequest, res) => {
+  const body = req.body as {
+    title?: string;
+    agenda?: string[];
+    scheduledAt?: string;
+    duration?: number;
+    timezone?: string;
+    location?: string;
+    description?: string;
+    settings?: Record<string, boolean>;
+  };
+  if (body.timezone && !isValidIanaTimezone(body.timezone)) {
+    return res.status(400).json({
+      error: 'timezone must be a valid IANA time zone.',
+      code: 'VALIDATION_ERROR',
+    });
+  }
   const m = await patchMeeting(
     String(req.params['id'] ?? ''),
     { id: req.user!.id, role: req.workspaceRole! },
-    req.body as Record<string, unknown>,
+    body,
   );
   res.json(m);
 });

@@ -14,6 +14,24 @@ export interface MeetingParticipant {
   joinedAt?: string | null;
 }
 
+export interface InvitationDelivery {
+  email: string;
+  kind: 'invite' | 'update' | 'cancel';
+  sequence: number;
+  status: string;
+  lastError?: string | null;
+  attempts: number;
+}
+
+export interface InvitationSummary {
+  sent: number;
+  failed: number;
+  pending: number;
+  skipped: number;
+  smtpConfigured: boolean;
+  deliveries: InvitationDelivery[];
+}
+
 export interface Meeting {
   id: string;
   roomId: string;
@@ -27,9 +45,15 @@ export interface Meeting {
   title?: string;
   agenda?: string[];
   scheduledAt?: string;
+  endsAt?: string | null;
   startedAt?: string;
   endedAt?: string;
   duration?: number;
+  timezone?: string;
+  location?: string;
+  description?: string;
+  calendarUid?: string;
+  calendarSequence?: number;
   participantCount?: number;
   peakParticipants?: number;
   participants?: number;
@@ -37,6 +61,10 @@ export interface Meeting {
   participantList?: MeetingParticipant[];
   settings: { waitingRoom: boolean; autoRecord: boolean };
   guestEmails?: string[];
+  joinUrl?: string;
+  googleCalendarUrl?: string | null;
+  outlookCalendarUrl?: string | null;
+  invitations?: InvitationSummary;
   createdAt: string;
 }
 
@@ -60,9 +88,23 @@ export interface CreateMeetingInput {
   agenda?: string[];
   scheduledAt?: string;
   duration?: number;
+  timezone?: string;
+  location?: string;
+  description?: string;
   settings?: { waitingRoom?: boolean; autoRecord?: boolean };
   participantIds?: string[];
   guestEmails?: string[];
+}
+
+export interface PatchMeetingInput {
+  title?: string;
+  agenda?: string[];
+  scheduledAt?: string;
+  duration?: number;
+  timezone?: string;
+  location?: string;
+  description?: string;
+  settings?: { waitingRoom?: boolean; autoRecord?: boolean };
 }
 
 function workspaceHeader(workspaceId?: string | null): Record<string, string> {
@@ -156,12 +198,49 @@ export const meetingsService = {
     });
   },
 
-  async patch(workspaceId: string | null | undefined, id: string, patch: Partial<CreateMeetingInput>): Promise<Meeting> {
+  async patch(
+    workspaceId: string | null | undefined,
+    id: string,
+    patch: PatchMeetingInput,
+  ): Promise<Meeting> {
     return apiFetch(`/workspace-meetings/${id}`, {
       method: 'PATCH',
       body: patch,
       headers: workspaceHeader(workspaceId),
     });
+  },
+
+  async retryInvitations(workspaceId: string | null | undefined, id: string): Promise<Meeting> {
+    return apiFetch(`/workspace-meetings/${id}/invitations/retry`, {
+      method: 'POST',
+      headers: workspaceHeader(workspaceId),
+    });
+  },
+
+  calendarIcsUrl(workspaceId: string | null | undefined, id: string): string {
+    const base = `${API_URL}/workspace-meetings/${encodeURIComponent(id)}/calendar.ics`;
+    if (!workspaceId) return base;
+    return base;
+  },
+
+  async downloadCalendarIcs(workspaceId: string | null | undefined, id: string): Promise<void> {
+    const res = await fetch(this.calendarIcsUrl(workspaceId, id), {
+      credentials: 'include',
+      headers: workspaceHeader(workspaceId),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error((data as { error?: string }).error || 'Could not download calendar file.');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'invite.ics';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   },
 
   async join(workspaceId: string | null | undefined, id: string): Promise<{ roomId: string }> {

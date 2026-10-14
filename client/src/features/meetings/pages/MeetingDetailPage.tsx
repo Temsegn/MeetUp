@@ -3,10 +3,16 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   CalendarDays,
+  CalendarPlus,
   Clock3,
+  Download,
   FileText,
+  Link2,
+  Mail,
+  Pencil,
   Plus,
   Radio,
+  RefreshCw,
   UserMinus,
   Users,
   Video,
@@ -24,8 +30,20 @@ import { teamsService } from '../../../services/teams/teams.service';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { MeetingDetailSkeleton } from '../components/MeetingsSkeletons';
+import { guestJoinUrl } from '../../../lib/frontendUrl';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const COMMON_TIMEZONES = [
+  'UTC',
+  'Africa/Addis_Ababa',
+  'Africa/Cairo',
+  'Asia/Dubai',
+  'Asia/Riyadh',
+  'Asia/Kolkata',
+  'Europe/London',
+  'America/New_York',
+];
 
 /**
  * Preview detail for upcoming / ended / cancelled meetings.
@@ -49,6 +67,17 @@ export function MeetingDetailPage() {
   const [pendingInviteIds, setPendingInviteIds] = useState<string[]>([]);
   const [guestEmailDraft, setGuestEmailDraft] = useState('');
   const [pendingGuestEmails, setPendingGuestEmails] = useState<string[]>([]);
+  const [retryBusy, setRetryBusy] = useState(false);
+  const [icsBusy, setIcsBusy] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editScheduledAt, setEditScheduledAt] = useState('');
+  const [editDuration, setEditDuration] = useState(30);
+  const [editTimezone, setEditTimezone] = useState('UTC');
+  const [editLocation, setEditLocation] = useState('');
+  const [editError, setEditError] = useState<string | null>(null);
+  const [copyDone, setCopyDone] = useState(false);
 
   useEffect(() => {
     if (!activeWorkspace?.workspaceId || !meetingId) {
@@ -215,6 +244,97 @@ export function MeetingDetailPage() {
     (isHost || isOwnerOrAdmin);
   const canRegister = derived.status === 'upcoming' && !isRegistered && !isCancelled && !isEnded;
   const canManageInvites = isHost && derived.status === 'upcoming';
+  const canEdit = isHostOrAdmin && derived.status === 'upcoming';
+  const joinLink =
+    meeting.joinUrl ||
+    guestJoinUrl(meeting.roomId) ||
+    `${window.location.origin}/join/${encodeURIComponent(meeting.roomId)}`;
+
+  const openEdit = () => {
+    if (!meeting) return;
+    setEditTitle(meeting.title || '');
+    const start = meeting.scheduledAt ? new Date(meeting.scheduledAt) : null;
+    if (start && !Number.isNaN(start.getTime())) {
+      const pad = (n: number) => String(n).padStart(2, '0');
+      setEditScheduledAt(
+        `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}T${pad(start.getHours())}:${pad(start.getMinutes())}`,
+      );
+    } else {
+      setEditScheduledAt('');
+    }
+    setEditDuration(meeting.duration ?? 30);
+    setEditTimezone(meeting.timezone || 'UTC');
+    setEditLocation(meeting.location || '');
+    setEditError(null);
+    setEditOpen(true);
+  };
+
+  const saveEdit = async () => {
+    if (!activeWorkspace?.workspaceId || !meeting) return;
+    if (!editTitle.trim()) {
+      setEditError('Title is required.');
+      return;
+    }
+    if (!editScheduledAt) {
+      setEditError('Date and time are required.');
+      return;
+    }
+    setEditBusy(true);
+    setEditError(null);
+    try {
+      const updated = await meetingsService.patch(activeWorkspace.workspaceId, meeting.id, {
+        title: editTitle.trim(),
+        scheduledAt: new Date(editScheduledAt).toISOString(),
+        duration: editDuration,
+        timezone: editTimezone,
+        location: editLocation.trim(),
+      });
+      setMeeting(updated);
+      setEditOpen(false);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Could not update meeting.');
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
+  const retryInvites = async () => {
+    if (!activeWorkspace?.workspaceId || !meeting) return;
+    setRetryBusy(true);
+    try {
+      const updated = await meetingsService.retryInvitations(
+        activeWorkspace.workspaceId,
+        meeting.id,
+      );
+      setMeeting(updated);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Could not retry invitations.');
+    } finally {
+      setRetryBusy(false);
+    }
+  };
+
+  const downloadIcs = async () => {
+    if (!activeWorkspace?.workspaceId || !meeting) return;
+    setIcsBusy(true);
+    try {
+      await meetingsService.downloadCalendarIcs(activeWorkspace.workspaceId, meeting.id);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Could not download .ics file.');
+    } finally {
+      setIcsBusy(false);
+    }
+  };
+
+  const copyJoinLink = async () => {
+    try {
+      await navigator.clipboard.writeText(joinLink);
+      setCopyDone(true);
+      window.setTimeout(() => setCopyDone(false), 2000);
+    } catch {
+      window.alert('Could not copy link.');
+    }
+  };
 
   const cancel = async () => {
     if (!activeWorkspace?.workspaceId || !meeting) return;
@@ -325,7 +445,17 @@ export function MeetingDetailPage() {
           <ArrowLeft className="size-4" />
           Back to Meetings
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={openEdit}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#E1E7EE] bg-white px-3.5 text-[12px] font-semibold text-[#334155] hover:bg-[#F8FAFC]"
+            >
+              <Pencil className="size-3.5" />
+              Edit
+            </button>
+          ) : null}
           {canCancel ? (
             <button
               type="button"
@@ -386,11 +516,228 @@ export function MeetingDetailPage() {
 
         <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
           <InfoChip icon={CalendarDays} label="Date" value={derived.date} />
-          <InfoChip icon={Clock3} label="Time" value={`${derived.time} · ${derived.duration}`} />
+          <InfoChip
+            icon={Clock3}
+            label="Time"
+            value={`${derived.time} · ${derived.duration}${meeting.timezone ? ` · ${meeting.timezone}` : ''}`}
+          />
           <InfoChip icon={Users} label="Status" value={derived.meta.label} />
           <InfoChip icon={FileText} label="Host" value={meeting.createdByName} />
         </div>
+        {meeting.location ? (
+          <p className="mt-3 text-[12px] text-[#6F7B8C]">
+            Location: <span className="font-semibold text-[#334155]">{meeting.location}</span>
+          </p>
+        ) : null}
       </section>
+
+      {!isCancelled ? (
+        <section className="rounded-xl border border-[#E8ECF1] bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+          <h2 className="mb-3 text-[13px] font-semibold text-[#151D2B]">Join & calendar</h2>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <button
+              type="button"
+              onClick={() => void copyJoinLink()}
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-[#E1E7EE] px-3 text-[12px] font-semibold text-[#334155] hover:bg-[#F8FAFC]"
+            >
+              <Link2 className="size-3.5" />
+              {copyDone ? 'Link copied' : 'Copy join link'}
+            </button>
+            {meeting.googleCalendarUrl ? (
+              <a
+                href={meeting.googleCalendarUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-[#E1E7EE] px-3 text-[12px] font-semibold text-[#334155] hover:bg-[#F8FAFC]"
+              >
+                <CalendarPlus className="size-3.5 text-[#016BE6]" />
+                Add to Google Calendar
+              </a>
+            ) : null}
+            {meeting.outlookCalendarUrl ? (
+              <a
+                href={meeting.outlookCalendarUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-[#E1E7EE] px-3 text-[12px] font-semibold text-[#334155] hover:bg-[#F8FAFC]"
+              >
+                <CalendarDays className="size-3.5 text-[#016BE6]" />
+                Add to Outlook
+              </a>
+            ) : null}
+            <button
+              type="button"
+              disabled={icsBusy}
+              onClick={() => void downloadIcs()}
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-[#E1E7EE] px-3 text-[12px] font-semibold text-[#334155] hover:bg-[#F8FAFC] disabled:opacity-60"
+            >
+              <Download className="size-3.5" />
+              {icsBusy ? 'Downloading…' : 'Download .ics'}
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] text-[#8A94A6]">
+            Google and Outlook links open a prefilled event — you still confirm to save it. Email
+            invitations include a calendar attachment when SMTP is configured.
+          </p>
+        </section>
+      ) : null}
+
+      {meeting.invitations && (isHostOrAdmin || (meeting.invitations.deliveries?.length ?? 0) > 0) ? (
+        <section className="rounded-xl border border-[#E8ECF1] bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#151D2B]">
+              <Mail className="size-3.5 text-[#016BE6]" />
+              Invitation delivery
+            </h2>
+            {isHostOrAdmin && meeting.invitations.failed > 0 ? (
+              <button
+                type="button"
+                disabled={retryBusy}
+                onClick={() => void retryInvites()}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#016BE6] px-2.5 text-[11px] font-semibold text-[#016BE6] hover:bg-[#E8F1FF] disabled:opacity-60"
+              >
+                <RefreshCw className={cn('size-3', retryBusy && 'animate-spin')} />
+                {retryBusy ? 'Retrying…' : 'Retry failed'}
+              </button>
+            ) : null}
+          </div>
+          {!meeting.invitations.smtpConfigured ? (
+            <p className="mb-2 rounded-lg border border-[#FDE68A] bg-[#FFFBEB] px-3 py-2 text-[12px] text-[#92400E]">
+              SMTP is not configured on the server. Meetings are saved, but emails are only logged
+              until SMTP_HOST is set.
+            </p>
+          ) : null}
+          <div className="mb-2 flex flex-wrap gap-2 text-[11px] font-semibold">
+            <span className="rounded-full bg-[#F0FDF4] px-2.5 py-1 text-[#15803D]">
+              Sent {meeting.invitations.sent}
+            </span>
+            <span className="rounded-full bg-[#FEF2F2] px-2.5 py-1 text-[#DC2626]">
+              Failed {meeting.invitations.failed}
+            </span>
+            <span className="rounded-full bg-[#F8FAFC] px-2.5 py-1 text-[#64748B]">
+              Pending {meeting.invitations.pending}
+            </span>
+          </div>
+          {meeting.invitations.deliveries.length === 0 ? (
+            <p className="text-[12px] text-[#8A94A6]">No invitation emails yet.</p>
+          ) : (
+            <ul className="max-h-48 space-y-1.5 overflow-y-auto">
+              {meeting.invitations.deliveries.map((d) => (
+                <li
+                  key={`${d.email}-${d.sequence}-${d.kind}`}
+                  className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-[#F1F4F8] bg-[#F8FAFC] px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-[12px] font-semibold text-[#151D2B]">{d.email}</p>
+                    <p className="text-[10px] text-[#8A94A6]">
+                      {d.kind} · seq {d.sequence} · attempts {d.attempts}
+                    </p>
+                    {d.lastError ? (
+                      <p className="mt-0.5 text-[10px] text-[#DC2626]">{d.lastError}</p>
+                    ) : null}
+                  </div>
+                  <span
+                    className={cn(
+                      'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase',
+                      d.status === 'accepted'
+                        ? 'bg-[#DCFCE7] text-[#15803D]'
+                        : d.status === 'failed'
+                          ? 'bg-[#FEE2E2] text-[#DC2626]'
+                          : 'bg-[#E2E8F0] text-[#475569]',
+                    )}
+                  >
+                    {d.status}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+
+      {editOpen ? (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/45 p-0 sm:items-center sm:p-4">
+          <div className="max-h-[92svh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-md sm:rounded-2xl">
+            <h3 className="text-[16px] font-bold text-[#151D2B]">Edit meeting</h3>
+            <p className="mt-1 text-[12px] text-[#6F7B8C]">
+              Saving sends an updated calendar invitation to attendees.
+            </p>
+            <div className="mt-4 space-y-3">
+              <label className="block text-[12px] font-semibold text-[#475569]">
+                Title
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="mt-1 h-11 w-full rounded-lg border border-[#E1E7EE] px-3 text-[14px] outline-none"
+                />
+              </label>
+              <label className="block text-[12px] font-semibold text-[#475569]">
+                Date & time
+                <input
+                  type="datetime-local"
+                  value={editScheduledAt}
+                  onChange={(e) => setEditScheduledAt(e.target.value)}
+                  className="mt-1 h-11 w-full rounded-lg border border-[#E1E7EE] px-3 text-[14px] outline-none"
+                />
+              </label>
+              <label className="block text-[12px] font-semibold text-[#475569]">
+                Duration (minutes)
+                <input
+                  type="number"
+                  min={1}
+                  max={480}
+                  value={editDuration}
+                  onChange={(e) => setEditDuration(Number(e.target.value) || 30)}
+                  className="mt-1 h-11 w-full rounded-lg border border-[#E1E7EE] px-3 text-[14px] outline-none"
+                />
+              </label>
+              <label className="block text-[12px] font-semibold text-[#475569]">
+                Time zone
+                <select
+                  value={editTimezone}
+                  onChange={(e) => setEditTimezone(e.target.value)}
+                  className="mt-1 h-11 w-full rounded-lg border border-[#E1E7EE] bg-white px-3 text-[14px] outline-none"
+                >
+                  {[...new Set([editTimezone, ...COMMON_TIMEZONES])].map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-[12px] font-semibold text-[#475569]">
+                Location
+                <input
+                  type="text"
+                  value={editLocation}
+                  onChange={(e) => setEditLocation(e.target.value)}
+                  className="mt-1 h-11 w-full rounded-lg border border-[#E1E7EE] px-3 text-[14px] outline-none"
+                />
+              </label>
+              {editError ? <p className="text-[12px] text-[#DC2626]">{editError}</p> : null}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={editBusy}
+                onClick={() => setEditOpen(false)}
+                className="rounded-lg border border-[#E1E7EE] px-3 py-2 text-[12px] font-semibold text-[#475569]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={editBusy}
+                onClick={() => void saveEdit()}
+                className="rounded-lg bg-[#016BE6] px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
+              >
+                {editBusy ? 'Saving…' : 'Save & notify'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <section className="rounded-xl border border-[#E8ECF1] bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">

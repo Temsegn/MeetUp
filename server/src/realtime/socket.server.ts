@@ -11,12 +11,14 @@ import { logger } from '../infrastructure/logging/logger';
 import { metrics } from '../infrastructure/metrics/metrics.service';
 import { startMeetingDurationJob } from '../modules/meetings/meeting-duration.job';
 import { startMeetingReminderJob } from '../modules/meetings/meeting-reminder.job';
+import { startMeetingInviteDeliveryJob } from '../modules/meetings/meeting-invite-delivery.job';
 
 export const setupSocketServer = (io: SocketIOServer): void => {
   bindRemoteControlIo(io);
   bindMessagesIo(io);
   startMeetingDurationJob(io);
   startMeetingReminderJob();
+  startMeetingInviteDeliveryJob();
 
   // ── Authentication middleware ──────────────────────────────────────────────
   io.use(socketAuthMiddleware);
