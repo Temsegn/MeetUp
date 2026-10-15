@@ -78,6 +78,7 @@ export function MeetingDetailPage() {
   const [editLocation, setEditLocation] = useState('');
   const [editError, setEditError] = useState<string | null>(null);
   const [copyDone, setCopyDone] = useState(false);
+  const [peopleExpanded, setPeopleExpanded] = useState(false);
 
   useEffect(() => {
     if (!activeWorkspace?.workspaceId || !meetingId) {
@@ -91,6 +92,10 @@ export function MeetingDetailPage() {
       .catch(() => setMeeting(null))
       .finally(() => setLoading(false));
   }, [activeWorkspace?.workspaceId, meetingId]);
+
+  useEffect(() => {
+    setPeopleExpanded(false);
+  }, [meetingId]);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 15_000);
@@ -203,8 +208,8 @@ export function MeetingDetailPage() {
     return <Navigate to={`/app/meeting/${meeting.roomId ?? meeting.id}`} replace />;
   }
 
-  const participants =
-    (meeting.participantList?.length
+  const roster =
+    meeting.participantList?.length
       ? meeting.participantList
       : [
           {
@@ -215,27 +220,46 @@ export function MeetingDetailPage() {
             avatarColor: meeting.createdByAvatarColor ?? null,
             status: 'registered' as const,
           },
-        ]
-    ).map((p) => ({
-      id: p.userId,
-      name: p.name,
-      role:
-        p.userId === meeting.createdBy
-          ? 'Host'
-          : p.status === 'joined'
-            ? 'Joined'
-            : p.status === 'invited'
-              ? 'Invited'
-              : 'Registered',
-      avatarUrl: p.avatarUrl,
-      avatarColor: p.avatarColor,
-      email: 'email' in p ? p.email : undefined,
-      isHost: p.userId === meeting.createdBy,
-    }));
-  const participantTotal = Math.max(
-    participants.length,
-    meeting.registeredParticipantCount ?? meeting.participants ?? meeting.peakParticipants ?? meeting.participantCount ?? 1,
+        ];
+  const rosterEmails = new Set(
+    roster.map((p) => ('email' in p ? String(p.email || '') : '').trim().toLowerCase()).filter(Boolean),
   );
+  const participants = [
+    ...roster
+      .filter((p) => !String(p.userId).startsWith('guest:'))
+      .map((p) => ({
+        id: p.userId,
+        name: p.name,
+        role:
+          p.userId === meeting.createdBy
+            ? 'Host'
+            : p.status === 'joined'
+              ? 'Joined'
+              : p.status === 'invited'
+                ? 'Invited'
+                : 'Registered',
+        avatarUrl: p.avatarUrl ?? null,
+        avatarColor: p.avatarColor ?? null,
+        email: 'email' in p ? p.email : undefined,
+        isHost: p.userId === meeting.createdBy,
+        isGuest: false,
+      })),
+    ...(meeting.guestEmails ?? [])
+      .map((email) => String(email || '').trim().toLowerCase())
+      .filter((email) => email && !rosterEmails.has(email))
+      .map((email) => ({
+        id: `guest:${email}`,
+        name: email,
+        role: 'Guest',
+        avatarUrl: null as string | null,
+        avatarColor: null as string | null,
+        email,
+        isHost: false,
+        isGuest: true,
+      })),
+  ];
+  const participantTotal = participants.length;
+  const visibleParticipants = peopleExpanded ? participants : participants.slice(0, 3);
   const agenda = derived.agenda;
   const isEnded = derived.status === 'ended';
   const isCancelled = derived.status === 'cancelled';
@@ -908,7 +932,7 @@ export function MeetingDetailPage() {
           ) : null}
 
           <ul className="space-y-2">
-            {participants.map((p) => (
+            {visibleParticipants.map((p) => (
               <li key={p.id} className="flex items-center gap-2.5">
                 <UserAvatar
                   name={p.name}
@@ -920,53 +944,37 @@ export function MeetingDetailPage() {
                   <p className="truncate text-[12px] font-semibold text-[#151D2B]">{p.name}</p>
                   <p className="truncate text-[10px] text-[#8A94A6]">
                     {p.role}
-                    {p.email ? ` · ${p.email}` : ''}
+                    {p.email && p.role !== 'Guest' ? ` · ${p.email}` : ''}
                   </p>
                 </div>
                 {canManageInvites && !p.isHost ? (
                   <button
                     type="button"
                     disabled={inviteBusy}
-                    title="Remove invitation"
-                    onClick={() => void removeInvite(p.id)}
-                    className="inline-flex size-7 items-center justify-center rounded-lg text-[#94A3B8] hover:bg-[#FEF2F2] hover:text-[#DC2626] disabled:opacity-60"
-                  >
-                    <UserMinus className="size-3.5" />
-                  </button>
-                ) : null}
-              </li>
-            ))}
-            {(meeting.guestEmails ?? []).map((email) => (
-              <li key={`guest-${email}`} className="flex items-center gap-2.5">
-                <UserAvatar name={email} size="md" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12px] font-semibold text-[#151D2B]">{email}</p>
-                  <p className="truncate text-[10px] text-[#8A94A6]">Guest · invited by email</p>
-                </div>
-                {canManageInvites ? (
-                  <button
-                    type="button"
-                    disabled={inviteBusy}
-                    title="Remove guest invitation"
+                    title={p.isGuest ? 'Remove guest invitation' : 'Remove invitation'}
                     onClick={() => {
-                      void (async () => {
-                        if (!activeWorkspace?.workspaceId) return;
-                        setInviteBusy(true);
-                        try {
-                          const updated = await meetingsService.removeGuestEmail(
-                            activeWorkspace.workspaceId,
-                            meeting.id,
-                            email,
-                          );
-                          setMeeting(updated);
-                        } catch (err) {
-                          window.alert(
-                            err instanceof Error ? err.message : 'Could not remove guest.',
-                          );
-                        } finally {
-                          setInviteBusy(false);
-                        }
-                      })();
+                      if (p.isGuest) {
+                        void (async () => {
+                          if (!activeWorkspace?.workspaceId || !p.email) return;
+                          setInviteBusy(true);
+                          try {
+                            const updated = await meetingsService.removeGuestEmail(
+                              activeWorkspace.workspaceId,
+                              meeting.id,
+                              p.email,
+                            );
+                            setMeeting(updated);
+                          } catch (err) {
+                            window.alert(
+                              err instanceof Error ? err.message : 'Could not remove guest.',
+                            );
+                          } finally {
+                            setInviteBusy(false);
+                          }
+                        })();
+                        return;
+                      }
+                      void removeInvite(p.id);
                     }}
                     className="inline-flex size-7 items-center justify-center rounded-lg text-[#94A3B8] hover:bg-[#FEF2F2] hover:text-[#DC2626] disabled:opacity-60"
                   >
@@ -975,12 +983,16 @@ export function MeetingDetailPage() {
                 ) : null}
               </li>
             ))}
-            {participantTotal > participants.length ? (
-              <li className="text-[11px] text-[#8A94A6]">
-                +{participantTotal - participants.length} more registered
-              </li>
-            ) : null}
           </ul>
+          {participants.length > 3 ? (
+            <button
+              type="button"
+              onClick={() => setPeopleExpanded((open) => !open)}
+              className="mt-2 text-[12px] font-semibold text-[#016BE6] hover:underline"
+            >
+              {peopleExpanded ? 'Show less' : `View more (${participants.length - 3})`}
+            </button>
+          ) : null}
           {canRegister ? (
             <button
               type="button"
