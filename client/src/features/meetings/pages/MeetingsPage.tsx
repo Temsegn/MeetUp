@@ -138,7 +138,7 @@ export function MeetingsPage() {
     }
   }, [filters]);
 
-  const { meetings: apiMeetings, stats: apiStats, loading, reload } = useMeetings({
+  const { meetings: apiMeetings, stats: apiStats, loading, reload, refreshQuietly } = useMeetings({
     status:
       filters.status !== 'all'
         ? filters.status === 'live'
@@ -162,10 +162,10 @@ export function MeetingsPage() {
     if (inLiveMeeting) return;
     const id = window.setInterval(() => {
       setNowTick(Date.now());
-      void reload();
+      void refreshQuietly();
     }, 20_000);
     return () => window.clearInterval(id);
-  }, [reload, inLiveMeeting]);
+  }, [refreshQuietly, inLiveMeeting]);
 
   const listedMeetings = useMemo(() => apiMeetings.map(apiMeetingToListed), [apiMeetings, nowTick]);
   const filtered = useMemo(
