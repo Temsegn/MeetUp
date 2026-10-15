@@ -194,6 +194,8 @@ export function LiveMeetingPage() {
   const {
     joined,
     waiting,
+    waitingForHost,
+    muteOnEntry,
     participantId,
     joinMeeting,
     leaveMeeting,
@@ -330,10 +332,10 @@ export function LiveMeetingPage() {
 
   // Pause shell HTTP polls (/mine, meetings list) for the duration of this call.
   useEffect(() => {
-    const active = joined || waiting;
+    const active = joined || waiting || waitingForHost;
     setLiveMeetingPresence(active);
     return () => setLiveMeetingPresence(false);
-  }, [joined, waiting]);
+  }, [joined, waiting, waitingForHost]);
 
   useEffect(() => {
     if (!socket) return;
@@ -404,7 +406,7 @@ export function LiveMeetingPage() {
 
   // Returning invite guests: skip the name prompt and enter the meeting automatically.
   useEffect(() => {
-    if (joined || waiting || isJoining) return;
+    if (joined || waiting || waitingForHost || isJoining) return;
     if (!nameRemembered || !displayName.trim()) return;
     if (user || !guestEmailLocked) return;
     if (joinGate && !joinGate.joinable) return;
@@ -419,6 +421,7 @@ export function LiveMeetingPage() {
   }, [
     joined,
     waiting,
+    waitingForHost,
     isJoining,
     nameRemembered,
     displayName,
@@ -427,6 +430,13 @@ export function LiveMeetingPage() {
     joinGate,
     localStream,
   ]);
+
+  // Meeting / workspace mute-on-entry → mute local mic as soon as join confirms it.
+  useEffect(() => {
+    if (muteOnEntry || meetingMeta?.settings?.muteOnEntry) {
+      setIsMuted(true);
+    }
+  }, [muteOnEntry, meetingMeta?.settings?.muteOnEntry, mediaEpoch]);
 
   // After admitted / host join / media recovery — publish local media (once per track id per epoch)
   useEffect(() => {
@@ -439,6 +449,8 @@ export function LiveMeetingPage() {
     const sess = session.current;
     let stream = localStream;
     if (!sess) return;
+    const startMuted =
+      isMuted || muteOnEntry || Boolean(meetingMeta?.settings?.muteOnEntry);
 
     void (async () => {
       try {
@@ -456,9 +468,10 @@ export function LiveMeetingPage() {
           publishedTrackIdsRef.current.add(track.id);
           try {
             const producer = await sess.produce(track, 'microphone');
-            // Preserve user mute preference across recovery.
-            if (isMuted && producer) {
+            // Preserve user mute preference / mute-on-entry across recovery.
+            if (startMuted && producer) {
               await sess.pauseProducer(producer.id);
+              setIsMuted(true);
             }
           } catch (err) {
             publishedTrackIdsRef.current.delete(track.id);
@@ -485,7 +498,16 @@ export function LiveMeetingPage() {
     })();
     // mediaEpoch intentionally included so soft reconnect republishes on a new session.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- isMuted/isCameraOff applied at publish time only
-  }, [joined, localStream, session, addToast, mediaEpoch, startLocalMedia]);
+  }, [
+    joined,
+    localStream,
+    session,
+    addToast,
+    mediaEpoch,
+    startLocalMedia,
+    muteOnEntry,
+    meetingMeta?.settings?.muteOnEntry,
+  ]);
 
   useEffect(() => {
     setMeetingLocked(Boolean(meetingMeta?.settings?.locked));
@@ -1137,6 +1159,7 @@ export function LiveMeetingPage() {
         onRequestMedia={() => void startLocalMedia().catch(() => {})}
         isJoining={isJoining}
         isWaiting={waiting}
+        isWaitingForHost={waitingForHost}
         isHostJoining={Boolean(user?.id && meetingMeta?.createdBy === user.id)}
         joinError={joinError}
         onJoin={() => void handleJoin()}

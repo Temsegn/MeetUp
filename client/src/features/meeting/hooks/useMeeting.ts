@@ -89,6 +89,10 @@ export const useMeeting = (
 ) => {
   const [joined,        setJoined]        = useState(false);
   const [waiting,       setWaiting]       = useState(false);
+  /** Join Before Host is off and the host is not in the room yet (not admit lobby). */
+  const [waitingForHost, setWaitingForHost] = useState(false);
+  /** Server meeting setting — local mic should start paused. */
+  const [muteOnEntry, setMuteOnEntry] = useState(false);
   const [participantId, setParticipantId] = useState<string>('');
   const [creatorId,     setCreatorId]     = useState<string | null>(null);
   const [peers,         setPeers]         = useState<PeerInfo[]>([]);
@@ -180,6 +184,8 @@ export const useMeeting = (
     setSocket(null);
     setJoined(false);
     setWaiting(false);
+    setWaitingForHost(false);
+    setMuteOnEntry(false);
     setPeers([]);
     setRemoteStreams(new Map());
     setParticipantId('');
@@ -243,6 +249,8 @@ export const useMeeting = (
     setSocket(null);
     setJoined(false);
     setWaiting(false);
+    setWaitingForHost(false);
+    setMuteOnEntry(false);
     setPeers([]);
     setRemoteStreams(new Map());
     setParticipantId('');
@@ -318,6 +326,8 @@ export const useMeeting = (
       // waiting for remote consume (critical for instant reconnect appearance).
       setSocket(sock);
       setWaiting(false);
+      setWaitingForHost(false);
+      setMuteOnEntry(Boolean(joinRes.muteOnEntry));
       setJoined(true);
       setConnectionState('connected');
       setRecoveryOutcome(null);
@@ -478,10 +488,23 @@ export const useMeeting = (
 
         if (joinRes.status === 'waiting') {
           setWaiting(true);
+          setWaitingForHost(false);
           setJoined(false);
           setConnectionState('connected');
           setRecoveryOutcome('waiting');
           addToast?.('Waiting for the host to let you back in…');
+          return;
+        }
+        if (joinRes.status === 'waiting_for_host') {
+          setWaitingForHost(true);
+          setWaiting(false);
+          setJoined(false);
+          setConnectionState('connected');
+          setRecoveryOutcome('waiting');
+          addToast?.(
+            joinRes.message ||
+              'The host has not joined yet. Try again after the host starts the meeting.',
+          );
           return;
         }
 
@@ -526,6 +549,7 @@ export const useMeeting = (
     if (joiningRef.current) return;
     joiningRef.current = true;
     intentionalLeaveRef.current = false;
+    setWaitingForHost(false);
     setConnectionState('connecting');
 
     try {
@@ -602,6 +626,7 @@ export const useMeeting = (
 
       if (joinRes.status === 'waiting') {
         setWaiting(true);
+        setWaitingForHost(false);
         setSocket(sock);
         setCreatorId(null);
 
@@ -626,6 +651,20 @@ export const useMeeting = (
         };
         sock.on('waiting-admitted', onAdmitted);
         sock.on('waiting-denied', onDenied);
+        return;
+      }
+
+      if (joinRes.status === 'waiting_for_host') {
+        setWaitingForHost(true);
+        setWaiting(false);
+        setJoined(false);
+        setSocket(sock);
+        setCreatorId(null);
+        setConnectionState('connected');
+        addToast?.(
+          joinRes.message ||
+            'The host has not joined yet. Try again after the host starts the meeting.',
+        );
         return;
       }
 
@@ -787,6 +826,8 @@ export const useMeeting = (
   return {
     joined,
     waiting,
+    waitingForHost,
+    muteOnEntry,
     participantId,
     joinMeeting,
     leaveMeeting,

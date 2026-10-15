@@ -21,6 +21,8 @@ type Props = {
   onRequestMedia?: () => void;
   isJoining?: boolean;
   isWaiting?: boolean;
+  /** Join Before Host is off — host has not started yet (retry join, not admit lobby). */
+  isWaitingForHost?: boolean;
   isHostJoining?: boolean;
   joinError?: string | null;
   onJoin: () => void;
@@ -49,6 +51,7 @@ export function MeetingPreJoinScreen({
   onRequestMedia,
   isJoining = false,
   isWaiting = false,
+  isWaitingForHost = false,
   isHostJoining = false,
   joinError = null,
   onJoin,
@@ -92,6 +95,42 @@ export function MeetingPreJoinScreen({
     !requireGuestEmail || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim());
   const canJoin = (!requireName || userName.trim().length > 0) && emailOk;
 
+  if (isWaitingForHost) {
+    return (
+      <div className="flex h-full min-h-0 flex-col items-center justify-center overflow-hidden bg-[#F7F9FC] px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="w-full max-w-sm rounded-2xl border border-[#E8ECF1] bg-white p-5 text-center shadow-sm">
+          <UserAvatar
+            name={userName || 'Guest'}
+            avatarUrl={avatarUrl}
+            avatarColor={avatarColor}
+            size="xl"
+            className="mx-auto size-14 text-[20px]"
+          />
+          <h1 className="mt-3 text-[17px] font-bold text-[#121B29]">Host has not joined yet</h1>
+          <p className="mt-1.5 text-[13px] leading-snug text-[#667383]">
+            This meeting does not allow joining before the host.
+            {title ? ` · ${title}` : ''}
+          </p>
+          <button
+            type="button"
+            onClick={onJoin}
+            disabled={isJoining}
+            className="mt-5 h-11 w-full rounded-xl bg-[#016BE6] text-[13px] font-semibold text-white hover:bg-[#0159C7] disabled:opacity-60"
+          >
+            {isJoining ? 'Checking…' : 'Try again'}
+          </button>
+          <button
+            type="button"
+            onClick={onCancelWaiting ?? onBack}
+            className="mt-2 h-11 w-full rounded-xl border border-[#E0E7EE] text-[13px] font-semibold text-[#334155] hover:bg-[#F8FAFC]"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (isWaiting) {
     return (
       <div className="flex h-full min-h-0 flex-col items-center justify-center overflow-hidden bg-[#F7F9FC] px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -106,7 +145,7 @@ export function MeetingPreJoinScreen({
           <div className="mx-auto mt-3 h-1 w-20 overflow-hidden rounded-full bg-[#E8F1FF]">
             <div className="h-full w-1/2 animate-pulse rounded-full bg-[#016BE6]" />
           </div>
-          <h1 className="mt-3 text-[17px] font-bold text-[#121B29]">Waiting for host</h1>
+          <h1 className="mt-3 text-[17px] font-bold text-[#121B29]">Waiting for host approval</h1>
           <p className="mt-1.5 text-[13px] leading-snug text-[#667383]">
             Lobby as <span className="font-semibold text-[#121B29]">{userName}</span>
             {title ? ` · ${title}` : ''}

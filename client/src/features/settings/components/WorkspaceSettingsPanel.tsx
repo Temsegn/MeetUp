@@ -493,14 +493,14 @@ export function WorkspaceSettingsPanel({ onViewAllMembers, onInviteMembers }: Pr
                       {
                         key: 'waiting' as const,
                         title: 'Enable Waiting Room',
-                        desc: 'When on, members must request to join. Guests always wait for host approval.',
+                        desc: 'When on, members must request to join and wait for host approval. Guests always wait. Off does not put members in the admit lobby.',
                         value: waitingRoom,
                         set: setWaitingRoom,
                       },
                       {
                         key: 'join' as const,
                         title: 'Enable Join Before Host',
-                        desc: 'Allow participants to join before the host',
+                        desc: 'When on, participants can enter before the host. When off, they must wait until the host has joined (no admit lobby unless Waiting Room is also on).',
                         value: joinBeforeHost,
                         set: setJoinBeforeHost,
                       },

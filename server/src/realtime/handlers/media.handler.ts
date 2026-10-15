@@ -199,15 +199,16 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
         }
       }
 
-      // Guests / waiting-room / join-before-host members need host admit — unless already admitted.
+      // Waiting Room and Join Before Host are independent:
+      // - waitingRoom on → members need host admit (guests always do)
+      // - joinBeforeHost off → members cannot enter until the host is in the room
+      //   (not the admit lobby — that only applies when waitingRoom is on)
       const hostInRoom = Boolean(
         creatorId &&
           mediaEngine.getPeersInRoom(roomId).some((p) => p.userId === creatorId),
       );
       const joinBeforeHost = Boolean(workspaceMeeting?.settings?.joinBeforeHost);
-      const waitingRoomEnabled =
-        Boolean(workspaceMeeting?.settings?.waitingRoom) ||
-        (!joinBeforeHost && !isHost && !hostInRoom);
+      const waitingRoomEnabled = Boolean(workspaceMeeting?.settings?.waitingRoom);
       const meetingId = workspaceMeeting?._id ? String(workspaceMeeting._id) : '';
       const guestEmail = user.guestEmail || user.email || null;
 
@@ -234,6 +235,21 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
         }
         if (!decision.allow && decision.code !== 'WAITING_REQUIRED') {
           return callback({ error: decision.reason, code: decision.code });
+        }
+        // Join Before Host off: block first-time members until host is present.
+        // Previously admitted peers may rejoin; Waiting Room / guests use admit below.
+        if (
+          decision.allow &&
+          decision.reason === 'no_waiting_required' &&
+          !joinBeforeHost &&
+          !hostInRoom
+        ) {
+          return callback({
+            status: 'waiting_for_host',
+            code: 'HOST_NOT_PRESENT',
+            message:
+              'The host has not joined yet. Try again after the host starts the meeting.',
+          });
         }
         if (!decision.allow && decision.code === 'WAITING_REQUIRED') {
           const requestId = randomUUID();
@@ -269,6 +285,19 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
             message: decision.reason,
           });
         }
+      } else if (
+        !isHost &&
+        !isGuest &&
+        !waitingRoomEnabled &&
+        !joinBeforeHost &&
+        !hostInRoom
+      ) {
+        return callback({
+          status: 'waiting_for_host',
+          code: 'HOST_NOT_PRESENT',
+          message:
+            'The host has not joined yet. Try again after the host starts the meeting.',
+        });
       } else if (!isHost && (isGuest || waitingRoomEnabled)) {
         // Instant / non-workspace room without Meeting doc — keep legacy wait for guests.
         const requestId = randomUUID();
