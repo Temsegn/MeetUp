@@ -76,13 +76,14 @@ export interface Meeting {
 
 export interface MeetingStats {
   total: number;
-  /** Meetings created in the last 30 days (aligned with Reports). */
+  /** Meetings in the selected window (all-time when days=0). */
   periodTotal?: number;
   live: number;
   ended: number;
   upcoming: number;
   participantMinutes: number;
   uniqueParticipants: number;
+  periodDays?: number | null;
   trends: {
     total: number;
     participantMinutes: number;
@@ -123,7 +124,15 @@ function workspaceHeader(workspaceId?: string | null): Record<string, string> {
 export const meetingsService = {
   async list(
     workspaceId: string | null | undefined,
-    params: { page?: number; limit?: number; status?: string; q?: string; date?: string } = {},
+    params: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      q?: string;
+      date?: string;
+      from?: string;
+      to?: string;
+    } = {},
   ): Promise<{ meetings: Meeting[]; total: number; page: number; limit: number }> {
     const qs = new URLSearchParams();
     if (params.page) qs.set('page', String(params.page));
@@ -131,14 +140,25 @@ export const meetingsService = {
     if (params.status && params.status !== 'all') qs.set('status', params.status);
     if (params.q) qs.set('q', params.q);
     if (params.date) qs.set('date', params.date);
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
     const query = qs.toString() ? `?${qs}` : '';
     return apiFetch(`/workspace-meetings${query}`, {
       headers: workspaceHeader(workspaceId),
     });
   },
 
-  async stats(workspaceId: string | null | undefined): Promise<MeetingStats> {
-    return apiFetch('/workspace-meetings/stats', {
+  async stats(
+    workspaceId: string | null | undefined,
+    params: { days?: number | null; from?: string; to?: string } = {},
+  ): Promise<MeetingStats> {
+    const qs = new URLSearchParams();
+    if (params.days == null) qs.set('days', '0');
+    else qs.set('days', String(params.days));
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    const query = qs.toString() ? `?${qs}` : '';
+    return apiFetch(`/workspace-meetings/stats${query}`, {
       headers: workspaceHeader(workspaceId),
     });
   },

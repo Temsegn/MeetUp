@@ -100,16 +100,27 @@ export function CalendarPage() {
       setLiveCalendarEvents(mapped);
 
       const now = Date.now();
+      // Side list: live now + future scheduled (not ended history).
       const upcoming: UpcomingMeeting[] = events
-        .filter((ev) => ev.scheduledAt && new Date(ev.scheduledAt).getTime() >= now)
-        .sort(
-          (a, b) =>
-            new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime(),
-        )
+        .filter((ev) => {
+          if (!ev.scheduledAt) return false;
+          if (ev.status === 'live') return true;
+          if (ev.status === 'ended') return false;
+          return new Date(ev.scheduledAt).getTime() >= now;
+        })
+        .sort((a, b) => {
+          const liveFirst = (ev: ApiEvent) => (ev.status === 'live' ? 0 : 1);
+          const d = liveFirst(a) - liveFirst(b);
+          if (d !== 0) return d;
+          return (
+            new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime()
+          );
+        })
         .slice(0, 8)
         .map((ev) => {
           const dt = new Date(ev.scheduledAt!);
           const count = Math.max(0, ev.participantCount ?? 0);
+          const suffix = ev.status === 'live' ? ' (Live)' : '';
           return {
             id: ev.id,
             dayLabel: dt.toLocaleDateString(undefined, {
@@ -118,7 +129,7 @@ export function CalendarPage() {
               day: 'numeric',
             }),
             time: dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
-            title: ev.title || 'Meeting',
+            title: `${ev.title || 'Meeting'}${suffix}`,
             avatars: count,
             roomId: ev.roomId,
             meetingId: ev.id,

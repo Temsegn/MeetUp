@@ -176,6 +176,10 @@ function App() {
               <Route path="workspace" element={<Navigate to="/app/settings/workspace" replace />} />
               <Route path="workspace/members" element={<Navigate to="/app/settings/members" replace />} />
               <Route path="workspace/rooms" element={<Navigate to="/app/settings/rooms" replace />} />
+              {/* Legacy / typo paths from older nav links */}
+              <Route path="setting/member" element={<Navigate to="/app/settings/members" replace />} />
+              <Route path="setting/members" element={<Navigate to="/app/settings/members" replace />} />
+              <Route path="settings/member" element={<Navigate to="/app/settings/members" replace />} />
               <Route path="admin" element={<AdminOverviewPage />} />
               <Route path="billing/invoices" element={<BillingPage />} />
             </Route>

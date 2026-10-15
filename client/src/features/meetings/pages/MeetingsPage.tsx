@@ -7,6 +7,7 @@ import { MeetingsToolbar } from '../components/MeetingsToolbar';
 import {
   DEFAULT_MEETING_FILTERS,
   filterMeetings,
+  meetingRangeQuery,
   type MeetingListFilters,
   type ListedMeeting,
 } from '../data/meetings.data';
@@ -109,10 +110,10 @@ function apiMeetingToListed(m: Meeting): ListedMeeting {
 }
 
 /**
- * Meetings listing — stats, filters (title/date/time/status), live first.
+ * Meetings listing — all by default; period + status filters; live/upcoming first.
  * Live opens conference; upcoming/ended open detail page.
  */
-const MEETING_FILTERS_KEY = 'samtal:meetingFilters';
+const MEETING_FILTERS_KEY = 'samtal:meetingFilters:v2';
 
 function loadStoredFilters(): MeetingListFilters {
   try {
@@ -138,6 +139,8 @@ export function MeetingsPage() {
     }
   }, [filters]);
 
+  const range = useMemo(() => meetingRangeQuery(filters), [filters]);
+
   const { meetings: apiMeetings, stats: apiStats, loading, reload, refreshQuietly } = useMeetings({
     status:
       filters.status !== 'all'
@@ -148,11 +151,13 @@ export function MeetingsPage() {
             : filters.status === 'cancelled'
               ? 'cancelled'
               : 'ended'
-        : undefined,
+        : 'all',
     q: filters.query || undefined,
-    date: filters.date || undefined,
+    from: range.from,
+    to: range.to,
+    days: range.days ?? null,
     page,
-    limit: 50,
+    limit: 100,
   });
 
   const inLiveMeeting = useLiveMeetingPresence();
@@ -173,7 +178,7 @@ export function MeetingsPage() {
     [listedMeetings, filters],
   );
 
-  // Use the 30-day period total so Meetings and Reports share the same window.
+  // Stats follow the same period filter as the list (All → all-time total).
   const stats = useMemo(() => ({
     totalMeetings: String(apiStats?.periodTotal ?? apiStats?.total ?? listedMeetings.length),
     totalTime: formatParticipantMinutes(apiStats?.participantMinutes ?? 0),
@@ -210,7 +215,7 @@ export function MeetingsPage() {
       ) : (
         <MeetingsList
           meetings={filtered}
-          filterKey={`${filters.query}|${filters.date}|${filters.time}|${filters.status}|${page}`}
+          filterKey={`${filters.query}|${filters.dateRange}|${filters.dateFrom}|${filters.dateTo}|${filters.time}|${filters.status}|${page}`}
           onChanged={() => void reload()}
         />
       )}

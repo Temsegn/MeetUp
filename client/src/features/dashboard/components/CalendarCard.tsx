@@ -1,11 +1,12 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowUpRight, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SectionCard } from './SectionCard';
-import { useMeetings } from '../../meetings/hooks/useMeetings';
 import { CalendarBodySkeleton } from './DashboardSkeletons';
 import { DASHBOARD_CARD_RADIUS_CLASS } from './dashboardListStyles';
 import { cn } from '../../../lib/cn';
+import { useAuth } from '../../../contexts/AuthContext';
+import { apiFetch } from '../../../services/auth/auth.service';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -13,13 +14,28 @@ function dayKey(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+type CalEvent = {
+  id: string;
+  title: string;
+  scheduledAt?: string;
+  status?: string;
+};
+
+function statusSuffix(status?: string): string {
+  if (status === 'live') return ' (Live)';
+  if (status === 'ended') return ' (Ended)';
+  return '';
+}
+
 export function CalendarCard({ className }: { className?: string }) {
   const navigate = useNavigate();
+  const { activeWorkspace } = useAuth();
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1, 12, 0, 0, 0);
   });
-  const { meetings, loading } = useMeetings({ status: 'scheduled', page: 1, limit: 100 });
+  const [events, setEvents] = useState<CalEvent[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -31,20 +47,52 @@ export function CalendarCard({ className }: { className?: string }) {
     today.getFullYear() === year && today.getMonth() === month;
   const todayDay = isCurrentMonth ? today.getDate() : -1;
 
+  useEffect(() => {
+    const ws = activeWorkspace?.workspaceId;
+    if (!ws) {
+      setEvents([]);
+      setLoading(false);
+      return;
+    }
+    const from = new Date(year, month, 1, 0, 0, 0, 0);
+    const to = new Date(year, month + 1, 0, 23, 59, 59, 999);
+    let cancelled = false;
+    setLoading(true);
+    void apiFetch<{ events: CalEvent[] }>(
+      `/calendar/events?from=${from.toISOString()}&to=${to.toISOString()}`,
+      { headers: { 'X-Workspace-Id': ws } },
+    )
+      .then((data) => {
+        if (!cancelled) setEvents(data.events ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setEvents([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspace?.workspaceId, year, month]);
+
   const meetingsByDay = useMemo(() => {
     const map = new Map<number, { title: string; time: string }[]>();
-    for (const m of meetings) {
+    for (const m of events) {
       if (!m.scheduledAt) continue;
       const dt = new Date(m.scheduledAt);
       if (dt.getFullYear() !== year || dt.getMonth() !== month) continue;
       const day = dt.getDate();
       const time = dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
       const list = map.get(day) ?? [];
-      list.push({ title: m.title?.trim() || 'Meeting', time });
+      list.push({
+        title: `${m.title?.trim() || 'Meeting'}${statusSuffix(m.status)}`,
+        time,
+      });
       map.set(day, list);
     }
     return map;
-  }, [meetings, year, month]);
+  }, [events, year, month]);
 
   const marked = useMemo(() => new Set(meetingsByDay.keys()), [meetingsByDay]);
 

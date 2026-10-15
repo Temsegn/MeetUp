@@ -2,7 +2,19 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { meetingsService, Meeting, MeetingStats } from '../../../services/meetings/meetings.service';
 
-export function useMeetings(params: { status?: string; q?: string; date?: string; page?: number; limit?: number } = {}) {
+export type UseMeetingsParams = {
+  status?: string;
+  q?: string;
+  date?: string;
+  from?: string;
+  to?: string;
+  /** Stats window; null/undefined = all-time. */
+  days?: number | null;
+  page?: number;
+  limit?: number;
+};
+
+export function useMeetings(params: UseMeetingsParams = {}) {
   const { activeWorkspace } = useAuth();
   const workspaceId = activeWorkspace?.workspaceId ?? null;
 
@@ -25,8 +37,20 @@ export function useMeetings(params: { status?: string; q?: string; date?: string
     }
     try {
       const [data, s] = await Promise.all([
-        meetingsService.list(workspaceId, params),
-        meetingsService.stats(workspaceId),
+        meetingsService.list(workspaceId, {
+          status: params.status,
+          q: params.q,
+          date: params.date,
+          from: params.from,
+          to: params.to,
+          page: params.page,
+          limit: params.limit,
+        }),
+        meetingsService.stats(workspaceId, {
+          days: params.days ?? null,
+          from: params.from,
+          to: params.to,
+        }),
       ]);
       setMeetings(data.meetings);
       setTotal(data.total);
@@ -38,7 +62,17 @@ export function useMeetings(params: { status?: string; q?: string; date?: string
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [workspaceId, params.status, params.q, params.date, params.page]);
+  }, [
+    workspaceId,
+    params.status,
+    params.q,
+    params.date,
+    params.from,
+    params.to,
+    params.days,
+    params.page,
+    params.limit,
+  ]);
 
   useEffect(() => { void load(); }, [load]);
 

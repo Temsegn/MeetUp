@@ -46,12 +46,17 @@ async function uploadRecording(
     });
   };
 
-  let res: Response;
-  try {
-    res = await doFetch();
-  } catch {
-    throw new Error('Failed to reach the server. Check that the backend is running and VITE_API_URL is correct.');
-  }
+  const attempt = async (): Promise<Response> => {
+    try {
+      return await doFetch();
+    } catch {
+      throw new Error(
+        'Failed to reach the server. Check that the backend is running and VITE_API_URL is correct.',
+      );
+    }
+  };
+
+  let res = await attempt();
 
   if (res.status === 401) {
     const refreshed = await refreshSession();
@@ -67,11 +72,26 @@ async function uploadRecording(
     }
   }
 
+  // One retry for transient upstream / gateway failures.
+  if (!res.ok && (res.status === 502 || res.status === 503 || res.status === 504 || res.status >= 500)) {
+    await new Promise((r) => window.setTimeout(r, 800));
+    res = await attempt();
+  }
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error((data as { error?: string }).error || `Upload failed (${res.status})`);
   }
   return data as SaveRecordingResponse;
+}
+
+function downloadBlobLocally(blob: Blob, roomId: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `samtal-recording-${roomId}-${Date.now()}.webm`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 /**
@@ -148,20 +168,26 @@ export function useMeetingScreenRecorder({
       }
 
       if (!workspaceId) {
-        // Still give the host a local file so the recording isn't lost.
-        const url = URL.createObjectURL(result.blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `samtal-recording-${roomId}-${Date.now()}.webm`;
-        a.click();
-        URL.revokeObjectURL(url);
-        addToast?.('No workspace selected — recording downloaded locally. Join a workspace to save to Recordings.');
+        downloadBlobLocally(result.blob, roomId);
+        addToast?.(
+          'No workspace selected — recording downloaded locally. Join a workspace to save to Recordings.',
+        );
         return;
       }
 
-      const saved = await uploadRecording(roomId, result.blob, workspaceId);
-      setLastSavedPath(saved.path);
-      addToast?.(`Recording saved (${Math.round(saved.bytes / 1e6)} MB). Find it under Recordings.`);
+      try {
+        const saved = await uploadRecording(roomId, result.blob, workspaceId);
+        setLastSavedPath(saved.path);
+        addToast?.(
+          `Recording saved (${Math.round(saved.bytes / 1e6)} MB). Find it under Recordings.`,
+        );
+      } catch (uploadErr) {
+        // Never lose the take — fall back to a local download.
+        downloadBlobLocally(result.blob, roomId);
+        const msg =
+          uploadErr instanceof Error ? uploadErr.message : 'Failed to save recording';
+        addToast?.(`${msg} — downloaded a local copy so the recording is not lost.`);
+      }
     } catch (err) {
       recorderRef.current = null;
       setIsRecording(false);

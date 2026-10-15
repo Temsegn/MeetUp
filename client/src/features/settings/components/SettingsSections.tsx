@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Camera, ChevronDown, Link2, Settings as SettingsIcon } from 'lucide-react';
 import type { User, UserSettings } from '../../../services/auth/auth.service';
 import {
@@ -194,14 +194,31 @@ export function ProfileSection({
 }
 
 export function AccountSection({ settings }: Common) {
-  const rows = [
-    { label: 'Account Type', value: settings.account.plan, action: 'Change Plan' },
+  const navigate = useNavigate();
+  const rows: {
+    label: string;
+    value: string;
+    action: string;
+    onAction: () => void;
+  }[] = [
+    {
+      label: 'Account Type',
+      value: settings.account.plan,
+      action: 'Change Plan',
+      onAction: () => navigate('/app/billing'),
+    },
     {
       label: 'Meeting Capacity',
       value: `${settings.account.meetingCapacity} participants`,
       action: 'Manage',
+      onAction: () => navigate('/app/settings/workspace'),
     },
-    { label: 'Your Role', value: settings.account.role, action: 'View Permissions' },
+    {
+      label: 'Your Role',
+      value: settings.account.role,
+      action: 'View Permissions',
+      onAction: () => navigate('/app/settings/members'),
+    },
   ];
 
   return (
@@ -219,7 +236,11 @@ export function AccountSection({ settings }: Common) {
             <span className="text-[13px] font-semibold text-[#151D2B]">{row.label}</span>
             <div className="flex items-center gap-3">
               <span className="text-[13px] text-[#6F7B8C]">{row.value}</span>
-              <button type="button" className="text-[13px] font-semibold text-[#016BE6] hover:underline">
+              <button
+                type="button"
+                onClick={row.onAction}
+                className="text-[13px] font-semibold text-[#016BE6] hover:underline"
+              >
                 {row.action}
               </button>
             </div>

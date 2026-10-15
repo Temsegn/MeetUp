@@ -19,10 +19,12 @@ router.get('/events', requireWorkspace('member'), async (req: AuthRequest, res) 
     role: req.workspaceRole,
   });
 
+  // All dated meetings in range (scheduled + live instant + ended).
+  // Visibility already scopes members to own/teammate/invited; admin/owner → whole workspace.
   const filter: Record<string, unknown> = {
     ...visibility,
     scheduledAt: { $gte: from, $lte: to },
-    status: 'scheduled',
+    status: { $in: ['scheduled', 'live', 'ended'] },
   };
 
   const meetings = await Meeting.find(filter).sort({ scheduledAt: 1 }).limit(200).lean();

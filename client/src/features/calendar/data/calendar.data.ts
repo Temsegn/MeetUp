@@ -13,6 +13,7 @@ export type CalendarEvent = {
   hostName?: string;
   hostAvatarUrl?: string | null;
   hostAvatarColor?: string | null;
+  status?: 'scheduled' | 'live' | 'ended' | string;
 };
 
 export type DayMeeting = {
@@ -255,6 +256,7 @@ export function apiEventToCalendarEvent(ev: {
   title: string;
   scheduledAt?: string;
   duration?: number;
+  status?: string;
   type?: string;
   participantCount?: number;
   createdByName?: string;
@@ -269,10 +271,13 @@ export function apiEventToCalendarEvent(ev: {
   ) {
     return null;
   }
+  const baseTitle = ev.title || 'Meeting';
+  const statusLabel =
+    ev.status === 'live' ? ' (Live)' : ev.status === 'ended' ? ' (Ended)' : '';
   return {
     id: ev.id,
     day: dt.getDate(),
-    title: ev.title || 'Meeting',
+    title: `${baseTitle}${statusLabel}`,
     time: dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
     type: mapApiEventType(ev.type, ev.title),
     duration: `${ev.duration ?? 30} min`,
@@ -282,5 +287,6 @@ export function apiEventToCalendarEvent(ev: {
     hostName: ev.createdByName,
     hostAvatarUrl: ev.createdByAvatarUrl ?? null,
     hostAvatarColor: ev.createdByAvatarColor ?? null,
+    status: ev.status,
   };
 }

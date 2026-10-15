@@ -1,6 +1,8 @@
 import { ListFilter, Search } from 'lucide-react';
 import { cn } from '../../../lib/cn';
 import {
+  MEETING_DATE_RANGES,
+  type MeetingDateRangeKey,
   type MeetingListFilters,
   type MeetingStatusFilter,
 } from '../data/meetings.data';
@@ -30,7 +32,21 @@ export function MeetingsToolbar({
   filtersOpen,
   onToggleFilters,
 }: Props) {
-  const filtersActive = Boolean(filters.date || filters.time);
+  const filtersActive = Boolean(
+    filters.time ||
+      (filters.dateRange === 'custom' && (filters.dateFrom || filters.dateTo)) ||
+      (filters.dateRange !== 'all' && filters.dateRange !== 'custom'),
+  );
+
+  const setRange = (key: MeetingDateRangeKey) => {
+    onChange({
+      ...filters,
+      dateRange: key,
+      date: '',
+      dateFrom: key === 'custom' ? filters.dateFrom : '',
+      dateTo: key === 'custom' ? filters.dateTo : '',
+    });
+  };
 
   return (
     <div className="flex w-full flex-col gap-2.5">
@@ -62,6 +78,24 @@ export function MeetingsToolbar({
       </div>
 
       <div className="flex w-fit max-w-full flex-wrap gap-1.5">
+        {MEETING_DATE_RANGES.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setRange(tab.key)}
+            className={cn(
+              'inline-flex h-8 items-center justify-center rounded-xl border px-3 text-[12px] font-semibold transition-colors',
+              filters.dateRange === tab.key
+                ? 'border-[#0F172A] bg-[#0F172A] text-white shadow-sm'
+                : 'border-[#E1E7EE] bg-white text-[#6F7B8C] hover:border-[#CBD5E1] hover:text-[#334155]',
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex w-fit max-w-full flex-wrap gap-1.5">
         {STATUS_TABS.map((tab) => (
           <button
             key={tab.key}
@@ -88,19 +122,38 @@ export function MeetingsToolbar({
         ))}
       </div>
 
-      {filtersOpen ? (
+      {filtersOpen || filters.dateRange === 'custom' ? (
         <div className="flex w-full flex-wrap items-end gap-3 rounded-xl border border-[#E8ECF1] bg-white p-3 shadow-sm">
-          <label className="flex min-w-[140px] flex-1 flex-col gap-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-[#8A94A6]">
-              Date
-            </span>
-            <input
-              type="date"
-              value={filters.date}
-              onChange={(e) => onChange({ ...filters, date: e.target.value })}
-              className="h-9 w-full rounded-xl border border-[#E1E7EE] bg-white px-2.5 text-[12px] text-[#151D2B] outline-none focus:border-[#016BE6]"
-            />
-          </label>
+          {filters.dateRange === 'custom' ? (
+            <>
+              <label className="flex min-w-[140px] flex-1 flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#8A94A6]">
+                  From
+                </span>
+                <input
+                  type="date"
+                  value={filters.dateFrom}
+                  onChange={(e) =>
+                    onChange({ ...filters, dateRange: 'custom', dateFrom: e.target.value, date: '' })
+                  }
+                  className="h-9 w-full rounded-xl border border-[#E1E7EE] bg-white px-2.5 text-[12px] text-[#151D2B] outline-none focus:border-[#016BE6]"
+                />
+              </label>
+              <label className="flex min-w-[140px] flex-1 flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#8A94A6]">
+                  To
+                </span>
+                <input
+                  type="date"
+                  value={filters.dateTo}
+                  onChange={(e) =>
+                    onChange({ ...filters, dateRange: 'custom', dateTo: e.target.value, date: '' })
+                  }
+                  className="h-9 w-full rounded-xl border border-[#E1E7EE] bg-white px-2.5 text-[12px] text-[#151D2B] outline-none focus:border-[#016BE6]"
+                />
+              </label>
+            </>
+          ) : null}
           <label className="flex min-w-[140px] flex-1 flex-col gap-1">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-[#8A94A6]">
               Time
@@ -114,7 +167,16 @@ export function MeetingsToolbar({
           </label>
           <button
             type="button"
-            onClick={() => onChange({ ...filters, date: '', time: '' })}
+            onClick={() =>
+              onChange({
+                ...filters,
+                date: '',
+                time: '',
+                dateRange: 'all',
+                dateFrom: '',
+                dateTo: '',
+              })
+            }
             className="h-9 rounded-xl border border-[#E1E7EE] bg-white px-3 text-[12px] font-semibold text-[#016BE6] hover:bg-[#F8FAFC]"
           >
             Clear

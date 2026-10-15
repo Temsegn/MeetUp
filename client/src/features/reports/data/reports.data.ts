@@ -8,7 +8,7 @@ export const REPORT_TABS = [
 
 export type ReportTab = (typeof REPORT_TABS)[number];
 
-export type DateRangeKey = 'today' | 'last_7' | 'last_30' | 'last_90';
+export type DateRangeKey = 'today' | 'last_7' | 'last_30' | 'last_90' | 'last_365';
 
 export const DATE_RANGES: {
   key: DateRangeKey;
@@ -44,6 +44,13 @@ export const DATE_RANGES: {
     short: '90 days',
     compare: 'vs prior 90 days',
     days: 90,
+  },
+  {
+    key: 'last_365',
+    label: 'Last year',
+    short: '1 year',
+    compare: 'vs prior year',
+    days: 365,
   },
 ];
 

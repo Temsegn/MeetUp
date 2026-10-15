@@ -56,7 +56,12 @@ export interface ListMeetingsOptions {
   limit?: number;
   status?: MeetingStatusFilter;
   q?: string;
+  /** Single calendar day (YYYY-MM-DD) — legacy; prefer from/to. */
   date?: string;
+  /** Inclusive range start (ISO or YYYY-MM-DD). */
+  from?: string;
+  /** Inclusive range end (ISO or YYYY-MM-DD). */
+  to?: string;
 }
 
 function periodBounds(days = 30) {
@@ -64,6 +69,43 @@ function periodBounds(days = 30) {
   const currentFrom = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
   const previousFrom = new Date(now.getTime() - days * 2 * 24 * 60 * 60 * 1000);
   return { now, currentFrom, previousFrom, previousTo: currentFrom };
+}
+
+function startOfLocalDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function endOfLocalDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(23, 59, 59, 999);
+  return x;
+}
+
+/** Parse YYYY-MM-DD or ISO into a Date; returns null if invalid. */
+function parseDateInput(raw?: string | null): Date | null {
+  if (!raw || !String(raw).trim()) return null;
+  const d = new Date(String(raw).trim());
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function resolveListDateRange(opts: {
+  date?: string;
+  from?: string;
+  to?: string;
+}): { from?: Date; to?: Date } {
+  if (opts.date) {
+    const day = parseDateInput(opts.date);
+    if (!day) return {};
+    return { from: startOfLocalDay(day), to: endOfLocalDay(day) };
+  }
+  const fromRaw = parseDateInput(opts.from);
+  const toRaw = parseDateInput(opts.to);
+  return {
+    from: fromRaw ? startOfLocalDay(fromRaw) : undefined,
+    to: toRaw ? endOfLocalDay(toRaw) : undefined,
+  };
 }
 
 function pctChange(current: number, previous: number): number {
@@ -374,13 +416,19 @@ export async function listWorkspaceMeetings(opts: ListMeetingsOptions) {
   }
 
   if (opts.q) filter.title = { $regex: opts.q, $options: 'i' };
-  if (opts.date) {
-    const start = new Date(opts.date);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(opts.date);
-    end.setHours(23, 59, 59, 999);
-    const lower = isUpcomingOnly && start < now ? now : start;
-    filter.scheduledAt = { $gte: lower, $lte: end };
+
+  const range = resolveListDateRange({ date: opts.date, from: opts.from, to: opts.to });
+  if (range.from || range.to) {
+    const scheduledAt: Record<string, Date> = {};
+    if (range.from) {
+      const lower =
+        isUpcomingOnly && range.from < now ? now : range.from;
+      scheduledAt.$gte = lower;
+    } else if (isUpcomingOnly) {
+      scheduledAt.$gte = now;
+    }
+    if (range.to) scheduledAt.$lte = range.to;
+    filter.scheduledAt = scheduledAt;
   }
 
   const page = opts.page ?? 1;
@@ -401,11 +449,28 @@ export async function listWorkspaceMeetings(opts: ListMeetingsOptions) {
     const tb = new Date(b.startedAt ?? b.scheduledAt ?? b.createdAt).getTime();
     return tb - ta;
   };
+  const byUpcomingSoonest = (
+    a: { scheduledAt?: Date; createdAt: Date },
+    b: typeof a,
+  ) => {
+    const ta = new Date(a.scheduledAt ?? a.createdAt).getTime();
+    const tb = new Date(b.scheduledAt ?? b.createdAt).getTime();
+    return ta - tb;
+  };
+  const isUpcomingRow = (r: { status?: string; scheduledAt?: Date }) =>
+    r.status === 'scheduled' &&
+    Boolean(r.scheduledAt) &&
+    new Date(r.scheduledAt!).getTime() >= now.getTime();
+
+  // Live → upcoming (soonest first) → everything else (latest first).
   const ordered = isUpcomingOnly
     ? rows
     : [
         ...rows.filter((r) => r.status === 'live').sort(byRecency),
-        ...rows.filter((r) => r.status !== 'live').sort(byRecency),
+        ...rows.filter((r) => isUpcomingRow(r)).sort(byUpcomingSoonest),
+        ...rows
+          .filter((r) => r.status !== 'live' && !isUpcomingRow(r))
+          .sort(byRecency),
       ];
 
   const withHosts = await attachHostAvatars(
@@ -488,7 +553,15 @@ export async function endMeetingById(
 
 export async function getMeetingStats(
   workspaceId: string,
-  viewer?: { userId: string; email?: string | null; role?: WorkspaceRole | null },
+  viewer?: {
+    userId: string;
+    email?: string | null;
+    role?: WorkspaceRole | null;
+    /** Stats window in days. Omit / 0 / all → all-time totals (periodTotal === total). */
+    days?: number | null;
+    from?: string;
+    to?: string;
+  },
 ) {
   await promoteDueMeetings(workspaceId);
   const visibility = viewer
@@ -499,7 +572,34 @@ export async function getMeetingStats(
         role: viewer.role,
       })
     : { workspaceId: new Types.ObjectId(workspaceId) };
-  const { now, currentFrom, previousFrom, previousTo } = periodBounds(30);
+
+  const customRange = resolveListDateRange({ from: viewer?.from, to: viewer?.to });
+  const daysRaw = viewer?.days;
+  const useAllTime =
+    !customRange.from &&
+    !customRange.to &&
+    (daysRaw == null || daysRaw <= 0 || !Number.isFinite(daysRaw));
+  const days = useAllTime ? 0 : Math.min(Math.max(1, Math.round(Number(daysRaw) || 30)), 3660);
+  const { now, currentFrom, previousFrom, previousTo } = useAllTime
+    ? {
+        now: new Date(),
+        currentFrom: new Date(0),
+        previousFrom: new Date(0),
+        previousTo: new Date(0),
+      }
+    : customRange.from || customRange.to
+      ? (() => {
+          const to = customRange.to ?? new Date();
+          const from = customRange.from ?? new Date(to.getTime() - 30 * 86400000);
+          const span = Math.max(1, to.getTime() - from.getTime());
+          return {
+            now: new Date(),
+            currentFrom: from,
+            previousFrom: new Date(from.getTime() - span),
+            previousTo: from,
+          };
+        })()
+      : periodBounds(days);
   const oid = new Types.ObjectId(workspaceId);
 
   const [
@@ -522,18 +622,32 @@ export async function getMeetingStats(
       status: 'scheduled',
       scheduledAt: { $gte: now },
     }),
-    Meeting.countDocuments({
-      ...visibility,
-      status: { $ne: 'cancelled' },
-      createdAt: { $gte: currentFrom },
-    }),
-    Meeting.countDocuments({
-      ...visibility,
-      status: { $ne: 'cancelled' },
-      createdAt: { $gte: previousFrom, $lt: previousTo },
-    }),
+    useAllTime
+      ? Meeting.countDocuments({ ...visibility, status: { $ne: 'cancelled' } })
+      : Meeting.countDocuments({
+          ...visibility,
+          status: { $ne: 'cancelled' },
+          createdAt: { $gte: currentFrom, ...(customRange.to ? { $lte: customRange.to } : {}) },
+        }),
+    useAllTime
+      ? Promise.resolve(0)
+      : Meeting.countDocuments({
+          ...visibility,
+          status: { $ne: 'cancelled' },
+          createdAt: { $gte: previousFrom, $lt: previousTo },
+        }),
     ParticipantMinuteLog.aggregate([
-      { $match: { workspaceId: oid, createdAt: { $gte: currentFrom } } },
+      {
+        $match: useAllTime
+          ? { workspaceId: oid }
+          : {
+              workspaceId: oid,
+              createdAt: {
+                $gte: currentFrom,
+                ...(customRange.to ? { $lte: customRange.to } : {}),
+              },
+            },
+      },
       {
         $group: {
           _id: null,
@@ -542,23 +656,32 @@ export async function getMeetingStats(
         },
       },
     ]),
-    ParticipantMinuteLog.aggregate([
-      { $match: { workspaceId: oid, createdAt: { $gte: previousFrom, $lt: previousTo } } },
-      {
-        $group: {
-          _id: null,
-          participantMinutes: { $sum: '$participantMinutes' },
-        },
-      },
-    ]),
-    ParticipantMinuteLog.distinct('userId', {
-      workspaceId: oid,
-      createdAt: { $gte: currentFrom },
-    }),
-    ParticipantMinuteLog.distinct('userId', {
-      workspaceId: oid,
-      createdAt: { $gte: previousFrom, $lt: previousTo },
-    }),
+    useAllTime
+      ? Promise.resolve([{ participantMinutes: 0 }])
+      : ParticipantMinuteLog.aggregate([
+          { $match: { workspaceId: oid, createdAt: { $gte: previousFrom, $lt: previousTo } } },
+          {
+            $group: {
+              _id: null,
+              participantMinutes: { $sum: '$participantMinutes' },
+            },
+          },
+        ]),
+    useAllTime
+      ? ParticipantMinuteLog.distinct('userId', { workspaceId: oid })
+      : ParticipantMinuteLog.distinct('userId', {
+          workspaceId: oid,
+          createdAt: {
+            $gte: currentFrom,
+            ...(customRange.to ? { $lte: customRange.to } : {}),
+          },
+        }),
+    useAllTime
+      ? Promise.resolve([])
+      : ParticipantMinuteLog.distinct('userId', {
+          workspaceId: oid,
+          createdAt: { $gte: previousFrom, $lt: previousTo },
+        }),
   ]);
 
   const participantMinutes = (pmCurrent[0]?.participantMinutes as number | undefined) ?? 0;
@@ -568,17 +691,22 @@ export async function getMeetingStats(
 
   return {
     total,
-    /** Meetings created in the last 30 days (matches Reports default window). */
+    /** Meetings in the selected window (all-time when no period). Aligns with Reports when same days. */
     periodTotal: meetingsCurrent,
     live,
     ended,
     upcoming,
     participantMinutes,
     uniqueParticipants,
+    periodDays: useAllTime ? null : days,
     trends: {
-      total: pctChange(meetingsCurrent, meetingsPrevious),
-      participantMinutes: pctChange(participantMinutes, participantMinutesPrev),
-      participants: pctChange(uniqueParticipants, uniqueParticipantsPrev),
+      total: useAllTime ? 0 : pctChange(meetingsCurrent, meetingsPrevious),
+      participantMinutes: useAllTime
+        ? 0
+        : pctChange(participantMinutes, participantMinutesPrev),
+      participants: useAllTime
+        ? 0
+        : pctChange(uniqueParticipants, uniqueParticipantsPrev),
     },
   };
 }

@@ -245,11 +245,33 @@ export const MEETINGS: ListedMeeting[] = [
 
 export type MeetingStatusFilter = 'all' | MeetingStatus;
 
+/** Period for meetings list + stats (aligned with Reports windows). */
+export type MeetingDateRangeKey = 'all' | 'today' | '7d' | '30d' | '1y' | 'custom';
+
+export const MEETING_DATE_RANGES: {
+  key: MeetingDateRangeKey;
+  label: string;
+  days: number | null;
+}[] = [
+  { key: 'all', label: 'All', days: null },
+  { key: 'today', label: 'Today', days: 1 },
+  { key: '7d', label: 'Last 7 days', days: 7 },
+  { key: '30d', label: 'Last 30 days', days: 30 },
+  { key: '1y', label: 'Last year', days: 365 },
+  { key: 'custom', label: 'Custom', days: null },
+];
+
 export type MeetingListFilters = {
   query: string;
+  /** @deprecated prefer dateRange; kept for exact-day legacy */
   date: string;
   time: string;
   status: MeetingStatusFilter;
+  dateRange: MeetingDateRangeKey;
+  /** Custom range start YYYY-MM-DD */
+  dateFrom: string;
+  /** Custom range end YYYY-MM-DD */
+  dateTo: string;
 };
 
 export const DEFAULT_MEETING_FILTERS: MeetingListFilters = {
@@ -257,7 +279,49 @@ export const DEFAULT_MEETING_FILTERS: MeetingListFilters = {
   date: '',
   time: '',
   status: 'all',
+  dateRange: 'all',
+  dateFrom: '',
+  dateTo: '',
 };
+
+/** Resolve API from/to (and optional days for stats) from toolbar filters. */
+export function meetingRangeQuery(filters: MeetingListFilters): {
+  from?: string;
+  to?: string;
+  days?: number | null;
+  date?: string;
+} {
+  const toYmd = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  if (filters.dateRange === 'all') {
+    return { days: null };
+  }
+
+  if (filters.dateRange === 'custom') {
+    return {
+      from: filters.dateFrom || undefined,
+      to: filters.dateTo || undefined,
+      days: null,
+    };
+  }
+
+  if (filters.dateRange === 'today') {
+    const today = toYmd(new Date());
+    return { from: today, to: today, days: 1 };
+  }
+
+  const days =
+    MEETING_DATE_RANGES.find((r) => r.key === filters.dateRange)?.days ?? 30;
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - (days! - 1));
+  return { from: toYmd(start), to: toYmd(end), days };
+}
 
 const STATUS_ORDER: Record<MeetingStatus, number> = {
   live: 0,
@@ -278,7 +342,14 @@ export function filterMeetings(
   return list
     .filter((m) => {
       if (filters.status !== 'all' && m.status !== filters.status) return false;
-      if (filters.date && m.dateKey !== filters.date) return false;
+      // Date range is applied on the API; only keep legacy single-day if set without a range.
+      if (
+        filters.dateRange === 'all' &&
+        filters.date &&
+        m.dateKey !== filters.date
+      ) {
+        return false;
+      }
       if (filters.time && !m.timeKey.startsWith(filters.time.slice(0, 5))) return false;
       if (q && !m.title.toLowerCase().includes(q) && !m.host.toLowerCase().includes(q)) {
         return false;
@@ -288,6 +359,10 @@ export function filterMeetings(
     .sort((a, b) => {
       const byStatus = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
       if (byStatus !== 0) return byStatus;
+      // Upcoming: soonest first; live/ended/cancelled: latest first.
+      if (a.status === 'upcoming' && b.status === 'upcoming') {
+        return a.dateKey.localeCompare(b.dateKey) || a.timeKey.localeCompare(b.timeKey);
+      }
       return b.dateKey.localeCompare(a.dateKey) || b.timeKey.localeCompare(a.timeKey);
     });
 }

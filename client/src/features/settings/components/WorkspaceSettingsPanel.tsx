@@ -3,6 +3,7 @@ import { Camera, ChevronDown, Copy, MoreHorizontal, Search, UserPlus } from 'luc
 import { UserAvatar } from '../../../components/ui/UserAvatar';
 import { useAuth } from '../../../contexts/AuthContext';
 import { compressImageToDataUrl } from '../../../lib/compressImage';
+import { applyWorkspaceLanguage } from '../../../lib/workspaceLocale';
 import {
   workspaceService,
   type WorkspaceMember,
@@ -135,6 +136,7 @@ export function WorkspaceSettingsPanel({ onViewAllMembers, onInviteMembers }: Pr
         setTimeZone(ws.settings.timeZone || 'Asia/Riyadh');
         setDateFormat(ws.settings.dateFormat || 'DD/MM/YYYY');
         setTimeFormat(ws.settings.timeFormat || '12-Hour (AM/PM)');
+        applyWorkspaceLanguage(ws.settings.language || 'English');
         setMembers(memberRows);
       })
       .catch(() => {
@@ -233,6 +235,8 @@ export function WorkspaceSettingsPanel({ onViewAllMembers, onInviteMembers }: Pr
         dateFormat,
         timeFormat,
       });
+      applyWorkspaceLanguage(language);
+      await refreshWorkspaces();
       setMessage('Workspace settings saved.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save settings.');

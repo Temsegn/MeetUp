@@ -98,6 +98,8 @@ export function LiveMeetingPage() {
   const [recordingTick, setRecordingTick] = useState(Date.now());
   const [deviceSettingsOpen, setDeviceSettingsOpen] = useState(false);
   const [meetingLocked, setMeetingLocked] = useState(false);
+  /** Host kicked this participant — show a clear screen before leaving. */
+  const [removedByHost, setRemovedByHost] = useState<{ message: string } | null>(null);
   const [audioInputId, setAudioInputId] = useState('');
   const [audioOutputId, setAudioOutputId] = useState(() => getMeetingAudioOutputId());
   const [videoInputId, setVideoInputId] = useState('');
@@ -754,49 +756,62 @@ export function LiveMeetingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [joined, user]);
 
-  const remoteHandlers: CommandHandlerMap = {
-    OPEN_CHAT: () => {
-      setShowChat(true);
-      setShowParticipants(false);
-    },
-    CLOSE_CHAT: () => setShowChat(false),
-    OPEN_PARTICIPANTS: () => {
-      setShowParticipants(true);
-      setShowChat(false);
-    },
-    CLOSE_PARTICIPANTS: () => setShowParticipants(false),
-    TOGGLE_CHAT_PANEL: () => {
-      setShowChat((v) => !v);
-      setShowParticipants(false);
-    },
-    TOGGLE_PARTICIPANTS_PANEL: () => {
-      setShowParticipants((v) => !v);
-      setShowChat(false);
-    },
-    TOGGLE_MUTE: () => {
-      void handleToggleMute();
-    },
-    TOGGLE_CAMERA: () => {
-      void handleToggleCamera();
-    },
-    START_SCREEN_SHARE: () => {
-      if (!screenStream) setPendingRemoteShare(true);
-    },
-    STOP_SCREEN_SHARE: () => {
-      setPendingRemoteShare(false);
-      void handleStopScreenShare();
-    },
-    RAISE_HAND: () => setRaiseHand(true),
-    LOWER_HAND: () => setRaiseHand(false),
-    SEND_CHAT: (payload) => {
-      const text = typeof payload.content === 'string' ? payload.content.trim() : '';
-      if (!text || chatDisabled) return;
-      socket?.emit('send-message', { roomId, content: text });
-    },
-    SEND_REACTION: (payload) => {
-      if (typeof payload.reaction === 'string') sendReaction(payload.reaction);
-    },
-  };
+  const remoteHandlers: CommandHandlerMap = useMemo(
+    () => ({
+      OPEN_CHAT: () => {
+        setShowChat(true);
+        setShowParticipants(false);
+      },
+      CLOSE_CHAT: () => setShowChat(false),
+      OPEN_PARTICIPANTS: () => {
+        setShowParticipants(true);
+        setShowChat(false);
+      },
+      CLOSE_PARTICIPANTS: () => setShowParticipants(false),
+      TOGGLE_CHAT_PANEL: () => {
+        setShowChat((v) => !v);
+        setShowParticipants(false);
+      },
+      TOGGLE_PARTICIPANTS_PANEL: () => {
+        setShowParticipants((v) => !v);
+        setShowChat(false);
+      },
+      TOGGLE_MUTE: () => {
+        void handleToggleMute();
+      },
+      TOGGLE_CAMERA: () => {
+        void handleToggleCamera();
+      },
+      START_SCREEN_SHARE: () => {
+        if (!screenStream) setPendingRemoteShare(true);
+      },
+      STOP_SCREEN_SHARE: () => {
+        setPendingRemoteShare(false);
+        void handleStopScreenShare();
+      },
+      RAISE_HAND: () => setRaiseHand(true),
+      LOWER_HAND: () => setRaiseHand(false),
+      SEND_CHAT: (payload) => {
+        const text = typeof payload.content === 'string' ? payload.content.trim() : '';
+        if (!text || chatDisabled) return;
+        socket?.emit('send-message', { roomId, content: text });
+      },
+      SEND_REACTION: (payload) => {
+        if (typeof payload.reaction === 'string') sendReaction(payload.reaction);
+      },
+    }),
+    [
+      handleToggleMute,
+      handleToggleCamera,
+      handleStopScreenShare,
+      screenStream,
+      chatDisabled,
+      socket,
+      roomId,
+      sendReaction,
+      setRaiseHand,
+    ],
+  );
 
   const remoteControl = useRemoteControl({
     socket,
@@ -834,10 +849,19 @@ export function LiveMeetingPage() {
     onDisableChat: () => setChatDisabled(true),
     onEnableChat: () => setChatDisabled(false),
     onKick: () => {
-      addToast('The host removed you from this meeting.');
-      window.setTimeout(() => {
-        void handleLeave('/app/meetings');
-      }, 1800);
+      const message = 'The host removed you from this meeting.';
+      addToast(message);
+      setRemovedByHost({ message });
+      allowLeaveRef.current = true;
+      void (async () => {
+        try {
+          localStream?.getTracks().forEach((t) => t.stop());
+          screenStream?.getTracks().forEach((t) => t.stop());
+          await leaveMeeting();
+        } catch {
+          /* still show removed screen */
+        }
+      })();
     },
     addToast,
   });
@@ -1074,10 +1098,32 @@ export function LiveMeetingPage() {
     [tiles, participantId, controllingRemote, controlledPeerId, controlledPeerName],
   );
 
+  if (removedByHost) {
+    return (
+      <div className="flex min-h-full flex-col items-center justify-center bg-[#F5F7FA] px-6 py-16 text-center">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#94A3B8]">Samtal</p>
+        <h1 className="mt-3 text-xl font-semibold text-[#151D2B]">Removed from meeting</h1>
+        <p className="mt-3 max-w-md text-sm leading-relaxed text-[#64748B]">
+          {removedByHost.message}
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setRemovedByHost(null);
+            navigate(user ? '/app/meetings' : '/');
+          }}
+          className="mt-8 inline-flex h-10 items-center justify-center rounded-full bg-[#016BE6] px-5 text-sm font-semibold text-white hover:bg-[#0059C4]"
+        >
+          {user ? 'Back to meetings' : 'Back to home'}
+        </button>
+      </div>
+    );
+  }
+
   if (!joined && joinGate && !joinGate.joinable) {
     return (
       <div className="flex min-h-full flex-col items-center justify-center bg-[#F5F7FA] px-6 py-16 text-center">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#94A3B8]">Samhal</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#94A3B8]">Samtal</p>
         <h1 className="mt-3 text-xl font-semibold text-[#151D2B]">{meetingTitle}</h1>
         <p className="mt-3 max-w-md text-sm leading-relaxed text-[#64748B]">
           {joinGate.message ||

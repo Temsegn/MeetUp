@@ -115,15 +115,22 @@ router.get('/', requireWorkspace('member'), async (req: AuthRequest, res) => {
     status: q.status as 'scheduled' | 'upcoming' | 'live' | 'ended' | 'cancelled' | 'all' | undefined,
     q: q.q,
     date: q.date,
+    from: q.from,
+    to: q.to,
   });
   res.json(data);
 });
 
 router.get('/stats', requireWorkspace('member'), async (req: AuthRequest, res) => {
+  const q = req.query as Record<string, string>;
+  const daysParsed = q.days != null && q.days !== '' ? Number(q.days) : null;
   const stats = await getMeetingStats(req.workspaceId!, {
     userId: req.user!.id,
     email: req.user!.email,
     role: req.workspaceRole,
+    days: Number.isFinite(daysParsed as number) ? (daysParsed as number) : null,
+    from: q.from,
+    to: q.to,
   });
   res.json(stats);
 });

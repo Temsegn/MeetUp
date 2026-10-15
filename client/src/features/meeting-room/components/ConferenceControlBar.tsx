@@ -259,7 +259,7 @@ export function ConferenceControlBar(props: Props) {
   if (props.canLock && props.onToggleLock) {
     desktopPrimary.push({
       id: 'lock',
-      label: props.meetingLocked ? 'Unlock' : 'Lock',
+      label: props.meetingLocked ? 'Unlock meeting' : 'Lock meeting',
       icon: props.meetingLocked ? LockOpen : Lock,
       active: props.meetingLocked,
       onClick: props.onToggleLock,
