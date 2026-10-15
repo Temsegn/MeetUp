@@ -6,6 +6,7 @@ import { cn } from '../../../lib/cn';
 import { useAppPresence } from '../../messages/hooks/useAppPresence';
 import { useAuth } from '../../../contexts/AuthContext';
 import { LiveMeetingShellProvider } from './LiveMeetingShellContext';
+import { applyWorkspaceLanguage } from '../../../lib/workspaceLocale';
 
 export function AppShellLayout() {
   const [collapsed, setCollapsed] = useState(false);
@@ -16,6 +17,10 @@ export function AppShellLayout() {
   const navigate = useNavigate();
   const { user } = useAuth();
   useAppPresence();
+
+  useEffect(() => {
+    applyWorkspaceLanguage('English');
+  }, []);
 
   const isLiveMeetingRoom = /^\/app\/meeting\/[^/]+$/.test(pathname);
   const isRecordingWatch = /^\/app\/recordings\/[^/]+$/.test(pathname);
