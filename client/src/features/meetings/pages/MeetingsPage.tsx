@@ -42,8 +42,13 @@ function isDue(m: Meeting): boolean {
 
 function apiMeetingToListed(m: Meeting): ListedMeeting {
   const dt = m.scheduledAt ? new Date(m.scheduledAt) : m.startedAt ? new Date(m.startedAt) : new Date(m.createdAt);
-  const dateKey = dt.toISOString().slice(0, 10);
-  const timeKey = dt.toTimeString().slice(0, 5);
+  const valid = !Number.isNaN(dt.getTime());
+  const dateKey = valid
+    ? `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+    : '';
+  const timeKey = valid
+    ? `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`
+    : '';
   const live = m.status === 'live' || isDue(m);
   const statusMap: Record<string, ListedMeeting['status']> = {
     live: 'live',
@@ -59,9 +64,13 @@ function apiMeetingToListed(m: Meeting): ListedMeeting {
     id: m.id,
     title: m.title || m.roomId,
     status: statusMap[m.status] ?? 'upcoming',
-    date: dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
+    date: valid
+      ? dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+      : '—',
     dateKey,
-    time: dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+    time: valid
+      ? dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+      : '—',
     timeKey,
     duration: durationMinutes > 0 ? formatParticipantMinutes(durationMinutes) : '—',
     durationMinutes,
@@ -119,7 +128,20 @@ function loadStoredFilters(): MeetingListFilters {
   try {
     const raw = sessionStorage.getItem(MEETING_FILTERS_KEY);
     if (!raw) return DEFAULT_MEETING_FILTERS;
-    return { ...DEFAULT_MEETING_FILTERS, ...(JSON.parse(raw) as MeetingListFilters) };
+    const parsed = { ...DEFAULT_MEETING_FILTERS, ...(JSON.parse(raw) as MeetingListFilters) };
+    const known = parsed.dateRange === 'all'
+      || parsed.dateRange === 'today'
+      || parsed.dateRange === '7d'
+      || parsed.dateRange === '30d'
+      || parsed.dateRange === '1y'
+      || parsed.dateRange === 'custom';
+    if (!known) {
+      parsed.dateRange = 'all';
+      parsed.dateFrom = '';
+      parsed.dateTo = '';
+    }
+    if (parsed.dateRange === 'all') parsed.date = '';
+    return parsed;
   } catch {
     return DEFAULT_MEETING_FILTERS;
   }
@@ -141,7 +163,7 @@ export function MeetingsPage() {
 
   const range = useMemo(() => meetingRangeQuery(filters), [filters]);
 
-  const { meetings: apiMeetings, stats: apiStats, loading, reload, refreshQuietly } = useMeetings({
+  const { meetings: apiMeetings, stats: apiStats, loading, error, reload, refreshQuietly } = useMeetings({
     status:
       filters.status !== 'all'
         ? filters.status === 'live'
@@ -212,6 +234,18 @@ export function MeetingsPage() {
 
       {loading ? (
         <MeetingsTableSkeleton rows={5} />
+      ) : error && filtered.length === 0 ? (
+        <div className="rounded-xl border border-[#FECACA] bg-white px-4 py-10 text-center">
+          <p className="text-[13px] font-semibold text-[#151D2B]">Meetings could not be loaded</p>
+          <p className="mt-1 text-[12px] text-[#8A94A6]">{error}</p>
+          <button
+            type="button"
+            onClick={() => void reload()}
+            className="mt-3 inline-flex h-9 items-center rounded-xl bg-[#016BE6] px-4 text-[12px] font-semibold text-white hover:bg-[#0056EF]"
+          >
+            Try again
+          </button>
+        </div>
       ) : (
         <MeetingsList
           meetings={filtered}

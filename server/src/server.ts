@@ -23,9 +23,11 @@ const startServer = async () => {
     },
     // Whiteboard + DM call signaling / small payloads.
     maxHttpBufferSize: 8e6,
-    // Detect dead sockets quickly so remotes see "Paused" without a long delay.
-    pingTimeout:  8_000,
-    pingInterval: 10_000,
+    // One missed pong behind nginx was dropping joins (ping timeout ~18s).
+    // Still detect a dead socket within about 40s; the client announces
+    // offline immediately so remotes do not wait on this timer.
+    pingTimeout:  25_000,
+    pingInterval: 15_000,
   });
 
   // Connect to MongoDB

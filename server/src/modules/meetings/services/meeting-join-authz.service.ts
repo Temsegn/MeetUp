@@ -1,10 +1,11 @@
 import { Types } from 'mongoose';
 import { WorkspaceTeam } from '../../../database/models/WorkspaceTeam.model';
+import { Workspace } from '../../../database/models/Workspace.model';
 import { MeetingParticipant } from '../../../database/models/MeetingParticipant.model';
 import { Meeting } from '../../../database/models/Meeting.model';
 import { ForbiddenError, ValidationError } from '../../../shared/errors/AppError';
 import type { WorkspaceRole } from '../../workspace/workspace.types';
-import { hasMinRole } from '../../workspace/workspace.types';
+import { hasMinRole, normalizeWorkspaceRole } from '../../workspace/workspace.types';
 
 export type MeetingAccessDoc = {
   _id: Types.ObjectId | string;
@@ -13,8 +14,8 @@ export type MeetingAccessDoc = {
   guestEmails?: string[] | null;
 };
 
-export function isWorkspaceStaffRole(role?: WorkspaceRole | null): boolean {
-  return Boolean(role && hasMinRole(role, 'admin'));
+export function isWorkspaceStaffRole(role?: WorkspaceRole | string | null): boolean {
+  return Boolean(role && hasMinRole(normalizeWorkspaceRole(role), 'admin'));
 }
 
 /** Teams where the user is lead or listed in memberIds. */
@@ -65,8 +66,8 @@ export async function listTeammateUserIds(
 
 /**
  * Mongo filter: meetings the user may see.
- * - Owner / admin: all workspace meetings
- * - Member: host · invited · teammates of the host (0-team hosts stay invite-only)
+ * - Admin (and the workspace owner): every meeting in the workspace
+ * - Any other member: meetings they host, were invited to, or that a teammate hosts
  */
 export async function buildMeetingVisibilityFilter(opts: {
   workspaceId: string;
@@ -77,6 +78,11 @@ export async function buildMeetingVisibilityFilter(opts: {
   const wsOid = new Types.ObjectId(opts.workspaceId);
 
   if (isWorkspaceStaffRole(opts.role)) {
+    return { workspaceId: wsOid };
+  }
+
+  const owned = await Workspace.findById(wsOid).select('ownerId').lean();
+  if (owned?.ownerId && String(owned.ownerId) === opts.userId) {
     return { workspaceId: wsOid };
   }
 

@@ -39,7 +39,10 @@ function toParticipantJson(doc: {
     avatarUrl: doc.avatarUrl ?? null,
     avatarColor: doc.avatarColor ?? null,
     status: doc.status,
-    registeredAt: doc.registeredAt.toISOString(),
+    registeredAt: (() => {
+      const d = doc.registeredAt ? new Date(doc.registeredAt) : new Date();
+      return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+    })(),
     joinedAt: doc.joinedAt ? doc.joinedAt.toISOString() : null,
   };
 }

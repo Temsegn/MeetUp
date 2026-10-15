@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Mic,
   MicOff,
@@ -64,14 +64,17 @@ type Props = {
   userName?: string;
 };
 
-function LabeledControl({ item }: { item: ControlItem }) {
+function LabeledControl({ item, fill = false }: { item: ControlItem; fill?: boolean }) {
   const Icon = item.icon;
   return (
     <button
       type="button"
       onClick={item.onClick}
       disabled={item.disabled}
-      className="flex w-10 shrink-0 flex-col items-center gap-0.5 py-0.5 disabled:opacity-40 sm:w-12 lg:w-14 xl:w-16"
+      className={cn(
+        'flex shrink-0 flex-col items-center gap-0.5 py-0.5 disabled:opacity-40',
+        fill ? 'w-full min-w-10 flex-1 sm:min-w-12' : 'w-10 sm:w-12 lg:w-14 xl:w-16',
+      )}
       aria-label={item.label}
       title={item.label}
     >
@@ -112,211 +115,207 @@ export function ConferenceControlBar(props: Props) {
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
-  const primaryMobile: ControlItem[] = [
-    {
-      id: 'mute',
-      label: 'Microphone',
-      icon: props.muted ? MicOff : Mic,
-      active: props.muted,
-      danger: props.muted,
-      onClick: props.onToggleMute,
-    },
-    {
-      id: 'camera',
-      label: 'Camera',
-      icon: props.cameraOff ? VideoOff : Video,
-      active: props.cameraOff,
-      danger: props.cameraOff,
-      onClick: props.onToggleCamera,
-    },
-    {
-      id: 'share',
-      label: 'Share screen',
-      icon: MonitorUp,
-      active: props.sharing,
-      disabled: !props.sharing && props.shareDisabled,
-      onClick: props.onToggleShare,
-    },
-    {
-      id: 'chat',
-      label: 'Chat',
-      icon: MessageSquare,
-      active: props.chatOpen,
-      onClick: props.onToggleChat,
-    },
-  ];
-
-  const moreItems: ControlItem[] = [
-    {
-      id: 'people',
-      label: 'Participants',
-      icon: Users,
-      active: props.participantsOpen,
-      onClick: props.onToggleParticipants,
-    },
-    {
-      id: 'hand',
-      label: 'Raise hand',
-      icon: Hand,
-      active: props.handRaised,
-      onClick: props.onToggleHand,
-    },
-    {
-      id: 'whiteboard',
-      label: 'Whiteboard',
-      icon: Pencil,
-      active: props.whiteboardOpen,
-      onClick: props.onToggleWhiteboard,
-    },
-    {
+  const mobileControls = useMemo(() => {
+    const items: ControlItem[] = [
+      {
+        id: 'mute',
+        label: 'Microphone',
+        icon: props.muted ? MicOff : Mic,
+        active: props.muted,
+        danger: props.muted,
+        onClick: props.onToggleMute,
+      },
+      {
+        id: 'camera',
+        label: 'Camera',
+        icon: props.cameraOff ? VideoOff : Video,
+        active: props.cameraOff,
+        danger: props.cameraOff,
+        onClick: props.onToggleCamera,
+      },
+      {
+        id: 'share',
+        label: 'Share screen',
+        icon: MonitorUp,
+        active: props.sharing,
+        disabled: !props.sharing && props.shareDisabled,
+        onClick: props.onToggleShare,
+      },
+      {
+        id: 'chat',
+        label: 'Chat',
+        icon: MessageSquare,
+        active: props.chatOpen,
+        onClick: props.onToggleChat,
+      },
+      {
+        id: 'people',
+        label: 'Participants',
+        icon: Users,
+        active: props.participantsOpen,
+        onClick: props.onToggleParticipants,
+      },
+      {
+        id: 'hand',
+        label: 'Raise hand',
+        icon: Hand,
+        active: props.handRaised,
+        onClick: props.onToggleHand,
+      },
+      {
+        id: 'whiteboard',
+        label: 'Whiteboard',
+        icon: Pencil,
+        active: props.whiteboardOpen,
+        onClick: props.onToggleWhiteboard,
+      },
+    ];
+    if (props.canRecord) {
+      items.push({
+        id: 'record',
+        label: props.recording ? 'Stop recording' : 'Record',
+        icon: Circle,
+        active: props.recording,
+        recording: props.recording,
+        disabled: props.recordingBusy || !props.onToggleRecording,
+        onClick: props.onToggleRecording,
+      });
+    }
+    if (props.onOpenDevices) {
+      items.push({
+        id: 'devices',
+        label: 'Devices',
+        icon: Settings2,
+        onClick: props.onOpenDevices,
+      });
+    }
+    if (props.canLock && props.onToggleLock) {
+      items.push({
+        id: 'lock',
+        label: props.meetingLocked ? 'Unlock meeting' : 'Lock meeting',
+        icon: props.meetingLocked ? LockOpen : Lock,
+        active: props.meetingLocked,
+        onClick: props.onToggleLock,
+      });
+    }
+    items.push({
       id: 'reactions',
       label: 'Reactions',
       icon: Smile,
       active: reactionsOpen,
       onClick: () => setReactionsOpen((v) => !v),
-    },
-  ];
-
-  if (props.onOpenDevices) {
-    moreItems.push({
-      id: 'devices',
-      label: 'Devices',
-      icon: Settings2,
-      onClick: props.onOpenDevices,
     });
-  }
+    return items;
+  }, [
+    props.muted,
+    props.cameraOff,
+    props.sharing,
+    props.shareDisabled,
+    props.chatOpen,
+    props.participantsOpen,
+    props.handRaised,
+    props.whiteboardOpen,
+    props.canRecord,
+    props.recording,
+    props.recordingBusy,
+    props.onToggleRecording,
+    props.onOpenDevices,
+    props.canLock,
+    props.meetingLocked,
+    props.onToggleLock,
+    props.onToggleMute,
+    props.onToggleCamera,
+    props.onToggleShare,
+    props.onToggleChat,
+    props.onToggleParticipants,
+    props.onToggleHand,
+    props.onToggleWhiteboard,
+    reactionsOpen,
+  ]);
 
-  if (props.canLock && props.onToggleLock) {
-    moreItems.push({
-      id: 'lock',
-      label: props.meetingLocked ? 'Unlock meeting' : 'Lock meeting',
-      icon: props.meetingLocked ? LockOpen : Lock,
-      active: props.meetingLocked,
-      onClick: props.onToggleLock,
-    });
-  }
+  const controlsSlotRef = useRef<HTMLDivElement>(null);
+  const [visibleCount, setVisibleCount] = useState(mobileControls.length);
 
-  if (props.canRecord) {
-    moreItems.unshift({
-      id: 'record',
-      label: props.recording ? 'Stop recording' : 'Record',
-      icon: Circle,
-      active: props.recording,
-      recording: props.recording,
-      disabled: props.recordingBusy || !props.onToggleRecording,
-      onClick: props.onToggleRecording,
-    });
-  }
+  useLayoutEffect(() => {
+    const el = controlsSlotRef.current;
+    if (!el) return;
+    const measure = () => {
+      const width = el.clientWidth;
+      if (width <= 0) return;
+      const minButton = window.matchMedia('(min-width: 640px)').matches ? 48 : 40;
+      const slots = Math.max(1, Math.floor(width / minButton));
+      const total = mobileControls.length;
+      const next = slots >= total ? total : Math.max(0, slots - 1);
+      setVisibleCount((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [mobileControls.length]);
 
-  // Desktop (lg+): every control visible; mobile keeps compact primary + More.
-  // Use the same labels as mobile so desktop/mobile naming stays consistent.
-  const desktopPrimary: ControlItem[] = [
-    ...primaryMobile,
-    {
-      id: 'people',
-      label: 'Participants',
-      icon: Users,
-      active: props.participantsOpen,
-      onClick: props.onToggleParticipants,
-    },
-    {
-      id: 'hand',
-      label: 'Raise hand',
-      icon: Hand,
-      active: props.handRaised,
-      onClick: props.onToggleHand,
-    },
-    {
-      id: 'whiteboard',
-      label: 'Whiteboard',
-      icon: Pencil,
-      active: props.whiteboardOpen,
-      onClick: props.onToggleWhiteboard,
-    },
-  ];
+  const visibleMobile = mobileControls.slice(0, visibleCount);
+  const overflowMobile = mobileControls.slice(visibleCount);
 
-  if (props.canRecord) {
-    desktopPrimary.push({
-      id: 'record',
-      label: props.recording ? 'Stop recording' : 'Record',
-      icon: Circle,
-      active: props.recording,
-      recording: props.recording,
-      disabled: props.recordingBusy || !props.onToggleRecording,
-      onClick: props.onToggleRecording,
-    });
-  }
-
-  if (props.onOpenDevices) {
-    desktopPrimary.push({
-      id: 'devices',
-      label: 'Devices',
-      icon: Settings2,
-      onClick: props.onOpenDevices,
-    });
-  }
-
-  if (props.canLock && props.onToggleLock) {
-    desktopPrimary.push({
-      id: 'lock',
-      label: props.meetingLocked ? 'Unlock meeting' : 'Lock meeting',
-      icon: props.meetingLocked ? LockOpen : Lock,
-      active: props.meetingLocked,
-      onClick: props.onToggleLock,
-    });
-  }
+  const desktopPrimary = mobileControls;
 
   return (
     <div className="relative z-[60] mx-auto flex w-full max-w-full min-w-0 items-center justify-between gap-1 overflow-visible rounded-2xl border border-[#E8ECF1] bg-white/95 px-1.5 py-1.5 shadow-[0_8px_30px_rgba(15,23,42,0.08)] backdrop-blur-md sm:gap-2 sm:rounded-[22px] sm:px-3 sm:py-2 lg:max-w-5xl">
-      {/* Mobile / tablet compact bar — overflow visible so More menu can open upward */}
-      <div className="flex min-w-0 flex-1 items-center justify-center gap-0 overflow-visible lg:hidden">
-        {primaryMobile.map((item) => (
-          <LabeledControl key={item.id} item={item} />
+      {/* Phone / tablet: fill the free width; leftover controls open from More */}
+      <div
+        ref={controlsSlotRef}
+        className="flex min-w-0 flex-1 items-center justify-between gap-0.5 overflow-visible lg:hidden"
+      >
+        {visibleMobile.map((item) => (
+          <LabeledControl key={item.id} item={item} fill />
         ))}
 
-        <div className="relative z-[70] shrink-0" ref={moreRef}>
-          <LabeledControl
-            item={{
-              id: 'more',
-              label: 'More',
-              icon: MoreHorizontal,
-              active: moreOpen,
-              onClick: () => {
-                setReactionsOpen(false);
-                setMoreOpen((v) => !v);
-              },
-            }}
-          />
-          {moreOpen ? (
-            <div
-              role="menu"
-              className="absolute bottom-[calc(100%+10px)] right-0 z-[80] max-h-[min(60vh,360px)] w-[min(240px,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-[#E8ECF1] bg-white py-1 shadow-xl"
-            >
-              {moreItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="menuitem"
-                    disabled={item.disabled}
-                    onClick={() => {
-                      item.onClick?.();
-                      if (item.id !== 'reactions') setMoreOpen(false);
-                    }}
-                    className={cn(
-                      'flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-medium text-[#151D2B] hover:bg-[#F8FAFC] disabled:opacity-40',
-                      item.active && 'text-[#016BE6]',
-                    )}
-                  >
-                    <Icon className={cn('size-4 shrink-0', item.recording && 'fill-current text-[#DC2626]')} />
-                    {item.label}
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-        </div>
+        {overflowMobile.length > 0 ? (
+          <div className="relative z-[70] flex min-w-10 flex-1 sm:min-w-12" ref={moreRef}>
+            <LabeledControl
+              fill
+              item={{
+                id: 'more',
+                label: 'More',
+                icon: MoreHorizontal,
+                active: moreOpen,
+                onClick: () => {
+                  setReactionsOpen(false);
+                  setMoreOpen((v) => !v);
+                },
+              }}
+            />
+            {moreOpen ? (
+              <div
+                role="menu"
+                className="absolute bottom-[calc(100%+10px)] right-0 z-[80] max-h-[min(60vh,360px)] w-[min(240px,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-[#E8ECF1] bg-white py-1 shadow-xl"
+              >
+                {overflowMobile.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="menuitem"
+                      disabled={item.disabled}
+                      onClick={() => {
+                        item.onClick?.();
+                        if (item.id !== 'reactions') setMoreOpen(false);
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-medium text-[#151D2B] hover:bg-[#F8FAFC] disabled:opacity-40',
+                        item.active && 'text-[#016BE6]',
+                      )}
+                    >
+                      <Icon className={cn('size-4 shrink-0', item.recording && 'fill-current text-[#DC2626]')} />
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {/* Desktop — all controls visible */}
@@ -324,15 +323,6 @@ export function ConferenceControlBar(props: Props) {
         {desktopPrimary.map((item) => (
           <LabeledControl key={item.id} item={item} />
         ))}
-        <LabeledControl
-          item={{
-            id: 'reactions',
-            label: 'Reactions',
-            icon: Smile,
-            active: reactionsOpen,
-            onClick: () => setReactionsOpen((v) => !v),
-          }}
-        />
       </div>
 
       {reactionsOpen ? (

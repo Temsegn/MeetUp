@@ -17,6 +17,8 @@ import { API_URL } from '../../lib/apiUrl';
 
 // ── In-memory access token (never persisted) ────────────────────────────────
 let accessToken: string | null = null;
+/** Bumped on every setAccessToken so a failed refresh cannot wipe a newer login. */
+let accessTokenEpoch = 0;
 
 /** Fired once when refresh fails so AuthContext can clear user and leave /app. */
 type SessionExpiredListener = () => void;
@@ -51,6 +53,7 @@ export function notifySessionExpired(): void {
 export const getAccessToken = (): string | null => accessToken;
 export const setAccessToken = (t: string | null): void => {
   accessToken = t;
+  accessTokenEpoch += 1;
   if (t) resetSessionExpiredGuard();
 };
 
@@ -191,6 +194,7 @@ function extractAccessToken(data: unknown): string {
 export async function refreshSession(): Promise<boolean> {
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
+      const epochAtStart = accessTokenEpoch;
       try {
         const res = await fetch(`${API_URL}/auth/refresh`, {
           method: 'POST',
@@ -198,14 +202,18 @@ export async function refreshSession(): Promise<boolean> {
           headers: { 'Content-Type': 'application/json' },
         });
         if (!res.ok) {
-          accessToken = null;
+          // A missing refresh cookie must not erase a token issued while this
+          // request was in flight (login racing a background 401).
+          if (accessTokenEpoch === epochAtStart) accessToken = null;
           return false;
         }
         const data: unknown = await res.json();
+        if (accessTokenEpoch !== epochAtStart) return true;
         accessToken = extractAccessToken(data);
+        accessTokenEpoch += 1;
         return true;
       } catch {
-        accessToken = null;
+        if (accessTokenEpoch === epochAtStart) accessToken = null;
         return false;
       } finally {
         refreshInFlight = null;
@@ -227,7 +235,8 @@ interface FetchOptions {
 export async function apiFetch<T>(path: string, opts: FetchOptions = {}, allowRetry = true): Promise<T> {
   const { method = 'GET', body, auth = true } = opts;
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(opts.headers ?? {}) };
-  if (auth && accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+  const sentToken = Boolean(auth && accessToken);
+  if (sentToken && accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
   let res: Response;
   try {
@@ -242,7 +251,9 @@ export async function apiFetch<T>(path: string, opts: FetchOptions = {}, allowRe
   }
 
   // Token expired → refresh once and retry the original request.
-  if (res.status === 401 && auth && allowRetry) {
+  // No bearer was sent: do not POST /auth/refresh. That call has no cookie on
+  // this deployment and only logs SESSION_MISSING every poll.
+  if (res.status === 401 && auth && allowRetry && sentToken) {
     const refreshed = await refreshSession();
     if (refreshed) return apiFetch<T>(path, opts, false);
     notifySessionExpired();

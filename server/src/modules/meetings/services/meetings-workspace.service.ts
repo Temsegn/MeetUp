@@ -90,6 +90,31 @@ function parseDateInput(raw?: string | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function dateBounds(range: { from?: Date; to?: Date }): Record<string, Date> | null {
+  const bounds: Record<string, Date> = {};
+  if (range.from) bounds.$gte = range.from;
+  if (range.to) bounds.$lte = range.to;
+  return Object.keys(bounds).length ? bounds : null;
+}
+
+/** AND a clause onto a filter that may already use $or (visibility). */
+function andClause(filter: Record<string, unknown>, clause: Record<string, unknown>) {
+  const and: unknown[] = [];
+  if (filter.$or) {
+    and.push({ $or: filter.$or });
+    delete filter.$or;
+  }
+  if (Array.isArray(filter.$and)) and.push(...filter.$and);
+  and.push(clause);
+  filter.$and = and;
+}
+
+function toIso(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 function resolveListDateRange(opts: {
   date?: string;
   from?: string;
@@ -232,7 +257,8 @@ function toJson(m: MeetingDoc | null) {
     joinUrl: links.joinUrl,
     googleCalendarUrl: links.googleCalendarUrl,
     outlookCalendarUrl: links.outlookCalendarUrl,
-    createdAt: m.createdAt.toISOString(),
+    createdAt:
+      toIso(m.createdAt) ?? toIso(m.startedAt) ?? toIso(m.scheduledAt) ?? new Date().toISOString(),
   };
 }
 
@@ -317,7 +343,7 @@ async function attachParticipantLists(meetings: MeetingJson[]): Promise<MeetingJ
       avatarUrl: r.avatarUrl ?? null,
       avatarColor: r.avatarColor ?? null,
       status: r.status as 'invited' | 'registered' | 'joined',
-      registeredAt: r.registeredAt.toISOString(),
+      registeredAt: toIso(r.registeredAt) ?? toIso(m.createdAt) ?? new Date().toISOString(),
       joinedAt: r.joinedAt ? r.joinedAt.toISOString() : null,
     }));
 
@@ -419,16 +445,29 @@ export async function listWorkspaceMeetings(opts: ListMeetingsOptions) {
 
   const range = resolveListDateRange({ date: opts.date, from: opts.from, to: opts.to });
   if (range.from || range.to) {
-    const scheduledAt: Record<string, Date> = {};
-    if (range.from) {
-      const lower =
-        isUpcomingOnly && range.from < now ? now : range.from;
-      scheduledAt.$gte = lower;
-    } else if (isUpcomingOnly) {
-      scheduledAt.$gte = now;
+    if (isUpcomingOnly) {
+      const scheduledAt: Record<string, Date> = {};
+      if (range.from) {
+        scheduledAt.$gte = range.from < now ? now : range.from;
+      } else {
+        scheduledAt.$gte = now;
+      }
+      if (range.to) scheduledAt.$lte = range.to;
+      filter.scheduledAt = scheduledAt;
+    } else {
+      // Reports count by createdAt. Instant meetings often have no scheduledAt,
+      // so a period that only checks scheduledAt returns an empty list.
+      const bounds = dateBounds(range);
+      if (bounds) {
+        andClause(filter, {
+          $or: [
+            { scheduledAt: { ...bounds } },
+            { startedAt: { ...bounds } },
+            { createdAt: { ...bounds } },
+          ],
+        });
+      }
     }
-    if (range.to) scheduledAt.$lte = range.to;
-    filter.scheduledAt = scheduledAt;
   }
 
   const page = opts.page ?? 1;
@@ -476,23 +515,39 @@ export async function listWorkspaceMeetings(opts: ListMeetingsOptions) {
   const withHosts = await attachHostAvatars(
     await Promise.all(
       ordered.map(async (r) => {
-        const json = toJson(r as unknown as MeetingDoc);
-        if (!json) return json;
-        const registeredCount = await countMeetingParticipants(json.id);
-        return {
-          ...json,
-          registeredParticipantCount: registeredCount,
-          participantCount: Math.max(json.participantCount ?? 1, registeredCount),
-          participants: Math.max(json.participants ?? 1, registeredCount),
-        };
+        try {
+          const json = toJson(r as unknown as MeetingDoc);
+          if (!json) return json;
+          const registeredCount = await countMeetingParticipants(json.id);
+          return {
+            ...json,
+            registeredParticipantCount: registeredCount,
+            participantCount: Math.max(json.participantCount ?? 1, registeredCount),
+            participants: Math.max(json.participants ?? 1, registeredCount),
+          };
+        } catch (err) {
+          logger.warn('Skipping meeting that could not be listed', {
+            meetingId: String(r._id),
+            err: err instanceof Error ? err.message : String(err),
+          });
+          return null;
+        }
       }),
     ),
   );
 
+  const listed = withHosts.filter((m): m is MeetingJson => Boolean(m));
+  let meetings = listed;
+  try {
+    meetings = await attachParticipantLists(listed);
+  } catch (err) {
+    logger.warn('Meeting list roster attach failed', {
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   return {
-    meetings: await attachParticipantLists(
-      withHosts.filter((m): m is MeetingJson => Boolean(m)),
-    ),
+    meetings,
     total,
     page,
     limit,

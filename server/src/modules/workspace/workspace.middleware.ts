@@ -25,13 +25,15 @@ export function requireWorkspace(minRole: WorkspaceRole = 'member') {
           res.status(403).json({ error: 'Not a member of this workspace.', code: 'NOT_WORKSPACE_MEMBER' });
           return;
         }
-        if (!hasMinRole(member.role, minRole)) {
+        // Legacy owner rows must count as admin or the meetings list hides the workspace.
+        const role = normalizeWorkspaceRole(member.role);
+        if (!hasMinRole(role, minRole)) {
           res.status(403).json({ error: 'Insufficient role.', code: 'FORBIDDEN' });
           return;
         }
 
         req.workspaceId = workspaceId;
-        req.workspaceRole = member.role;
+        req.workspaceRole = role;
         next();
       })();
     });

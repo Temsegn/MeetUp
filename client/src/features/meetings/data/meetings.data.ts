@@ -334,23 +334,23 @@ export function getMeetingById(id: string): ListedMeeting | undefined {
   return MEETINGS.find((m) => m.id === id);
 }
 
+function clockPrefix(value: string): string {
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return '';
+  return `${match[1].padStart(2, '0')}:${match[2]}`;
+}
+
 export function filterMeetings(
   list: ListedMeeting[],
   filters: MeetingListFilters,
 ): ListedMeeting[] {
   const q = filters.query.trim().toLowerCase();
+  const wantTime = clockPrefix(filters.time);
   return list
     .filter((m) => {
       if (filters.status !== 'all' && m.status !== filters.status) return false;
-      // Date range is applied on the API; only keep legacy single-day if set without a range.
-      if (
-        filters.dateRange === 'all' &&
-        filters.date &&
-        m.dateKey !== filters.date
-      ) {
-        return false;
-      }
-      if (filters.time && !m.timeKey.startsWith(filters.time.slice(0, 5))) return false;
+      // Period is applied by the API. A leftover single-day value must not hide All.
+      if (wantTime && clockPrefix(m.timeKey) !== wantTime) return false;
       if (q && !m.title.toLowerCase().includes(q) && !m.host.toLowerCase().includes(q)) {
         return false;
       }

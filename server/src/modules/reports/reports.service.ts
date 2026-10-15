@@ -59,11 +59,14 @@ function meetingEndedFilter(
   from: Date,
   types: ReportMeetingType[] | null,
   prev?: { prevFrom: Date; prevTo: Date },
+  visibility?: Record<string, unknown>,
 ) {
   // Count meetings created in the window (any non-cancelled status) so Reports
-  // totals align with the Meetings tab 30-day period counter.
+  // totals align with the Meetings tab period counter.
+  // visibility is the same rule as the Meetings list: admin sees the workspace,
+  // a member sees only their own, invited, and team meetings.
   const base: Record<string, unknown> = {
-    workspaceId,
+    ...(visibility ?? { workspaceId }),
     status: { $ne: 'cancelled' },
     createdAt: prev ? { $gte: prev.prevFrom, $lt: prev.prevTo } : { $gte: from },
   };
@@ -78,9 +81,10 @@ async function meetingIdsForFilter(
   from: Date,
   types: ReportMeetingType[] | null,
   prev?: { prevFrom: Date; prevTo: Date },
+  visibility?: Record<string, unknown>,
 ): Promise<Types.ObjectId[] | null> {
   if (!types?.length) return null;
-  return Meeting.find(meetingEndedFilter(workspaceId, from, types, prev)).distinct('_id');
+  return Meeting.find(meetingEndedFilter(workspaceId, from, types, prev, visibility)).distinct('_id');
 }
 
 function pmMatch(
@@ -283,16 +287,17 @@ export async function buildReportsOverview(
   workspaceId: Types.ObjectId,
   rangeDays: number,
   types: ReportMeetingType[] | null = null,
+  visibility?: Record<string, unknown>,
 ) {
   const { range, from, prevFrom, prevTo } = rangeBounds(rangeDays);
   const prevWindow = { prevFrom, prevTo };
 
-  const meetingFilter = meetingEndedFilter(workspaceId, from, types);
-  const meetingFilterPrev = meetingEndedFilter(workspaceId, from, types, prevWindow);
+  const meetingFilter = meetingEndedFilter(workspaceId, from, types, undefined, visibility);
+  const meetingFilterPrev = meetingEndedFilter(workspaceId, from, types, prevWindow, visibility);
 
   const [currentMeetingIds, prevMeetingIds] = await Promise.all([
-    meetingIdsForFilter(workspaceId, from, types),
-    meetingIdsForFilter(workspaceId, from, types, prevWindow),
+    meetingIdsForFilter(workspaceId, from, types, undefined, visibility),
+    meetingIdsForFilter(workspaceId, from, types, prevWindow, visibility),
   ]);
 
   const pmFilter = pmMatch(workspaceId, from, currentMeetingIds);

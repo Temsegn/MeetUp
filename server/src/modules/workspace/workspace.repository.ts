@@ -38,7 +38,7 @@ function toMember(doc: {
   _id: unknown;
   workspaceId: unknown;
   userId: unknown;
-  role: WorkspaceRole;
+  role: string;
   status: MemberRecord['status'];
   createdAt: Date;
 }): MemberRecord {
@@ -46,7 +46,7 @@ function toMember(doc: {
     id: String(doc._id),
     workspaceId: String(doc.workspaceId),
     userId: String(doc.userId),
-    role: doc.role,
+    role: normalizeWorkspaceRole(doc.role),
     status: doc.status,
     createdAt: doc.createdAt,
   };
@@ -75,7 +75,7 @@ export const workspaceRepository = {
           workspaceId: String(r.workspaceId),
           workspaceName: w.name,
           slug: w.slug,
-          role: r.role as WorkspaceRole,
+          role: normalizeWorkspaceRole(r.role),
         };
       })
       .filter((x): x is MembershipSummary => Boolean(x));

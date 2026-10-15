@@ -75,24 +75,24 @@ export function MeetingsToolbar({
           <ListFilter className="size-3.5" />
           Filters
         </button>
-      </div>
 
-      <div className="flex w-fit max-w-full flex-wrap gap-1.5">
-        {MEETING_DATE_RANGES.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setRange(tab.key)}
-            className={cn(
-              'inline-flex h-8 items-center justify-center rounded-xl border px-3 text-[12px] font-semibold transition-colors',
-              filters.dateRange === tab.key
-                ? 'border-[#0F172A] bg-[#0F172A] text-white shadow-sm'
-                : 'border-[#E1E7EE] bg-white text-[#6F7B8C] hover:border-[#CBD5E1] hover:text-[#334155]',
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {filtersOpen || filters.dateRange !== 'all'
+          ? MEETING_DATE_RANGES.filter((tab) => filtersOpen || tab.key === filters.dateRange).map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setRange(tab.key)}
+                className={cn(
+                  'inline-flex h-9 shrink-0 items-center justify-center rounded-xl border px-3 text-[12px] font-semibold transition-colors',
+                  filters.dateRange === tab.key
+                    ? 'border-[#0F172A] bg-[#0F172A] text-white shadow-sm'
+                    : 'border-[#E1E7EE] bg-white text-[#6F7B8C] hover:border-[#CBD5E1] hover:text-[#334155]',
+                )}
+              >
+                {tab.label}
+              </button>
+            ))
+          : null}
       </div>
 
       <div className="flex w-fit max-w-full flex-wrap gap-1.5">

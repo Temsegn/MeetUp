@@ -72,8 +72,10 @@ export function NotificationCenterProvider({ children }: { children: React.React
       return;
     }
 
-    pollSuspendedRef.current = false;
     let cancelled = false;
+
+    // Keep a previous suspension when the call starts/stops. Resetting here
+    // restarted the 8s /auth/refresh loop on every presence change.
 
     // Live call: pause HTTP /mine — DM socket still delivers messages instantly.
     if (inLiveMeeting) {
@@ -83,7 +85,7 @@ export function NotificationCenterProvider({ children }: { children: React.React
     }
 
     const sync = async () => {
-      if (cancelled || pollSuspendedRef.current) return;
+      if (cancelled || pollSuspendedRef.current || !getAccessToken()) return;
 
       try {
         const serverNotes = await meetingsService.listNotifications(activeWorkspace.workspaceId);
