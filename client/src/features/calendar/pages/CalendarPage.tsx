@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { cn } from '../../../lib/cn';
 import { useAuth } from '../../../contexts/AuthContext';
 import { apiFetch } from '../../../services/auth/auth.service';
@@ -30,6 +31,21 @@ import {
   weekDaysContaining,
 } from '../data/calendar.data';
 
+/** Parse `?date=YYYY-MM-DD` from the dashboard calendar deep-link. */
+function parseDateQuery(raw: string | null): { year: number; monthIndex: number; day: number } | null {
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const [ys, ms, ds] = raw.split('-');
+  const year = Number(ys);
+  const monthIndex = Number(ms) - 1;
+  const day = Number(ds);
+  if (!Number.isFinite(year) || monthIndex < 0 || monthIndex > 11 || day < 1 || day > 31) {
+    return null;
+  }
+  const max = new Date(year, monthIndex + 1, 0).getDate();
+  if (day > max) return null;
+  return { year, monthIndex, day };
+}
+
 /** Two-column layout: calendar left, side panel right (Figma) */
 const layoutGrid = 'grid grid-cols-1 xl:grid-cols-[1fr_minmax(260px,300px)]';
 
@@ -52,6 +68,7 @@ type ApiEvent = {
  */
 export function CalendarPage() {
   const { activeWorkspace } = useAuth();
+  const [searchParams] = useSearchParams();
   const [view, setView] = useState<CalendarView>('Month');
   const [selectedDay, setSelectedDay] = useState(getDefaultSelectedDay);
   const [activeTypes, setActiveTypes] = useState<Set<CalendarEventType>>(
@@ -70,6 +87,16 @@ export function CalendarPage() {
       return Math.min(d, max);
     });
   }, []);
+
+  // Dashboard CalendarCard → /app/calendar?date=YYYY-MM-DD
+  useEffect(() => {
+    const parsed = parseDateQuery(searchParams.get('date'));
+    if (!parsed) return;
+    setCalendarCursor(parsed.year, parsed.monthIndex);
+    setMonthLabel(getCalendarMonthLabel());
+    setSelectedDay(parsed.day);
+    setView('Day');
+  }, [searchParams]);
 
   const loadEvents = useCallback(async () => {
     const ws = activeWorkspace?.workspaceId;
