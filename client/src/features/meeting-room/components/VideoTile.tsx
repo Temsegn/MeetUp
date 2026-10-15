@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { MicOff, Hand } from 'lucide-react';
 import { cn } from '../../../lib/cn';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
+import { applyMeetingAudioOutput } from '../lib/audio-output';
 
 export type LiveParticipant = {
   id: string;
@@ -63,6 +64,7 @@ export function VideoTile({ participant, isScreenShare = false, className }: Pro
     const audio = participant.audioStream || participant.stream;
     if (audio && audio.getAudioTracks().some((t) => t.readyState !== 'ended')) {
       el.srcObject = audio;
+      void applyMeetingAudioOutput(el);
       void el.play().catch(() => {});
     } else {
       el.srcObject = null;

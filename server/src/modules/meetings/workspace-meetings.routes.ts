@@ -50,7 +50,7 @@ const CreateWorkspaceMeetingBody = z
     title: z.string().trim().min(1).max(200),
     agenda: z.array(z.string().trim().max(500)).max(20).optional(),
     scheduledAt: z.string().optional(),
-    duration: z.number().int().min(1).max(480).optional(),
+    duration: z.number().int().min(1).max(1440).optional(),
     timezone: z.string().trim().max(80).optional(),
     location: z.string().trim().max(500).optional(),
     description: z.string().trim().max(4000).optional(),

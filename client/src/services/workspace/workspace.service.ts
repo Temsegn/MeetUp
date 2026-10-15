@@ -16,6 +16,9 @@ export interface WorkspaceSettings {
   muteOnEntry: boolean;
   maxMeetingDurationMinutes: number;
   language: string;
+  timeZone: string;
+  dateFormat: string;
+  timeFormat: string;
 }
 
 export interface Workspace {

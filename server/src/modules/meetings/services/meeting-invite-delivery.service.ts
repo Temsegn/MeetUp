@@ -145,6 +145,13 @@ async function sendOneDelivery(
   const end = meetingEndAt(start, meeting.duration ?? 30);
   const organizer = await hostOrganizer(meeting);
   const calendarUid = ensureCalendarUid(String(meeting._id), meeting.calendarUid);
+  const ws = meeting.workspaceId
+    ? await Workspace.findById(meeting.workspaceId).select('email logoUrl settings.timeZone').lean()
+    : null;
+  const timezone =
+    (meeting.timezone && meeting.timezone.trim()) ||
+    (ws?.settings as { timeZone?: string } | undefined)?.timeZone ||
+    'Asia/Riyadh';
   const method = row.kind === 'cancel' ? 'CANCEL' : 'REQUEST';
   const ics = buildMeetingIcs({
     calendarUid,
@@ -154,7 +161,7 @@ async function sendOneDelivery(
     location: meeting.location || '',
     start,
     end,
-    timezone: meeting.timezone || 'UTC',
+    timezone,
     roomId: meeting.roomId,
     organizerEmail: organizer.email,
     organizerName: organizer.name,
@@ -171,16 +178,19 @@ async function sendOneDelivery(
     roomId: meeting.roomId,
     scheduledAt: start,
     endsAt: end,
-    timezone: meeting.timezone,
+    timezone,
     location: meeting.location,
     isLive: meeting.status === 'live' || meeting.type === 'instant',
     kind: emailKind,
+    logoUrl: ws?.logoUrl ?? null,
+    supportEmail: (ws?.email || '').trim() || 'support@samtal.cc',
   });
 
   row.attempts += 1;
   try {
     const result = await emailService.send({
       to: row.email,
+      replyTo: 'no-reply@samtal.cc',
       subject: msg.subject,
       text: msg.text,
       html: msg.html,

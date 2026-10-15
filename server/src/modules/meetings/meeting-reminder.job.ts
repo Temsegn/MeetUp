@@ -116,8 +116,11 @@ export async function sendDueMeetingStartReminders(): Promise<number> {
   const now = Date.now();
   const earliest = new Date(now - MAX_LATENESS_MS);
 
+  // Instant meetings already get the invitation email at create time — do not
+  // also fire a "starting now" reminder in the same minute.
   const due = await Meeting.find({
     status: { $in: ['scheduled', 'live'] },
+    type: { $ne: 'instant' },
     startReminderSentAt: null,
     $or: [
       { scheduledAt: { $ne: null, $lte: new Date(now), $gte: earliest } },
@@ -140,9 +143,10 @@ export async function sendMeetingStartReminderForRoom(roomId: string): Promise<v
   const m = await Meeting.findOne({
     roomId,
     status: { $in: ['scheduled', 'live'] },
+    type: { $ne: 'instant' },
     startReminderSentAt: null,
   })
-    .select('_id')
+    .select('_id type')
     .lean();
   if (!m) return;
   await deliverRemindersForMeeting(String(m._id));

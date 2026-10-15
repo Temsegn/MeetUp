@@ -1,9 +1,10 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { meetingsService } from '../services/meetings/meetings.service';
 import { connectDmSocket, DM_EVENTS } from '../services/messages/dm-socket';
 import type { ChatMessage } from '../services/messages/messages.service';
-import { getAccessToken } from '../services/auth/auth.service';
+import { ApiError, getAccessToken } from '../services/auth/auth.service';
+import { useLiveMeetingPresence } from '../features/meeting/lib/live-meeting-presence';
 
 export type NotificationKind = 'message' | 'meeting' | 'workspace' | 'system';
 
@@ -53,23 +54,39 @@ function mapServerNote(note: {
   };
 }
 
+/** Outside a call: poll every 8s. Inside a live meeting: pause HTTP /mine spam. */
+const NOTIFICATION_POLL_MS = 8_000;
+
 export function NotificationCenterProvider({ children }: { children: React.ReactNode }) {
   const { activeWorkspace, user } = useAuth();
+  const inLiveMeeting = useLiveMeetingPresence();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  /** After SESSION_EXPIRED / hard 401 — stop hammering /mine until workspace changes. */
+  const pollSuspendedRef = useRef(false);
 
   // Fetch ALL persisted notifications (messages, meetings, workspace, …)
   useEffect(() => {
     if (!activeWorkspace?.workspaceId) {
       setNotifications([]);
+      pollSuspendedRef.current = false;
       return;
     }
 
+    pollSuspendedRef.current = false;
     let cancelled = false;
+
+    // Live call: pause HTTP /mine — DM socket still delivers messages instantly.
+    if (inLiveMeeting) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const sync = async () => {
+      if (cancelled || pollSuspendedRef.current) return;
+
       try {
-        const serverNotes = await meetingsService
-          .listNotifications(activeWorkspace.workspaceId)
-          .catch(() => []);
+        const serverNotes = await meetingsService.listNotifications(activeWorkspace.workspaceId);
         if (cancelled) return;
 
         const fromServer = serverNotes.map(mapServerNote);
@@ -88,18 +105,32 @@ export function NotificationCenterProvider({ children }: { children: React.React
           );
           return merged.slice(0, 120);
         });
-      } catch {
-        // ignore
+      } catch (err) {
+        if (
+          err instanceof ApiError &&
+          (err.status === 401 || err.code === 'SESSION_EXPIRED' || err.code === 'SESSION_MISSING')
+        ) {
+          // Stop retry spam — apiFetch already attempted refresh once.
+          pollSuspendedRef.current = true;
+          if (intervalId) {
+            window.clearInterval(intervalId);
+            intervalId = null;
+          }
+        }
       }
     };
 
+    let intervalId: ReturnType<typeof setInterval> | null = window.setInterval(
+      () => void sync(),
+      NOTIFICATION_POLL_MS,
+    );
     void sync();
-    const id = window.setInterval(() => void sync(), 8000);
+
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      if (intervalId) window.clearInterval(intervalId);
     };
-  }, [activeWorkspace?.workspaceId]);
+  }, [activeWorkspace?.workspaceId, inLiveMeeting]);
 
   // Instant message notifications while online (also persisted server-side)
   useEffect(() => {

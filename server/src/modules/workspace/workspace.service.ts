@@ -104,6 +104,9 @@ export function createWorkspaceService() {
         muteOnEntry?: boolean;
         maxMeetingDurationMinutes?: number;
         language?: string;
+        timeZone?: string;
+        dateFormat?: string;
+        timeFormat?: string;
       },
     ) {
       if (!hasMinRole(actorRole, 'admin')) throw new ForbiddenError('Admins only.');
@@ -175,13 +178,40 @@ export function createWorkspaceService() {
         patch.language = language;
       }
 
+      if (patch.timeZone !== undefined) {
+        const timeZone = String(patch.timeZone).trim();
+        if (!timeZone || timeZone.length > 64) {
+          throw new ValidationError('Invalid time zone.');
+        }
+        patch.timeZone = timeZone;
+      }
+
+      if (patch.dateFormat !== undefined) {
+        const dateFormat = String(patch.dateFormat).trim();
+        if (!dateFormat || dateFormat.length > 32) {
+          throw new ValidationError('Invalid date format.');
+        }
+        patch.dateFormat = dateFormat;
+      }
+
+      if (patch.timeFormat !== undefined) {
+        const timeFormat = String(patch.timeFormat).trim();
+        if (!timeFormat || timeFormat.length > 32) {
+          throw new ValidationError('Invalid time format.');
+        }
+        patch.timeFormat = timeFormat;
+      }
+
       const hasSettingsPatch =
         patch.waitingRoom !== undefined ||
         patch.autoRecord !== undefined ||
         patch.joinBeforeHost !== undefined ||
         patch.muteOnEntry !== undefined ||
         patch.maxMeetingDurationMinutes !== undefined ||
-        patch.language !== undefined;
+        patch.language !== undefined ||
+        patch.timeZone !== undefined ||
+        patch.dateFormat !== undefined ||
+        patch.timeFormat !== undefined;
 
       const ws = hasSettingsPatch
         ? await workspaceRepository.updateSettings(workspaceId, {
@@ -191,6 +221,9 @@ export function createWorkspaceService() {
             muteOnEntry: patch.muteOnEntry,
             maxMeetingDurationMinutes: patch.maxMeetingDurationMinutes,
             language: patch.language,
+            timeZone: patch.timeZone,
+            dateFormat: patch.dateFormat,
+            timeFormat: patch.timeFormat,
           })
         : await workspaceRepository.findById(workspaceId);
       if (!ws) throw new NotFoundError('Workspace');

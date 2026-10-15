@@ -12,6 +12,7 @@ import {
 } from '../data/meetings.data';
 import { useMeetings } from '../hooks/useMeetings';
 import type { Meeting } from '../../../services/meetings/meetings.service';
+import { useLiveMeetingPresence } from '../../meeting/lib/live-meeting-presence';
 
 function formatParticipantMinutes(minutes: number): string {
   if (minutes < 60) return `${minutes}m`;
@@ -50,7 +51,9 @@ function apiMeetingToListed(m: Meeting): ListedMeeting {
     cancelled: 'cancelled',
   };
   const actual = actualDurationMinutes(m);
-  const durationMinutes = actual > 0 ? actual : (m.status === 'scheduled' ? (m.duration ?? 30) : 0);
+  const planned = Number(m.duration);
+  const plannedMinutes = Number.isFinite(planned) && planned > 0 ? Math.round(planned) : 30;
+  const durationMinutes = actual > 0 ? actual : (m.status === 'scheduled' || m.status === 'live' ? plannedMinutes : 0);
   return {
     id: m.id,
     title: m.title || m.roomId,
@@ -59,7 +62,7 @@ function apiMeetingToListed(m: Meeting): ListedMeeting {
     dateKey,
     time: dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
     timeKey,
-    duration: durationMinutes > 0 ? `${durationMinutes}m` : '—',
+    duration: durationMinutes > 0 ? formatParticipantMinutes(durationMinutes) : '—',
     durationMinutes,
     participants: Math.max(
       1,
@@ -109,11 +112,31 @@ function apiMeetingToListed(m: Meeting): ListedMeeting {
  * Meetings listing — stats, filters (title/date/time/status), live first.
  * Live opens conference; upcoming/ended open detail page.
  */
+const MEETING_FILTERS_KEY = 'samtal:meetingFilters';
+
+function loadStoredFilters(): MeetingListFilters {
+  try {
+    const raw = sessionStorage.getItem(MEETING_FILTERS_KEY);
+    if (!raw) return DEFAULT_MEETING_FILTERS;
+    return { ...DEFAULT_MEETING_FILTERS, ...(JSON.parse(raw) as MeetingListFilters) };
+  } catch {
+    return DEFAULT_MEETING_FILTERS;
+  }
+}
+
 export function MeetingsPage() {
-  const [filters, setFilters] = useState<MeetingListFilters>(DEFAULT_MEETING_FILTERS);
+  const [filters, setFilters] = useState<MeetingListFilters>(() => loadStoredFilters());
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [page] = useState(1);
   const [nowTick, setNowTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(MEETING_FILTERS_KEY, JSON.stringify(filters));
+    } catch {
+      /* ignore */
+    }
+  }, [filters]);
 
   const { meetings: apiMeetings, stats: apiStats, loading, reload } = useMeetings({
     status:
@@ -132,19 +155,27 @@ export function MeetingsPage() {
     limit: 50,
   });
 
+  const inLiveMeeting = useLiveMeetingPresence();
+
   useEffect(() => {
+    // Don't hammer workspace-meetings/stats while a call is active (other tab / shell).
+    if (inLiveMeeting) return;
     const id = window.setInterval(() => {
       setNowTick(Date.now());
       void reload();
     }, 20_000);
     return () => window.clearInterval(id);
-  }, [reload]);
+  }, [reload, inLiveMeeting]);
 
   const listedMeetings = useMemo(() => apiMeetings.map(apiMeetingToListed), [apiMeetings, nowTick]);
-  const filtered = useMemo(() => filterMeetings(listedMeetings, { ...filters, status: 'all', query: '', date: '' }), [listedMeetings]);
+  const filtered = useMemo(
+    () => filterMeetings(listedMeetings, filters),
+    [listedMeetings, filters],
+  );
 
+  // Use the 30-day period total so Meetings and Reports share the same window.
   const stats = useMemo(() => ({
-    totalMeetings: String(apiStats?.total ?? listedMeetings.length),
+    totalMeetings: String(apiStats?.periodTotal ?? apiStats?.total ?? listedMeetings.length),
     totalTime: formatParticipantMinutes(apiStats?.participantMinutes ?? 0),
     totalParticipants: String(apiStats?.uniqueParticipants ?? 0),
     liveNow: String(apiStats?.live ?? listedMeetings.filter((m) => m.status === 'live').length),

@@ -186,8 +186,8 @@ export function CreateMeetingMenu() {
         setError('Start time must be in the future.');
         return;
       }
-      if (duration < 1 || duration > 480) {
-        setError('Duration must be between 1 and 480 minutes.');
+      if (!Number.isFinite(duration) || duration < 1 || duration > 1440) {
+        setError('Duration must be between 1 and 1440 minutes (24 hours).');
         return;
       }
     }
@@ -426,10 +426,27 @@ export function CreateMeetingMenu() {
                 Duration (minutes)
                 <input
                   type="number"
-                  min={5}
-                  max={480}
-                  value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value) || 30)}
+                  min={1}
+                  max={1440}
+                  inputMode="numeric"
+                  value={Number.isFinite(duration) ? duration : ''}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === '') {
+                      setDuration(NaN as unknown as number);
+                      return;
+                    }
+                    const digits = raw.replace(/\D/g, '').slice(0, 4);
+                    if (!digits) {
+                      setDuration(NaN as unknown as number);
+                      return;
+                    }
+                    const n = Math.min(1440, Math.max(1, parseInt(digits, 10)));
+                    setDuration(n);
+                  }}
+                  onBlur={() => {
+                    if (!Number.isFinite(duration) || duration < 1) setDuration(30);
+                  }}
                   className="mt-1 h-12 w-full rounded-lg border border-[#E1E7EE] px-3 text-[16px] outline-none sm:h-10 sm:text-[13px]"
                 />
               </label>

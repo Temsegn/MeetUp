@@ -67,7 +67,9 @@ export function ConfirmDialog({
       document.body.style.overflow = prevOverflow;
       prev?.focus?.();
     };
-  }, [open, busy, onClose]);
+    // Only re-focus when the dialog opens — not when parent re-renders (e.g. rename typing).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   if (!open) return null;
 

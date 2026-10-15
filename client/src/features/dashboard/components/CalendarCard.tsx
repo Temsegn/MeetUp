@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowUpRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { SectionCard } from './SectionCard';
@@ -9,7 +9,12 @@ import { cn } from '../../../lib/cn';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+function dayKey(year: number, month: number, day: number): string {
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
 export function CalendarCard({ className }: { className?: string }) {
+  const navigate = useNavigate();
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1, 12, 0, 0, 0);
@@ -26,17 +31,22 @@ export function CalendarCard({ className }: { className?: string }) {
     today.getFullYear() === year && today.getMonth() === month;
   const todayDay = isCurrentMonth ? today.getDate() : -1;
 
-  const marked = useMemo(() => {
-    const set = new Set<number>();
+  const meetingsByDay = useMemo(() => {
+    const map = new Map<number, { title: string; time: string }[]>();
     for (const m of meetings) {
       if (!m.scheduledAt) continue;
       const dt = new Date(m.scheduledAt);
-      if (dt.getFullYear() === year && dt.getMonth() === month) {
-        set.add(dt.getDate());
-      }
+      if (dt.getFullYear() !== year || dt.getMonth() !== month) continue;
+      const day = dt.getDate();
+      const time = dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+      const list = map.get(day) ?? [];
+      list.push({ title: m.title?.trim() || 'Meeting', time });
+      map.set(day, list);
     }
-    return set;
+    return map;
   }, [meetings, year, month]);
+
+  const marked = useMemo(() => new Set(meetingsByDay.keys()), [meetingsByDay]);
 
   const monthLabel = cursor.toLocaleDateString(undefined, {
     month: 'long',
@@ -99,22 +109,38 @@ export function CalendarCard({ className }: { className?: string }) {
             {d}
           </span>
         ))}
-        {currentDays.map((d) => (
-          <button
-            key={d}
-            type="button"
-            className={`relative py-1.5 text-[11px] ${
-              d === todayDay
-                ? 'rounded-full bg-[#006DEC] font-bold text-white'
-                : 'rounded-full text-[#334155] hover:bg-[#F1F5F9]'
-            }`}
-          >
-            {d}
-            {marked.has(d) && d !== todayDay ? (
-              <span className="absolute bottom-0 left-1/2 size-1 -translate-x-1/2 rounded-full bg-[#006DEC]" />
-            ) : null}
-          </button>
-        ))}
+        {currentDays.map((d) => {
+          const dayMeetings = meetingsByDay.get(d) ?? [];
+          const title =
+            dayMeetings.length > 0
+              ? dayMeetings.map((m) => `${m.time} — ${m.title}`).join('\n')
+              : undefined;
+          return (
+            <button
+              key={d}
+              type="button"
+              title={title}
+              aria-label={
+                dayMeetings.length > 0
+                  ? `${d}, ${dayMeetings.length} meeting${dayMeetings.length === 1 ? '' : 's'}`
+                  : String(d)
+              }
+              onClick={() => {
+                navigate(`/app/calendar?date=${dayKey(year, month, d)}`);
+              }}
+              className={`relative py-1.5 text-[11px] ${
+                d === todayDay
+                  ? 'rounded-full bg-[#006DEC] font-bold text-white'
+                  : 'rounded-full text-[#334155] hover:bg-[#F1F5F9]'
+              }`}
+            >
+              {d}
+              {marked.has(d) && d !== todayDay ? (
+                <span className="absolute bottom-0 left-1/2 size-1 -translate-x-1/2 rounded-full bg-[#006DEC]" />
+              ) : null}
+            </button>
+          );
+        })}
         {Array.from({ length: trailing }, (_, i) => (
           <span key={`n-${i}`} className="py-1.5 text-[11px] text-[#CBD5E1]">
             {i + 1}

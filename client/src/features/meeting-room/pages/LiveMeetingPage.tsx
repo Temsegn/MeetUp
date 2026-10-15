@@ -12,6 +12,7 @@ import {
   loadGuestDisplayName,
   saveGuestDisplayName,
 } from '../../meeting/lib/guest-display-name';
+import { setLiveMeetingPresence } from '../../meeting/lib/live-meeting-presence';
 import { useLocalMedia } from '../../media/hooks/useLocalMedia';
 import { useReactions } from '../../collaboration/hooks/useReactions';
 import { ReactionOverlay } from '../../collaboration/components/ReactionOverlay/ReactionOverlay';
@@ -29,11 +30,13 @@ import { MeetingRejoinScreen } from '../components/MeetingRejoinScreen';
 import { MeetingRoomHeader } from '../components/MeetingRoomHeader';
 import { VideoTile, type LiveParticipant } from '../components/VideoTile';
 import { ConferenceControlBar } from '../components/ConferenceControlBar';
+import { MeetingDeviceSettings } from '../components/MeetingDeviceSettings';
 import { MeetingVideoGrid } from '../components/MeetingVideoGrid';
 import { ParticipantsPanel } from '../components/ParticipantsPanel';
 import { MeetingChatPanel } from '../components/MeetingChatPanel';
 import { useMeetingModeration, emitHostModerate } from '../hooks/useMeetingModeration';
 import type { ParticipantModerationAction } from '../components/ParticipantRowMenu';
+import { getMeetingAudioOutputId, setMeetingAudioOutput } from '../lib/audio-output';
 
 /**
  * New Samtal live meeting experience (pre-join + in-call).
@@ -93,8 +96,15 @@ export function LiveMeetingPage() {
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [recordingTick, setRecordingTick] = useState(Date.now());
+  const [deviceSettingsOpen, setDeviceSettingsOpen] = useState(false);
+  const [meetingLocked, setMeetingLocked] = useState(false);
+  const [audioInputId, setAudioInputId] = useState('');
+  const [audioOutputId, setAudioOutputId] = useState(() => getMeetingAudioOutputId());
+  const [videoInputId, setVideoInputId] = useState('');
   const stageRef = useRef<HTMLDivElement | null>(null);
   const publishedTrackIdsRef = useRef<Set<string>>(new Set());
+  /** One auto-start attempt per join; host stop/restart does not change workspace settings. */
+  const autoRecordStartedRef = useRef(false);
   /** When true, navigation/leave is intentional (Leave / End / host ended). */
   const allowLeaveRef = useRef(false);
 
@@ -212,8 +222,16 @@ export function LiveMeetingPage() {
     addToast,
   });
 
-  const { localStream, screenStream, startLocalMedia, startScreenShare, stopScreenShare, error: mediaError } =
-    useLocalMedia();
+  const {
+    localStream,
+    screenStream,
+    startLocalMedia,
+    startScreenShare,
+    stopScreenShare,
+    replaceVideoTrack,
+    replaceAudioTrack,
+    error: mediaError,
+  } = useLocalMedia();
   const { activeReactions, sendReaction, raisedHands, toggleRaiseHand, setRaiseHand } = useReactions(
     roomId,
     participantId || '__pre_join__',
@@ -240,11 +258,46 @@ export function LiveMeetingPage() {
     stopRecording,
   } = useMeetingScreenRecorder({
     roomId,
-    workspaceId: activeWorkspace?.workspaceId,
+    workspaceId: activeWorkspace?.workspaceId ?? (meetingMeta as { workspaceId?: string } | null)?.workspaceId ?? null,
     getStageEl: () => stageRef.current,
     getAudioStreams,
     addToast,
   });
+
+  // Workspace autoRecord (copied onto the meeting at create) → start once when host joins.
+  // Host can stop / start again manually; that only affects this call, not workspace settings.
+  useEffect(() => {
+    if (!joined) {
+      autoRecordStartedRef.current = false;
+      return;
+    }
+    if (!isHost) return;
+    if (meetingMeta?.settings?.autoRecord !== true) return;
+    if (autoRecordStartedRef.current || isRecording || isRecordingBusy) return;
+
+    let attempts = 0;
+    const tryStart = () => {
+      if (autoRecordStartedRef.current || isRecording || isRecordingBusy) return;
+      if (!stageRef.current) {
+        if (attempts++ < 10) {
+          window.setTimeout(tryStart, 500);
+        }
+        return;
+      }
+      autoRecordStartedRef.current = true;
+      void startRecording();
+    };
+
+    const timer = window.setTimeout(tryStart, 1_500);
+    return () => window.clearTimeout(timer);
+  }, [
+    joined,
+    isHost,
+    meetingMeta?.settings?.autoRecord,
+    isRecording,
+    isRecordingBusy,
+    startRecording,
+  ]);
 
   // Browser tab close / refresh / back without using Leave
   useEffect(() => {
@@ -274,6 +327,13 @@ export function LiveMeetingPage() {
   useEffect(() => {
     void startLocalMedia().catch(() => {});
   }, [startLocalMedia]);
+
+  // Pause shell HTTP polls (/mine, meetings list) for the duration of this call.
+  useEffect(() => {
+    const active = joined || waiting;
+    setLiveMeetingPresence(active);
+    return () => setLiveMeetingPresence(false);
+  }, [joined, waiting]);
 
   useEffect(() => {
     if (!socket) return;
@@ -427,6 +487,18 @@ export function LiveMeetingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- isMuted/isCameraOff applied at publish time only
   }, [joined, localStream, session, addToast, mediaEpoch, startLocalMedia]);
 
+  useEffect(() => {
+    setMeetingLocked(Boolean(meetingMeta?.settings?.locked));
+  }, [meetingMeta?.settings?.locked]);
+
+  useEffect(() => {
+    if (!localStream) return;
+    const mic = localStream.getAudioTracks()[0]?.getSettings()?.deviceId;
+    const cam = localStream.getVideoTracks()[0]?.getSettings()?.deviceId;
+    if (mic) setAudioInputId(mic);
+    if (cam) setVideoInputId(cam);
+  }, [localStream]);
+
   // Host waiting-room requests
   useEffect(() => {
     if (!socket || !joined || !isHost) return;
@@ -456,6 +528,77 @@ export function LiveMeetingPage() {
       socket.off('waiting-request-resolved', onResolved);
     };
   }, [socket, joined, isHost, roomId, addToast]);
+
+  useEffect(() => {
+    if (!socket || !joined) return;
+    const onLock = (payload: { roomId?: string; locked?: boolean }) => {
+      if (payload.roomId && payload.roomId !== roomId) return;
+      setMeetingLocked(Boolean(payload.locked));
+      addToast(payload.locked ? 'Meeting locked' : 'Meeting unlocked');
+    };
+    socket.on('meeting-lock-changed', onLock);
+    return () => {
+      socket.off('meeting-lock-changed', onLock);
+    };
+  }, [socket, joined, roomId, addToast]);
+
+  const handleSelectMic = useCallback(
+    async (deviceId: string) => {
+      const track = await replaceAudioTrack(deviceId);
+      if (!track) {
+        addToast('Could not switch microphone');
+        return;
+      }
+      setAudioInputId(deviceId);
+      try {
+        await session.current?.replaceProducerTrack('microphone', track);
+      } catch {
+        addToast('Microphone switched locally; republish may be needed');
+      }
+    },
+    [replaceAudioTrack, session, addToast],
+  );
+
+  const handleSelectCamera = useCallback(
+    async (deviceId: string) => {
+      const track = await replaceVideoTrack(deviceId);
+      if (!track) {
+        addToast('Could not switch camera');
+        return;
+      }
+      setVideoInputId(deviceId);
+      try {
+        await session.current?.replaceProducerTrack('camera', track);
+      } catch {
+        addToast('Camera switched locally; republish may be needed');
+      }
+    },
+    [replaceVideoTrack, session, addToast],
+  );
+
+  const handleSelectSpeaker = useCallback(
+    async (deviceId: string) => {
+      setAudioOutputId(deviceId);
+      try {
+        await setMeetingAudioOutput(deviceId);
+      } catch {
+        addToast('Could not switch speaker');
+      }
+    },
+    [addToast],
+  );
+
+  const handleToggleLock = useCallback(() => {
+    if (!socket || !isHost) return;
+    const next = !meetingLocked;
+    socket.emit(next ? 'lock-meeting' : 'unlock-meeting', { roomId }, (res: { error?: string; locked?: boolean } | undefined) => {
+      if (res?.error) {
+        addToast(res.error);
+        return;
+      }
+      if (typeof res?.locked === 'boolean') setMeetingLocked(res.locked);
+    });
+  }, [socket, isHost, meetingLocked, roomId, addToast]);
 
   const handleAdmitWaiting = (requestId: string) => {
     socket?.emit('admit-waiting', { roomId, requestId }, (res: { error?: string } | undefined) => {
@@ -668,7 +811,12 @@ export function LiveMeetingPage() {
     },
     onDisableChat: () => setChatDisabled(true),
     onEnableChat: () => setChatDisabled(false),
-    onKick: () => void handleLeave(),
+    onKick: () => {
+      addToast('The host removed you from this meeting.');
+      window.setTimeout(() => {
+        void handleLeave('/app/meetings');
+      }, 1800);
+    },
     addToast,
   });
 
@@ -1260,6 +1408,8 @@ export function LiveMeetingPage() {
           chatOpen={showChat}
           canEndMeeting={isHost && !controllingRemote}
           canRecord={isHost && !controllingRemote}
+          canLock={isHost && !controllingRemote}
+          meetingLocked={meetingLocked}
           shareDisabled={someoneElseSharing && !controllingRemote}
           shareDisabledReason="Someone else is sharing"
           onToggleMute={
@@ -1339,11 +1489,28 @@ export function LiveMeetingPage() {
               ? (emoji) => void remoteControl.sendAction('SEND_REACTION', { reaction: emoji })
               : sendReaction
           }
+          onOpenDevices={
+            controllingRemote ? undefined : () => setDeviceSettingsOpen(true)
+          }
+          onToggleLock={
+            isHost && !controllingRemote ? () => handleToggleLock() : undefined
+          }
           onLeave={() => setLeavePromptOpen(true)}
           onEndCall={() => void handleEndMeeting()}
           userName={controllingRemote && controlledPeerName ? controlledPeerName : effectiveName}
         />
       </div>
+
+      <MeetingDeviceSettings
+        open={deviceSettingsOpen}
+        onClose={() => setDeviceSettingsOpen(false)}
+        audioInputId={audioInputId}
+        audioOutputId={audioOutputId}
+        videoInputId={videoInputId}
+        onSelectMic={(id) => void handleSelectMic(id)}
+        onSelectSpeaker={(id) => void handleSelectSpeaker(id)}
+        onSelectCamera={(id) => void handleSelectCamera(id)}
+      />
 
       {panelOpen ? (
         <div className="fixed inset-0 z-40 xl:hidden">

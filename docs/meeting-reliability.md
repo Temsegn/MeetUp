@@ -62,4 +62,4 @@ Reconnect / refresh / network handover reuses admission and skips the waiting ro
 
 - Media cannot continue through a total outage; recovery rebuilds transports when the network returns.
 - Backend restart still drops live mediasoup objects; membership/admission survive and clients must rejoin media.
-- Meeting lock / join-before-host enforcement is still not fully implemented as a separate control.
+- Host lock and join-before-host are enforced in the live join path; lock does not block previously admitted rejoins.

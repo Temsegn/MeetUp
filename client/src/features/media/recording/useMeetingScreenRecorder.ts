@@ -148,7 +148,14 @@ export function useMeetingScreenRecorder({
       }
 
       if (!workspaceId) {
-        addToast?.('No workspace selected — recording cannot be saved to your library.');
+        // Still give the host a local file so the recording isn't lost.
+        const url = URL.createObjectURL(result.blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `samtal-recording-${roomId}-${Date.now()}.webm`;
+        a.click();
+        URL.revokeObjectURL(url);
+        addToast?.('No workspace selected — recording downloaded locally. Join a workspace to save to Recordings.');
         return;
       }
 

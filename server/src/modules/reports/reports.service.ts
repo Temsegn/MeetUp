@@ -60,10 +60,12 @@ function meetingEndedFilter(
   types: ReportMeetingType[] | null,
   prev?: { prevFrom: Date; prevTo: Date },
 ) {
+  // Count meetings created in the window (any non-cancelled status) so Reports
+  // totals align with the Meetings tab 30-day period counter.
   const base: Record<string, unknown> = {
     workspaceId,
-    status: 'ended',
-    endedAt: prev ? { $gte: prev.prevFrom, $lt: prev.prevTo } : { $gte: from },
+    status: { $ne: 'cancelled' },
+    createdAt: prev ? { $gte: prev.prevFrom, $lt: prev.prevTo } : { $gte: from },
   };
   if (types?.length) {
     base.type = types.length === 1 ? types[0] : { $in: types };
@@ -325,7 +327,7 @@ export async function buildReportsOverview(
       { $match: meetingFilter },
       {
         $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$startedAt' } },
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
           meetings: { $sum: 1 },
         },
       },
@@ -354,8 +356,8 @@ export async function buildReportsOverview(
       'attachments.0': { $exists: true },
     }),
     Meeting.find(meetingFilter)
-      .sort({ endedAt: -1 })
-      .select('_id title type startedAt endedAt peakParticipants participantCount')
+      .sort({ createdAt: -1 })
+      .select('_id title type startedAt endedAt createdAt peakParticipants participantCount')
       .lean(),
     topParticipantsForWorkspace(workspaceId, from, currentMeetingIds, 5),
   ]);

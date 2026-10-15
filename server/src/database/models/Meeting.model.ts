@@ -23,6 +23,8 @@ export interface IMeeting extends Document {
     autoRecord: boolean;
     joinBeforeHost: boolean;
     muteOnEntry: boolean;
+    /** Host locked the room — new joins blocked until unlocked. */
+    locked?: boolean;
   };
   /** External guest invite emails (lowercase). */
   guestEmails: string[];
@@ -60,6 +62,7 @@ const meetingSchema = new Schema<IMeeting>(
       autoRecord: { type: Boolean, default: false },
       joinBeforeHost: { type: Boolean, default: false },
       muteOnEntry: { type: Boolean, default: false },
+      locked: { type: Boolean, default: false },
     },
     guestEmails: { type: [String], default: [] },
     timezone: { type: String, default: 'UTC' },

@@ -13,6 +13,9 @@ import {
   PhoneOff,
   Smile,
   MoreHorizontal,
+  Settings2,
+  Lock,
+  LockOpen,
 } from 'lucide-react';
 import { cn } from '../../../lib/cn';
 
@@ -41,6 +44,8 @@ type Props = {
   chatOpen: boolean;
   canEndMeeting?: boolean;
   canRecord?: boolean;
+  canLock?: boolean;
+  meetingLocked?: boolean;
   shareDisabled?: boolean;
   shareDisabledReason?: string;
   onToggleMute: () => void;
@@ -51,6 +56,8 @@ type Props = {
   onToggleWhiteboard: () => void;
   onToggleParticipants: () => void;
   onToggleChat: () => void;
+  onOpenDevices?: () => void;
+  onToggleLock?: () => void;
   onSendReaction: (reaction: string) => void;
   onLeave: () => void;
   onEndCall: () => void;
@@ -108,7 +115,7 @@ export function ConferenceControlBar(props: Props) {
   const primaryMobile: ControlItem[] = [
     {
       id: 'mute',
-      label: 'Mic',
+      label: 'Microphone',
       icon: props.muted ? MicOff : Mic,
       active: props.muted,
       danger: props.muted,
@@ -124,7 +131,7 @@ export function ConferenceControlBar(props: Props) {
     },
     {
       id: 'share',
-      label: 'Screen',
+      label: 'Share screen',
       icon: MonitorUp,
       active: props.sharing,
       disabled: !props.sharing && props.shareDisabled,
@@ -149,7 +156,7 @@ export function ConferenceControlBar(props: Props) {
     },
     {
       id: 'hand',
-      label: 'Raise Hand',
+      label: 'Raise hand',
       icon: Hand,
       active: props.handRaised,
       onClick: props.onToggleHand,
@@ -170,10 +177,29 @@ export function ConferenceControlBar(props: Props) {
     },
   ];
 
+  if (props.onOpenDevices) {
+    moreItems.push({
+      id: 'devices',
+      label: 'Devices',
+      icon: Settings2,
+      onClick: props.onOpenDevices,
+    });
+  }
+
+  if (props.canLock && props.onToggleLock) {
+    moreItems.push({
+      id: 'lock',
+      label: props.meetingLocked ? 'Unlock meeting' : 'Lock meeting',
+      icon: props.meetingLocked ? LockOpen : Lock,
+      active: props.meetingLocked,
+      onClick: props.onToggleLock,
+    });
+  }
+
   if (props.canRecord) {
     moreItems.unshift({
       id: 'record',
-      label: props.recording ? 'Stop Rec' : 'Record',
+      label: props.recording ? 'Stop recording' : 'Record',
       icon: Circle,
       active: props.recording,
       recording: props.recording,
@@ -183,25 +209,26 @@ export function ConferenceControlBar(props: Props) {
   }
 
   // Desktop (lg+): every control visible; mobile keeps compact primary + More.
+  // Use the same labels as mobile so desktop/mobile naming stays consistent.
   const desktopPrimary: ControlItem[] = [
     ...primaryMobile,
     {
       id: 'people',
-      label: 'People',
+      label: 'Participants',
       icon: Users,
       active: props.participantsOpen,
       onClick: props.onToggleParticipants,
     },
     {
       id: 'hand',
-      label: 'Hand',
+      label: 'Raise hand',
       icon: Hand,
       active: props.handRaised,
       onClick: props.onToggleHand,
     },
     {
       id: 'whiteboard',
-      label: 'Board',
+      label: 'Whiteboard',
       icon: Pencil,
       active: props.whiteboardOpen,
       onClick: props.onToggleWhiteboard,
@@ -211,12 +238,31 @@ export function ConferenceControlBar(props: Props) {
   if (props.canRecord) {
     desktopPrimary.push({
       id: 'record',
-      label: props.recording ? 'Stop' : 'Record',
+      label: props.recording ? 'Stop recording' : 'Record',
       icon: Circle,
       active: props.recording,
       recording: props.recording,
       disabled: props.recordingBusy || !props.onToggleRecording,
       onClick: props.onToggleRecording,
+    });
+  }
+
+  if (props.onOpenDevices) {
+    desktopPrimary.push({
+      id: 'devices',
+      label: 'Devices',
+      icon: Settings2,
+      onClick: props.onOpenDevices,
+    });
+  }
+
+  if (props.canLock && props.onToggleLock) {
+    desktopPrimary.push({
+      id: 'lock',
+      label: props.meetingLocked ? 'Unlock' : 'Lock',
+      icon: props.meetingLocked ? LockOpen : Lock,
+      active: props.meetingLocked,
+      onClick: props.onToggleLock,
     });
   }
 
@@ -281,7 +327,7 @@ export function ConferenceControlBar(props: Props) {
         <LabeledControl
           item={{
             id: 'reactions',
-            label: 'React',
+            label: 'Reactions',
             icon: Smile,
             active: reactionsOpen,
             onClick: () => setReactionsOpen((v) => !v),

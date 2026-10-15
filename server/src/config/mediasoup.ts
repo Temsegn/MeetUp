@@ -183,8 +183,8 @@ export const mediasoupConfig = {
     enableTcp:  true,    // TCP fallback for firewalls that block UDP
     preferUdp:  true,    // UDP always preferred for lower latency
     enableSctp: false,   // SCTP/DataChannels not used — signaling via Socket.IO
-    initialAvailableOutgoingBitrate: 600_000,
-    minimumAvailableOutgoingBitrate: 100_000,
+    initialAvailableOutgoingBitrate: 1_500_000,
+    minimumAvailableOutgoingBitrate: 150_000,
     // maxSctpMessageSize intentionally omitted — SCTP is disabled
   } as WebRtcTransportOptions,
 
@@ -210,9 +210,9 @@ export const mediasoupConfig = {
    *  - These values are passed from client side in transport.produce({ encodings })
    */
   simulcastEncodings: [
-    { rid: 'r0', maxBitrate:  100_000, scaleResolutionDownBy: 4, maxFramerate: 15 }, // ~180p
-    { rid: 'r1', maxBitrate:  300_000, scaleResolutionDownBy: 2, maxFramerate: 20 }, // ~360p
-    { rid: 'r2', maxBitrate: 1_200_000, scaleResolutionDownBy: 1, maxFramerate: 30 }, // ~720p
+    { rid: 'r0', maxBitrate:  150_000, scaleResolutionDownBy: 4, maxFramerate: 15 }, // ~180p
+    { rid: 'r1', maxBitrate:  500_000, scaleResolutionDownBy: 2, maxFramerate: 24 }, // ~360p
+    { rid: 'r2', maxBitrate: 2_000_000, scaleResolutionDownBy: 1, maxFramerate: 30 }, // ~720p
   ],
 
   /**

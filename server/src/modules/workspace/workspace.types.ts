@@ -16,7 +16,7 @@ export function normalizeWorkspaceRole(role: string | undefined | null): Workspa
   return 'member';
 }
 
-/** Workspace prefs — applied to new meetings + workspace UI. Meeting toggles default OFF. */
+/** Workspace prefs — copied onto each new meeting at create. Meeting toggles default OFF. */
 export interface WorkspaceSettings {
   waitingRoom: boolean;
   autoRecord: boolean;
@@ -24,6 +24,10 @@ export interface WorkspaceSettings {
   muteOnEntry: boolean;
   maxMeetingDurationMinutes: number;
   language: string;
+  /** IANA time zone (e.g. Asia/Riyadh). */
+  timeZone: string;
+  dateFormat: string;
+  timeFormat: string;
 }
 
 export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
@@ -33,6 +37,9 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   muteOnEntry: false,
   maxMeetingDurationMinutes: 30,
   language: 'English',
+  timeZone: 'Asia/Riyadh',
+  dateFormat: 'DD/MM/YYYY',
+  timeFormat: '12-Hour (AM/PM)',
 };
 
 export interface WorkspaceRecord {

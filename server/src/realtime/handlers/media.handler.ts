@@ -199,8 +199,15 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
         }
       }
 
-      // Guests / waiting-room members need host admit — unless already admitted (or kicked).
-      const waitingRoomEnabled = Boolean(workspaceMeeting?.settings?.waitingRoom);
+      // Guests / waiting-room / join-before-host members need host admit — unless already admitted.
+      const hostInRoom = Boolean(
+        creatorId &&
+          mediaEngine.getPeersInRoom(roomId).some((p) => p.userId === creatorId),
+      );
+      const joinBeforeHost = Boolean(workspaceMeeting?.settings?.joinBeforeHost);
+      const waitingRoomEnabled =
+        Boolean(workspaceMeeting?.settings?.waitingRoom) ||
+        (!joinBeforeHost && !isHost && !hostInRoom);
       const meetingId = workspaceMeeting?._id ? String(workspaceMeeting._id) : '';
       const guestEmail = user.guestEmail || user.email || null;
 
@@ -214,6 +221,17 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
           isHost,
           waitingRoomEnabled,
         });
+        if (
+          workspaceMeeting?.settings?.locked &&
+          !isHost &&
+          decision.reason !== 'previously_admitted' &&
+          decision.reason !== 'host'
+        ) {
+          return callback({
+            error: 'This meeting is locked by the host.',
+            code: 'MEETING_LOCKED',
+          });
+        }
         if (!decision.allow && decision.code !== 'WAITING_REQUIRED') {
           return callback({ error: decision.reason, code: decision.code });
         }
@@ -422,6 +440,50 @@ export const registerMediaHandlers = (io: Server, socket: Socket) => {
       return callback?.({ error: 'Not in this room', code: 'NOT_IN_ROOM' });
     }
     callback?.({ waiting: listWaiting(roomId) });
+  });
+
+  socket.on('lock-meeting', async (payload: unknown, callback?: Callback) => {
+    const v = validatePayload(LeaveRoomSchema, payload);
+    if (!v.success) return callback && validationError(callback, v.error);
+    const { roomId } = v.data;
+    try {
+      const current = socket.data.currentRoom as { roomId: string } | undefined;
+      if (!current || current.roomId !== roomId) {
+        return callback?.({ error: 'Not in this room', code: 'NOT_IN_ROOM' });
+      }
+      const meeting = await meetingsService.findByRoomId(roomId);
+      const creatorId = meeting?.createdBy ? String(meeting.createdBy) : null;
+      if (!creatorId || creatorId !== user.userId) {
+        return callback?.({ error: 'Only the host can lock the meeting.', code: 'FORBIDDEN' });
+      }
+      await Meeting.updateOne({ roomId }, { $set: { 'settings.locked': true } });
+      io.to(roomId).emit('meeting-lock-changed', { roomId, locked: true });
+      callback?.({ success: true, locked: true });
+    } catch (err: unknown) {
+      callback?.({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  socket.on('unlock-meeting', async (payload: unknown, callback?: Callback) => {
+    const v = validatePayload(LeaveRoomSchema, payload);
+    if (!v.success) return callback && validationError(callback, v.error);
+    const { roomId } = v.data;
+    try {
+      const current = socket.data.currentRoom as { roomId: string } | undefined;
+      if (!current || current.roomId !== roomId) {
+        return callback?.({ error: 'Not in this room', code: 'NOT_IN_ROOM' });
+      }
+      const meeting = await meetingsService.findByRoomId(roomId);
+      const creatorId = meeting?.createdBy ? String(meeting.createdBy) : null;
+      if (!creatorId || creatorId !== user.userId) {
+        return callback?.({ error: 'Only the host can unlock the meeting.', code: 'FORBIDDEN' });
+      }
+      await Meeting.updateOne({ roomId }, { $set: { 'settings.locked': false } });
+      io.to(roomId).emit('meeting-lock-changed', { roomId, locked: false });
+      callback?.({ success: true, locked: false });
+    } catch (err: unknown) {
+      callback?.({ error: err instanceof Error ? err.message : String(err) });
+    }
   });
 
   // ────────────────────────────────────────────────────────────────────────────

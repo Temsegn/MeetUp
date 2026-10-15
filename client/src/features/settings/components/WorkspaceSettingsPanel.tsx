@@ -98,8 +98,8 @@ export function WorkspaceSettingsPanel({ onViewAllMembers, onInviteMembers }: Pr
   const [muteOnEntry, setMuteOnEntry] = useState(false);
   const [autoRecord, setAutoRecord] = useState(false);
   const [maxMinutes, setMaxMinutes] = useState('30 minutes');
-  const [timeZone, setTimeZone] = useState('(GMT+05:30) Asia/Kolkata');
-  const [dateFormat, setDateFormat] = useState('MM/DD/YYYY');
+  const [timeZone, setTimeZone] = useState('Asia/Riyadh');
+  const [dateFormat, setDateFormat] = useState('DD/MM/YYYY');
   const [timeFormat, setTimeFormat] = useState('12-Hour (AM/PM)');
   const [language, setLanguage] = useState('English');
 
@@ -132,6 +132,9 @@ export function WorkspaceSettingsPanel({ onViewAllMembers, onInviteMembers }: Pr
         setMuteOnEntry(Boolean(ws.settings.muteOnEntry));
         setMaxMinutes(`${ws.settings.maxMeetingDurationMinutes ?? 30} minutes`);
         setLanguage(ws.settings.language || 'English');
+        setTimeZone(ws.settings.timeZone || 'Asia/Riyadh');
+        setDateFormat(ws.settings.dateFormat || 'DD/MM/YYYY');
+        setTimeFormat(ws.settings.timeFormat || '12-Hour (AM/PM)');
         setMembers(memberRows);
       })
       .catch(() => {
@@ -226,6 +229,9 @@ export function WorkspaceSettingsPanel({ onViewAllMembers, onInviteMembers }: Pr
         muteOnEntry,
         maxMeetingDurationMinutes: Number.isFinite(parsed) ? parsed : 30,
         language,
+        timeZone,
+        dateFormat,
+        timeFormat,
       });
       setMessage('Workspace settings saved.');
     } catch (err) {
@@ -419,10 +425,12 @@ export function WorkspaceSettingsPanel({ onViewAllMembers, onInviteMembers }: Pr
                     onChange={setTimeZone}
                     disabled={!canEdit}
                     options={[
-                      '(GMT+05:30) Asia/Kolkata',
-                      '(GMT+03:00) Asia/Riyadh',
-                      '(GMT+00:00) UTC',
-                      '(GMT-05:00) America/New_York',
+                      'Asia/Riyadh',
+                      'Asia/Kolkata',
+                      'UTC',
+                      'America/New_York',
+                      'Europe/London',
+                      'Africa/Addis_Ababa',
                     ]}
                   />
                   <SelectRow
@@ -506,7 +514,7 @@ export function WorkspaceSettingsPanel({ onViewAllMembers, onInviteMembers }: Pr
                       {
                         key: 'record' as const,
                         title: 'Auto Record Meetings',
-                        desc: 'Automatically record all meetings',
+                        desc: 'When on, new meetings start recording as the host joins. The host can still stop or restart in that call without changing this setting.',
                         value: autoRecord,
                         set: setAutoRecord,
                       },

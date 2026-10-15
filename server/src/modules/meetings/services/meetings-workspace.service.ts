@@ -568,6 +568,8 @@ export async function getMeetingStats(
 
   return {
     total,
+    /** Meetings created in the last 30 days (matches Reports default window). */
+    periodTotal: meetingsCurrent,
     live,
     ended,
     upcoming,
@@ -599,17 +601,21 @@ export async function createWorkspaceMeeting(opts: CreateMeetingOptions) {
   const duration =
     opts.duration ??
     undefined;
-  if (duration !== undefined && (!Number.isFinite(duration) || duration < 1 || duration > 480)) {
-    throw new ValidationError('duration must be between 1 and 480 minutes.');
-  }
-
-  const timezoneRaw = (opts.timezone || 'UTC').trim();
-  if (!isValidIanaTimezone(timezoneRaw)) {
-    throw new ValidationError('timezone must be a valid IANA time zone.');
+  if (duration !== undefined && (!Number.isFinite(duration) || duration < 1 || duration > 1440)) {
+    throw new ValidationError('duration must be between 1 and 1440 minutes (24 hours).');
   }
 
   const workspace = await workspaceRepository.findById(opts.workspaceId);
   const wsSettings = workspace?.settings;
+  const timezoneRaw = (
+    opts.timezone ||
+    wsSettings?.timeZone ||
+    'Asia/Riyadh'
+  ).trim();
+  if (!isValidIanaTimezone(timezoneRaw)) {
+    throw new ValidationError('timezone must be a valid IANA time zone.');
+  }
+
   const inherited = {
     waitingRoom: wsSettings?.waitingRoom ?? false,
     autoRecord: wsSettings?.autoRecord ?? false,
@@ -830,8 +836,8 @@ export async function patchMeeting(
     m.scheduledAt = d;
   }
   if (patch.duration !== undefined) {
-    if (!Number.isFinite(patch.duration) || patch.duration < 1 || patch.duration > 480) {
-      throw new ValidationError('duration must be between 1 and 480 minutes.');
+    if (!Number.isFinite(patch.duration) || patch.duration < 1 || patch.duration > 1440) {
+      throw new ValidationError('duration must be between 1 and 1440 minutes (24 hours).');
     }
     m.duration = patch.duration;
   }

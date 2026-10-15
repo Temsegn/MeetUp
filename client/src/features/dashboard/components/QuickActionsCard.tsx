@@ -1,4 +1,5 @@
 import { CalendarPlus, CloudUpload, LogIn, MonitorUp } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { cn } from '../../../lib/cn';
 import { QuickActionSkeleton } from './DashboardSkeletons';
 import {
@@ -12,26 +13,30 @@ const ACTIONS = [
     label: 'Schedule Meeting',
     bg: 'bg-[#E8F1FE]',
     text: 'text-[#1A56DB]',
+    to: '/app/meetings?create=schedule',
   },
   {
     icon: LogIn,
     label: 'Join with ID',
     bg: 'bg-[#E3F8EC]',
     text: 'text-[#0F7A4A]',
+    to: '/app/meetings?join=1',
   },
   {
     icon: MonitorUp,
     label: 'Share Screen',
     bg: 'bg-[#EEE9FF]',
     text: 'text-[#6B3FA0]',
+    to: '/app/meetings?create=instant',
   },
   {
     icon: CloudUpload,
     label: 'Upload Recording',
     bg: 'bg-[#FFE8D6]',
     text: 'text-[#C2410C]',
+    to: '/app/recordings',
   },
-];
+] as const;
 
 export function QuickActionsCard({
   className,
@@ -40,6 +45,8 @@ export function QuickActionsCard({
   className?: string;
   loading?: boolean;
 }) {
+  const navigate = useNavigate();
+
   return (
     <div
       className={cn(
@@ -63,6 +70,7 @@ export function QuickActionsCard({
               <button
                 key={a.label}
                 type="button"
+                onClick={() => navigate(a.to)}
                 className={cn(
                   a.bg,
                   a.text,

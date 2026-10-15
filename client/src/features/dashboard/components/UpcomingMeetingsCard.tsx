@@ -7,6 +7,7 @@ import { UserAvatar } from '../../../components/ui/UserAvatar';
 import { useAuth } from '../../../contexts/AuthContext';
 import { meetingsService, type Meeting } from '../../../services/meetings/meetings.service';
 import { useMeetings } from '../../meetings/hooks/useMeetings';
+import { useLiveMeetingPresence } from '../../meeting/lib/live-meeting-presence';
 import { MeetingRowSkeleton } from './DashboardSkeletons';
 import {
   DASHBOARD_CARD_RADIUS_CLASS,
@@ -46,13 +47,16 @@ export function UpcomingMeetingsCard() {
     return role === 'admin';
   };
 
+  const inLiveMeeting = useLiveMeetingPresence();
+
   useEffect(() => {
+    if (inLiveMeeting) return;
     const id = window.setInterval(() => {
       setNow(Date.now());
       void reload();
     }, 20_000);
     return () => window.clearInterval(id);
-  }, [reload]);
+  }, [reload, inLiveMeeting]);
 
   const rows = useMemo(() => {
     const live = meetings

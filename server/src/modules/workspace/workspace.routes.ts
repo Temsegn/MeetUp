@@ -70,6 +70,9 @@ router.patch('/:id/settings', requireWorkspace('admin'), async (req: AuthRequest
     muteOnEntry?: boolean;
     maxMeetingDurationMinutes?: number;
     language?: string;
+    timeZone?: string;
+    dateFormat?: string;
+    timeFormat?: string;
   };
   const ws = await workspaceService.updateSettings(req.workspaceId!, req.workspaceRole!, body);
   res.json(ws);

@@ -55,10 +55,17 @@ const empty = {
 export const useRemoteControlStore = create<RemoteControlState>((set) => ({
   ...empty,
   setIncoming: (incoming) =>
-    set({
+    set((s) => ({
       incoming,
-      role: incoming ? 'incoming-pending' : 'idle',
-    }),
+      // Clearing the request modal must not wipe an active session role.
+      role: incoming
+        ? 'incoming-pending'
+        : s.session?.role === 'controlling'
+          ? 'controlling'
+          : s.session?.role === 'controlled'
+            ? 'controlled'
+            : 'idle',
+    })),
   setOutgoing: (outgoingTargetId, outgoingStatus) =>
     set({
       outgoingTargetId,

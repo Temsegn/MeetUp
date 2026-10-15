@@ -4,6 +4,10 @@ services:
       context: ./server
       dockerfile: Dockerfile
     restart: unless-stopped
+    # Public DNS — helps if anything still resolves external hosts (SMTP, etc.)
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     env_file:
       - ./server/.env
     environment:
@@ -15,10 +19,11 @@ services:
       MEDIASOUP_MIN_PORT: "40000"
       MEDIASOUP_MAX_PORT: "40199"
       MEDIASOUP_LISTEN_IP: 0.0.0.0
-      # MEDIASOUP_ANNOUNCED_IP comes from server/.env / root .env — do not default to 127.0.0.1
+      # MEDIASOUP_ANNOUNCED_IP must come from server/.env (public VPS IP), not 127.0.0.1
       FRONTEND_URL: ${FRONTEND_URL:-https://meet.samtal.cc:8981}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://meet.samtal.cc:8981,http://46.246.120.148:8980,http://localhost,http://localhost:5173}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-https://meet.samtal.cc:8981/auth/google/callback}
+      # Force compose Mongo (overrides Atlas URI in server/.env — avoids Atlas IP whitelist 502s)
       MONGODB_URI: mongodb://mongo:27017/meetspace
     ports:
       - "40000-40199:40000-40199/udp"
@@ -33,11 +38,11 @@ services:
         - CMD
         - node
         - -e
-        - "fetch('http://127.0.0.1:4001/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+        - "fetch('http://127.0.0.1:4001/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 20s
+      timeout: 5s
+      retries: 8
+      start_period: 90s
 
   client:
     build:
@@ -49,9 +54,12 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:80"
+    volumes:
+      # Live nginx config — re-resolves `server` so brief API restarts do not 502 forever
+      - ./client/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    # Do not wait for healthy server — SPA must stay up while API is still booting
     depends_on:
-      server:
-        condition: service_healthy
+      - server
 
   mongo:
     image: mongo:8.0

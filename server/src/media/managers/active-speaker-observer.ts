@@ -35,8 +35,8 @@ import { logger } from '../../infrastructure/logging/logger';
  *   High (above 700k)          → full spatial layer 2 (720p)
  */
 
-const LOW_BW_BPS = 300_000;   // below this → layer 0
-const MED_BW_BPS = 700_000;   // below this → layer 1, above → layer 2
+const LOW_BW_BPS = 300_000;     // below this → layer 0
+const MED_BW_BPS = 1_200_000;   // below this → layer 1, above → layer 2
 
 export class ActiveSpeakerManager {
   private io?: SocketIOServer;

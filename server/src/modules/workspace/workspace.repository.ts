@@ -145,6 +145,9 @@ export const workspaceRepository = {
       $set['settings.maxMeetingDurationMinutes'] = settings.maxMeetingDurationMinutes;
     }
     if (settings.language !== undefined) $set['settings.language'] = settings.language;
+    if (settings.timeZone !== undefined) $set['settings.timeZone'] = settings.timeZone;
+    if (settings.dateFormat !== undefined) $set['settings.dateFormat'] = settings.dateFormat;
+    if (settings.timeFormat !== undefined) $set['settings.timeFormat'] = settings.timeFormat;
     if (Object.keys($set).length === 0) return this.findById(id);
     const doc = await Workspace.findByIdAndUpdate(id, { $set }, { new: true }).lean();
     return doc ? toWorkspace(doc) : null;

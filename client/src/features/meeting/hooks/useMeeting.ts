@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
-import { createSocketClient } from '../../../services/socket/socket-client';
+import { createSocketClient, destroySocketClient } from '../../../services/socket/socket-client';
+import { setLiveMeetingPresence } from '../lib/live-meeting-presence';
 import { MediaSession } from '../../media/mediasoup/media-session';
 import {
   AUTO_RECOVERY_MAX_ATTEMPTS,
@@ -159,6 +160,7 @@ export const useMeeting = (
     autoAttemptRef.current = 0;
     clearAutoRetryTimer();
     clearReconnectDeadline();
+    setLiveMeetingPresence(false);
 
     const sock = socketRef.current;
     if (sock) {
@@ -166,9 +168,6 @@ export const useMeeting = (
       sock.io.off('reconnect_attempt');
       sock.io.off('reconnect_failed');
       sock.off('disconnect');
-      try {
-        sock.disconnect();
-      } catch { /* ignore */ }
     }
     if (sessionRef.current) {
       try {
@@ -176,6 +175,7 @@ export const useMeeting = (
       } catch { /* ignore */ }
       sessionRef.current = null;
     }
+    destroySocketClient(sock);
     socketRef.current = null;
     setSocket(null);
     setJoined(false);
@@ -215,19 +215,30 @@ export const useMeeting = (
     autoAttemptRef.current = 0;
     clearAutoRetryTimer();
     clearReconnectDeadline();
+    setLiveMeetingPresence(false);
+
     const sock = socketRef.current;
     if (sock) {
       sock.io.off('reconnect');
       sock.io.off('reconnect_attempt');
       sock.io.off('reconnect_failed');
       sock.off('disconnect');
-      sock.emit('leave-room', { roomId });
+      try {
+        // Fire-and-forget leave so we don't hang on a pending ack.
+        sock.emit('leave-room', { roomId });
+      } catch { /* ignore */ }
     }
+
     const session = sessionRef.current;
     if (session) {
-      await session.cleanup();
+      try {
+        await session.softCleanup();
+      } catch { /* ignore */ }
       sessionRef.current = null;
     }
+
+    // Hard teardown — stops Engine.IO reconnect / pending polls.
+    destroySocketClient(sock);
     socketRef.current = null;
     setSocket(null);
     setJoined(false);
@@ -316,6 +327,7 @@ export const useMeeting = (
       clearReconnectDeadline();
       setNeedsRejoinScreen(false);
       intentionalLeaveRef.current = false;
+      setLiveMeetingPresence(true);
 
       sock.emit('get-recording-status', { roomId }, (res: any) => {
         if (res && !res.error) setIsRecording(!!res.recording);
@@ -526,6 +538,7 @@ export const useMeeting = (
 
       const authToken = tokenOverride || token;
       if (!authToken) throw new Error('Not signed in');
+      // createSocketClient destroys any prior meeting socket (single-socket rule).
       const sock = createSocketClient(authToken);
       socketRef.current = sock;
 

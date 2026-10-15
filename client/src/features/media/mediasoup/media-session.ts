@@ -232,15 +232,17 @@ export class MediaSession {
       encodings = this.screenShareEncodings;
     } else if (simulcast && track.kind === 'video') {
       encodings = this.simulcastEncodings ?? [
-        { rid: 'r0', maxBitrate: 100_000, scaleResolutionDownBy: 4 },
-        { rid: 'r1', maxBitrate: 300_000, scaleResolutionDownBy: 2 },
-        { rid: 'r2', maxBitrate: 900_000, scaleResolutionDownBy: 1 },
+        { rid: 'r0', maxBitrate: 150_000, scaleResolutionDownBy: 4, maxFramerate: 15 },
+        { rid: 'r1', maxBitrate: 500_000, scaleResolutionDownBy: 2, maxFramerate: 24 },
+        { rid: 'r2', maxBitrate: 2_000_000, scaleResolutionDownBy: 1, maxFramerate: 30 },
       ];
     }
 
     const producer = await this.sendTransport.produce({
       track,
       encodings: encodings as any,
+      // Keep getUserMedia tracks alive across softCleanup / reconnect.
+      stopTracks: false,
       codecOptions: track.kind === 'audio' ? { opusStereo: true, opusDtx: true } : undefined,
       appData: { source },
     });
@@ -393,6 +395,15 @@ export class MediaSession {
     return this.getProducers().filter((p) => (p.appData as any)?.source === source);
   }
 
+  /** Swap the track on an existing producer (device switch) without re-negotiate. */
+  public async replaceProducerTrack(source: MediaSource, track: MediaStreamTrack): Promise<void> {
+    const producers = this.getProducersBySource(source);
+    for (const producer of producers) {
+      if (producer.closed) continue;
+      await producer.replaceTrack({ track });
+    }
+  }
+
   // ── Consumer controls ──────────────────────────────────────────────────────
 
   public closeConsumerById(consumerId: string): void {
@@ -456,9 +467,7 @@ export class MediaSession {
     try {
       this.socket.emit('leave-room', { roomId: this.roomId });
     } catch { /* best-effort */ }
-    try {
-      this.socket.disconnect();
-    } catch { /* best-effort */ }
+    // Caller (leaveMeeting) owns hard socket destroy via destroySocketClient.
   }
 
   private _emitAck(event: string, payload: object): Promise<void> {

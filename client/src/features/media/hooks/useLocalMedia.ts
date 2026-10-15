@@ -19,13 +19,41 @@ export const useLocalMedia = () => {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio, video });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: audio
+          ? {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            }
+          : false,
+        video: video
+          ? {
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 30 },
+              facingMode: 'user',
+            }
+          : false,
+      });
       localStreamRef.current = stream;
       setLocalStream(stream);
       return stream;
     } catch (err: unknown) {
       if (video) {
         try {
+          // Retry once with simpler video constraints before audio-only fallback.
+          try {
+            const retry = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+              video: { width: { ideal: 640 }, height: { ideal: 360 } },
+            });
+            localStreamRef.current = retry;
+            setLocalStream(retry);
+            return retry;
+          } catch {
+            /* fall through to audio-only */
+          }
           const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
           localStreamRef.current = audioOnly;
           setLocalStream(audioOnly);

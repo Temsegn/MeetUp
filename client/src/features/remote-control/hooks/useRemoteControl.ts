@@ -209,8 +209,14 @@ export function useRemoteControl({
       if (!socket || !incoming) return;
       try {
         await remoteControlService.respond(socket, incoming.sessionId, accept);
-        setIncoming(null);
-        if (!accept) reset();
+        // Keep incoming until STARTED arrives when accepting — clearing first
+        // used to race and leave the controller with a dead session role.
+        if (!accept) {
+          setIncoming(null);
+          reset();
+        } else {
+          setIncoming(null);
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Could not respond';
         setError(message);

@@ -59,7 +59,13 @@ export interface Meeting {
   participants?: number;
   registeredParticipantCount?: number;
   participantList?: MeetingParticipant[];
-  settings: { waitingRoom: boolean; autoRecord: boolean };
+  settings: {
+    waitingRoom: boolean;
+    autoRecord: boolean;
+    joinBeforeHost?: boolean;
+    muteOnEntry?: boolean;
+    locked?: boolean;
+  };
   guestEmails?: string[];
   joinUrl?: string;
   googleCalendarUrl?: string | null;
@@ -70,6 +76,8 @@ export interface Meeting {
 
 export interface MeetingStats {
   total: number;
+  /** Meetings created in the last 30 days (aligned with Reports). */
+  periodTotal?: number;
   live: number;
   ended: number;
   upcoming: number;

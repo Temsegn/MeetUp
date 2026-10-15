@@ -32,6 +32,8 @@ export interface EmailMessage {
   attachments?: EmailAttachment[];
   /** Nodemailer calendar MIME part (text/calendar; method=…). */
   icalEvent?: EmailIcalEvent;
+  /** Prefer no-reply so invitation replies do not bounce into a monitored inbox. */
+  replyTo?: string;
 }
 
 export class EmailDeliveryError extends Error {
@@ -88,6 +90,7 @@ export const emailService = {
       const info = await t.sendMail({
         from: env.EMAIL_FROM,
         to: message.to,
+        replyTo: message.replyTo ?? 'no-reply@samtal.cc',
         subject: message.subject,
         text: message.text,
         html: message.html,

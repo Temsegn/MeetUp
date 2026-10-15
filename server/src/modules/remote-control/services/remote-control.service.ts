@@ -54,6 +54,29 @@ export function createRemoteControlService(deps: RemoteControlServiceDeps) {
     deps.onAudit?.(full);
   }
 
+  /** Keep socketIds fresh so actions still reach peers after soft-reconnect. */
+  function refreshPeerSockets(session: RemoteControlSession): void {
+    const requester = deps.presence.getPeer(session.roomId, session.requester.participantId);
+    const controlled = deps.presence.getPeer(session.roomId, session.controlled.participantId);
+    if (requester?.socketId) session.requester.socketId = requester.socketId;
+    if (controlled?.socketId) session.controlled.socketId = controlled.socketId;
+  }
+
+  function emitToSessionPeer(
+    session: RemoteControlSession,
+    which: 'requester' | 'controlled' | 'both',
+    event: string,
+    payload: unknown,
+  ): void {
+    refreshPeerSockets(session);
+    if (which === 'requester' || which === 'both') {
+      deps.transport.emitToSocket(session.requester.socketId, event, payload);
+    }
+    if (which === 'controlled' || which === 'both') {
+      deps.transport.emitToSocket(session.controlled.socketId, event, payload);
+    }
+  }
+
   function pushHistory(session: RemoteControlSession, event: Omit<RemoteControlHistoryEvent, 'id' | 'at' | 'sessionId' | 'roomId' | 'controllerId' | 'controllerName' | 'controlledUserId' | 'controlledName'>): void {
     const entry: RemoteControlHistoryEvent = {
       id: randomId(),
@@ -70,8 +93,7 @@ export function createRemoteControlService(deps: RemoteControlServiceDeps) {
     list.push(entry);
     if (list.length > HISTORY_LIMIT) list.splice(0, list.length - HISTORY_LIMIT);
     history.set(session.sessionId, list);
-    deps.transport.emitToSocket(session.requester.socketId, 'remote-control:history', entry);
-    deps.transport.emitToSocket(session.controlled.socketId, 'remote-control:history', entry);
+    emitToSessionPeer(session, 'both', 'remote-control:history', entry);
   }
 
   function overRate(key: string, limit: number, windowMs: number): boolean {
@@ -150,10 +172,8 @@ export function createRemoteControlService(deps: RemoteControlServiceDeps) {
       requesterId: session.requester.participantId,
       controlledUserId: session.controlled.participantId,
     };
-    deps.transport.emitToSocket(session.requester.socketId, event, payload);
-    deps.transport.emitToSocket(session.controlled.socketId, event, payload);
-    deps.transport.emitToSocket(session.requester.socketId, 'remote-control:ended', payload);
-    deps.transport.emitToSocket(session.controlled.socketId, 'remote-control:ended', payload);
+    emitToSessionPeer(session, 'both', event, payload);
+    emitToSessionPeer(session, 'both', 'remote-control:ended', payload);
 
     audit({
       action: 'RC_SESSION_ENDED',
@@ -303,8 +323,7 @@ export function createRemoteControlService(deps: RemoteControlServiceDeps) {
         permissions: session.permissions,
         timestamp: now(),
       };
-      deps.transport.emitToSocket(session.requester.socketId, 'remote-control:started', started);
-      deps.transport.emitToSocket(session.controlled.socketId, 'remote-control:started', started);
+      emitToSessionPeer(session, 'both', 'remote-control:started', started);
       audit({
         action: 'RC_REQUEST_ACCEPTED',
         sessionId: session.sessionId,
@@ -409,7 +428,7 @@ export function createRemoteControlService(deps: RemoteControlServiceDeps) {
         },
       };
 
-      deps.transport.emitToSocket(session.controlled.socketId, 'remote-control:action', envelope);
+      emitToSessionPeer(session, 'controlled', 'remote-control:action', envelope);
       audit({
         action: 'RC_COMMAND_FORWARDED',
         sessionId: session.sessionId,
@@ -480,9 +499,8 @@ export function createRemoteControlService(deps: RemoteControlServiceDeps) {
       if (overRate(`cursor:${session.sessionId}`, CURSOR_RATE_LIMIT, ACTION_RATE_WINDOW_MS)) {
         return;
       }
-      const target = isRequester ? session.controlled.socketId : session.requester.socketId;
       const name = isRequester ? session.requester.name : session.controlled.name;
-      deps.transport.emitToSocket(target, 'remote-control:cursor', {
+      emitToSessionPeer(session, isRequester ? 'controlled' : 'requester', 'remote-control:cursor', {
         type: 'REMOTE_CONTROL_CURSOR',
         sessionId: session.sessionId,
         x: input.x,
@@ -512,7 +530,7 @@ export function createRemoteControlService(deps: RemoteControlServiceDeps) {
       if (overRate(`ui:${session.sessionId}`, UI_STATE_RATE_LIMIT, ACTION_RATE_WINDOW_MS)) {
         return;
       }
-      deps.transport.emitToSocket(session.requester.socketId, 'remote-control:ui-state', {
+      emitToSessionPeer(session, 'requester', 'remote-control:ui-state', {
         type: 'REMOTE_CONTROL_UI_STATE',
         sessionId: session.sessionId,
         state: input.state,
@@ -538,7 +556,7 @@ export function createRemoteControlService(deps: RemoteControlServiceDeps) {
       if (overRate(`draft:${session.sessionId}`, DRAFT_RATE_LIMIT, ACTION_RATE_WINDOW_MS)) {
         return;
       }
-      deps.transport.emitToSocket(session.controlled.socketId, 'remote-control:draft', {
+      emitToSessionPeer(session, 'controlled', 'remote-control:draft', {
         type: 'REMOTE_CONTROL_DRAFT',
         sessionId: session.sessionId,
         chatDraft: input.chatDraft,
@@ -590,7 +608,7 @@ export function createRemoteControlService(deps: RemoteControlServiceDeps) {
       ) {
         throw new RemoteControlError('Only the controller can request a UI snapshot.', 'FORBIDDEN', 403);
       }
-      deps.transport.emitToSocket(session.controlled.socketId, 'remote-control:sync', {
+      emitToSessionPeer(session, 'controlled', 'remote-control:sync', {
         type: 'REMOTE_CONTROL_UI_STATE',
         sessionId: session.sessionId,
       });
