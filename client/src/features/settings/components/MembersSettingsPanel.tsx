@@ -115,32 +115,12 @@ export function MembersSettingsPanel({ onInviteMembers }: { onInviteMembers: () 
     setLoading(true);
     setError(null);
     try {
+      const memberRows = await workspaceService.listMembers(activeWorkspace.workspaceId);
+      setMembers(Array.isArray(memberRows) ? memberRows : []);
       if (canManage) {
-        const [memberRows, inviteRows] = await Promise.all([
-          workspaceService.listMembers(activeWorkspace.workspaceId),
-          workspaceService.listInvites(activeWorkspace.workspaceId),
-        ]);
-        setMembers(memberRows);
-        setInvites(inviteRows);
+        const inviteRows = await workspaceService.listInvites(activeWorkspace.workspaceId).catch(() => []);
+        setInvites(Array.isArray(inviteRows) ? inviteRows : []);
       } else {
-        const directory = await workspaceService.listDirectory(activeWorkspace.workspaceId);
-        setMembers(
-          directory.map((d) => ({
-            id: d.userId,
-            workspaceId: activeWorkspace.workspaceId,
-            userId: d.userId,
-            role: d.role,
-            status: 'active',
-            name: d.name,
-            email: d.email,
-            phone: d.phone,
-            avatarUrl: d.avatarUrl,
-            avatarColor: d.avatarColor,
-            jobTitle: d.jobTitle,
-            department: d.department,
-            createdAt: new Date().toISOString(),
-          })),
-        );
         setInvites([]);
       }
     } catch (err) {
@@ -201,9 +181,12 @@ export function MembersSettingsPanel({ onInviteMembers }: { onInviteMembers: () 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((row) => {
-      if (roleFilter !== 'All Roles' && row.role !== roleFilter.toLowerCase()) return false;
+      const name = String(row.name || '');
+      const email = String(row.email || '');
+      const role = String(row.role || '');
+      if (roleFilter !== 'All Roles' && role !== roleFilter.toLowerCase()) return false;
       if (!q) return true;
-      return row.name.toLowerCase().includes(q) || row.email.toLowerCase().includes(q);
+      return name.toLowerCase().includes(q) || email.toLowerCase().includes(q);
     });
   }, [rows, query, roleFilter]);
 
@@ -235,9 +218,8 @@ export function MembersSettingsPanel({ onInviteMembers }: { onInviteMembers: () 
     }
   };
 
-  const openView = (member: WorkspaceMember) => {
+  const openView = () => {
     setMenuKey(null);
-    navigate(`/app/settings/members/${member.userId}`);
   };
 
   const openEdit = (member: WorkspaceMember) => {
@@ -565,7 +547,7 @@ export function MembersSettingsPanel({ onInviteMembers }: { onInviteMembers: () 
                                   type="button"
                                   role="menuitem"
                                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-[#151D2B] hover:bg-[#F8FAFC]"
-                                  onClick={() => openView(row.member)}
+                                  onClick={openView}
                                 >
                                   <Eye size={14} className="text-[#016BE6]" />
                                   View

@@ -187,7 +187,7 @@ export function AppSidebar({
                   'relative flex items-center rounded-[10px] transition-colors',
                   collapsed ? 'size-9 justify-center' : 'min-h-9 w-full gap-2 px-2.5 py-2',
                   active
-                    ? 'bg-black/20 text-white'
+                    ? 'bg-white/20 text-white'
                     : 'text-white/80 hover:bg-white/10 hover:text-white',
                 )}
               >
@@ -218,7 +218,7 @@ export function AppSidebar({
                   'relative flex items-center rounded-[10px] transition-colors',
                   collapsed ? 'size-9 justify-center' : 'min-h-9 w-full gap-2 px-2.5 py-2',
                   navItemActive(pathname, item, isActive)
-                    ? 'bg-black/20 text-white'
+                    ? 'bg-white/20 text-white'
                     : 'text-white/80 hover:bg-white/10 hover:text-white',
                 )
               }
@@ -250,7 +250,7 @@ export function AppSidebar({
                 'flex w-full items-center rounded-[10px] transition-colors',
                 collapsed ? 'mx-auto size-9 justify-center' : 'min-h-9 gap-2 px-2.5 py-2',
                 pathname.startsWith('/admin') || adminOpen
-                  ? 'bg-black/20 text-white'
+                  ? 'bg-white/20 text-white'
                   : 'text-white/80 hover:bg-white/10 hover:text-white',
               )}
             >

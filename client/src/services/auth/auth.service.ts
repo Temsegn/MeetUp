@@ -254,6 +254,13 @@ export async function apiFetch<T>(path: string, opts: FetchOptions = {}, allowRe
   // No bearer was sent: do not POST /auth/refresh. That call has no cookie on
   // this deployment and only logs SESSION_MISSING every poll.
   if (res.status === 401 && auth && allowRetry && sentToken) {
+    const peek = await res.clone().json().catch(() => ({}));
+    const code = (peek as { code?: string }).code;
+    // A forbidden members request must not wipe the session and dump the user on login.
+    if (code === 'FORBIDDEN' || code === 'NOT_WORKSPACE_MEMBER') {
+      const message = (peek as { error?: string }).error ?? 'Request failed.';
+      throw new ApiError(message, 403, code);
+    }
     const refreshed = await refreshSession();
     if (refreshed) return apiFetch<T>(path, opts, false);
     notifySessionExpired();

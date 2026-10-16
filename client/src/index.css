@@ -67,7 +67,7 @@
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 * {
@@ -80,8 +80,8 @@ body {
   min-height: 100vh;
   min-height: 100svh;
   min-height: 100dvh;
-  background-color: var(--color-background);
-  color: var(--color-foreground);
+  background-color: #ffffff;
+  color: var(--color-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

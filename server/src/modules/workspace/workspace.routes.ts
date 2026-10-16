@@ -78,7 +78,7 @@ router.patch('/:id/settings', requireWorkspace('admin'), async (req: AuthRequest
   res.json(ws);
 });
 
-router.get('/:id/members', requireWorkspace('admin'), async (req: AuthRequest, res) => {
+router.get('/:id/members', requireWorkspace('member'), async (req: AuthRequest, res) => {
   const members = await workspaceService.listMembers(req.workspaceId!);
   res.json({ members });
 });

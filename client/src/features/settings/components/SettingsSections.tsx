@@ -211,7 +211,7 @@ export function AccountSection({ settings }: Common) {
       label: 'Meeting Capacity',
       value: `${settings.account.meetingCapacity} participants`,
       action: 'Manage',
-      onAction: () => navigate('/app/settings/workspace'),
+      onAction: () => navigate('/app/settings/members'),
     },
     {
       label: 'Your Role',
