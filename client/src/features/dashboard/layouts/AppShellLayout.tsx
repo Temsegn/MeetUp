@@ -6,7 +6,6 @@ import { cn } from '../../../lib/cn';
 import { useAppPresence } from '../../messages/hooks/useAppPresence';
 import { useAuth } from '../../../contexts/AuthContext';
 import { LiveMeetingShellProvider } from './LiveMeetingShellContext';
-import { RouteErrorBoundary } from '../../../components/RouteErrorBoundary';
 import { applyWorkspaceLanguage } from '../../../lib/workspaceLocale';
 
 export function AppShellLayout() {
@@ -168,9 +167,7 @@ export function AppShellLayout() {
             )}
           >
             <div className={cn(lockViewport && 'h-full min-h-0')}>
-              <RouteErrorBoundary resetKey={pathname}>
-                <Outlet />
-              </RouteErrorBoundary>
+              <Outlet />
             </div>
           </main>
         </div>

@@ -108,7 +108,7 @@ export function MembersSettingsPanel({ onInviteMembers }: { onInviteMembers: () 
   const [editInviteRole, setEditInviteRole] = useState<'admin' | 'member'>('member');
 
   const canManage = activeWorkspace?.role === 'admin';
-  const isOwner = activeWorkspace?.role === 'owner';
+  const isAdmin = canManage;
 
   const reload = useCallback(async () => {
     if (!activeWorkspace?.workspaceId) return;
@@ -218,8 +218,9 @@ export function MembersSettingsPanel({ onInviteMembers }: { onInviteMembers: () 
     }
   };
 
-  const openView = () => {
+  const openView = (member: WorkspaceMember) => {
     setMenuKey(null);
+    navigate(`/app/settings/members/${member.userId}`);
   };
 
   const openEdit = (member: WorkspaceMember) => {
@@ -547,7 +548,7 @@ export function MembersSettingsPanel({ onInviteMembers }: { onInviteMembers: () 
                                   type="button"
                                   role="menuitem"
                                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-[#151D2B] hover:bg-[#F8FAFC]"
-                                  onClick={openView}
+                                  onClick={() => openView(row.member)}
                                 >
                                   <Eye size={14} className="text-[#016BE6]" />
                                   View
