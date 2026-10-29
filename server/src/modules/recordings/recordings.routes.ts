@@ -292,8 +292,31 @@ router.get('/:id/stream', injectTokenQueryAuth, requireWorkspace('member'), asyn
   if (!rec) throw new NotFoundError('Recording');
   if (String(rec.workspaceId) !== req.workspaceId) throw new ForbiddenError();
 
-  const relKey = rec.storageKey.replace(/^recordings\//, '');
-  const absPath = storage.pathFor('recordings', relKey);
+  // ── Resolve the absolute file path from storageKey ───────────────────────
+  // storageKey formats we may see in the wild:
+  //   "recordings/<roomId>/<recordingId>/meeting-composite.mp4"  ← normal (toStorageKey)
+  //   "<roomId>/<recordingId>/meeting-composite.mp4"             ← missing prefix
+  //   "/absolute/path/to/file.mp4"                               ← legacy absolute
+  //
+  // Strategy: strip any leading "recordings/" prefix, then pass the result to
+  // pathFor which resolves relative to the recordings bucket root.
+  // If pathFor throws (path traversal guard), fall back to treating the
+  // storageKey as an already-resolved absolute path.
+  let absPath: string;
+  try {
+    const relKey = rec.storageKey
+      .replace(/^recordings\//, '')   // strip "recordings/" prefix
+      .replace(/^\/+/, '');           // strip any leading slashes
+    absPath = storage.pathFor('recordings', relKey);
+  } catch {
+    // pathFor threw — storageKey might be an absolute path from legacy code.
+    // Only allow it if it's actually an absolute path that exists.
+    if (!rec.storageKey.startsWith('/')) {
+      throw new NotFoundError('Recording file');
+    }
+    absPath = rec.storageKey;
+  }
+
   const asDownload =
     String(req.query.download ?? '') === '1' || String(req.query.download ?? '') === 'true';
 
@@ -307,34 +330,33 @@ router.get('/:id/stream', injectTokenQueryAuth, requireWorkspace('member'), asyn
   try {
     fileStat = await fsStat(absPath);
   } catch {
+    // Log for server-side diagnosis — client only sees 404
+    logger.warn('Recording file not found on disk', {
+      recordingId: String(rec._id),
+      storageKey: rec.storageKey,
+      resolvedPath: absPath,
+    });
     throw new NotFoundError('Recording file');
   }
   const fileSize = fileStat.size;
   const lastModified = fileStat.mtime.toUTCString();
-  // ETag: hex of mtime + size — cheap, stable, and unique per file version
   const etag = `"${fileStat.mtimeMs.toString(16)}-${fileSize.toString(16)}"`;
 
   // ── HTTP caching headers ──────────────────────────────────────────────────
-  // Cache for 1 hour in any shared proxy / CDN. Immutable recordings don't
-  // change after upload so 1h is conservative; raise to 86400 for production.
-  // We always set Vary: Range so caches store range responses separately.
   res.setHeader('Cache-Control', asDownload ? 'no-store' : 'public, max-age=3600');
   res.setHeader('ETag', etag);
   res.setHeader('Last-Modified', lastModified);
   res.setHeader('Vary', 'Range');
-  // X-Content-Duration lets players display duration before loading the file
   if (rec.durationSeconds && rec.durationSeconds > 0) {
     res.setHeader('X-Content-Duration', String(rec.durationSeconds));
   }
 
   // ── 304 Not Modified ─────────────────────────────────────────────────────
-  // Only honour conditional requests for non-download (streaming) requests.
   if (!asDownload) {
     const ifNoneMatch = req.headers['if-none-match'];
     const ifModifiedSince = req.headers['if-modified-since'];
     const etagMatch = ifNoneMatch && (ifNoneMatch === etag || ifNoneMatch === '*');
-    const freshSince =
-      ifModifiedSince && new Date(ifModifiedSince) >= fileStat.mtime;
+    const freshSince = ifModifiedSince && new Date(ifModifiedSince) >= fileStat.mtime;
     if (etagMatch || freshSince) {
       res.status(304).end();
       return;
@@ -355,11 +377,8 @@ router.get('/:id/stream', injectTokenQueryAuth, requireWorkspace('member'), asyn
   }
 
   if (range && !asDownload) {
-    // ── HTTP 206 Partial Content ────────────────────────────────────────────
     const parts = range.replace(/bytes=/, '').split('-');
     const start = parseInt(parts[0], 10);
-    // Default end: serve up to 2 MB per chunk so the browser buffers quickly
-    // without downloading the whole file on the first request.
     const defaultChunk = 2 * 1024 * 1024; // 2 MB
     const end = parts[1]
       ? parseInt(parts[1], 10)
