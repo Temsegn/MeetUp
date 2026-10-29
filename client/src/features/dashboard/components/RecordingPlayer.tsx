@@ -18,12 +18,16 @@ type Props = {
   src?: string;
   /**
    * Poster image URL (JPEG first-frame thumbnail).
-   * Shown while the video is loading so the player never appears black.
-   * Supplied by RecordingDetailPage via recordingsService.getPosterUrl().
+   * Shown while the video is loading so the player never appears as a black rectangle.
    */
   poster?: string;
   className?: string;
-  /** Start playback as soon as the stream is ready. */
+  /**
+   * Whether to start playback automatically once metadata is loaded.
+   * Defaults to FALSE — modern browsers block autoplay for unmuted media
+   * (DOMException: NotAllowedError), which causes the "Could not start playback"
+   * error. Users tap the Play button instead.
+   */
   autoPlay?: boolean;
 };
 
@@ -33,7 +37,7 @@ export function RecordingPlayer({
   src,
   poster,
   className,
-  autoPlay = true,
+  autoPlay = false,
 }: Props) {
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
@@ -45,7 +49,7 @@ export function RecordingPlayer({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [ready, setReady] = useState(false);
-  /** True once we have at least the metadata (duration, dimensions). */
+  /** True once the browser has loaded at least duration + dimensions. */
   const [metaReady, setMetaReady] = useState(false);
 
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -83,8 +87,8 @@ export function RecordingPlayer({
     setDuration(durationSec);
   }, [durationSec]);
 
-  // Fake-tick timer — only used when there is no real video source.
-  // If src is present, the <video> element drives currentTime via timeupdate.
+  // Fake-tick timer — only runs when there is no real video source.
+  // When src is set, the <video> element drives currentTime via timeupdate.
   useEffect(() => {
     if (src) return;
     if (!playing) return;
@@ -101,26 +105,33 @@ export function RecordingPlayer({
     return () => window.clearInterval(id);
   }, [playing, speed, totalDuration, src]);
 
+  // Drive play / pause on the native video element.
   useEffect(() => {
     if (!src || !videoRef.current) return;
     const video = videoRef.current;
     video.muted = muted;
     video.playbackRate = speed;
     if (playing) {
-      void video.play().catch(() => {
+      void video.play().catch((err: unknown) => {
+        // NotAllowedError = browser autoplay policy blocked playback.
+        // This is NOT a real error — just show the play button silently.
+        // Any other error (codec, network, decode) shows the message.
+        const isAutoplayBlocked =
+          err instanceof DOMException &&
+          (err.name === 'NotAllowedError' || err.name === 'NotSupportedError');
         setPlaying(false);
-        if (didAutoPlay.current && video.paused) {
+        if (!isAutoplayBlocked) {
+          setLoadError('Could not start playback. Tap play to try again.');
+        } else {
           setLoadError(null);
-          return;
         }
-        setLoadError('Could not start playback. Tap play to try again.');
       });
     } else {
       video.pause();
     }
   }, [src, playing, muted, speed]);
 
-  // Reset state when src changes (new recording selected).
+  // Reset all state when the src URL changes (user selects a different recording).
   useEffect(() => {
     setReady(false);
     setMetaReady(false);
@@ -130,14 +141,15 @@ export function RecordingPlayer({
     didAutoPlay.current = false;
   }, [src]);
 
+  // Wire native video events.
   useEffect(() => {
     if (!src || !videoRef.current) return;
     const video = videoRef.current;
 
     const onTimeUpdate = () => setCurrent(video.currentTime);
 
-    // loadedmetadata fires as soon as the browser knows duration + dimensions.
-    // With preload="metadata" this happens very quickly without buffering video data.
+    // loadedmetadata: browser now knows duration + dimensions.
+    // With preload="metadata" + faststart MP4 this is nearly instant.
     const onMeta = () => {
       if (Number.isFinite(video.duration) && video.duration > 0) {
         setDuration(video.duration);
@@ -146,16 +158,14 @@ export function RecordingPlayer({
       setLoadError(null);
     };
 
-    // loadeddata fires when the first frame is available to paint.
+    // loadeddata: first frame is available to paint.
     const onReady = () => {
       setReady(true);
       setLoadError(null);
-      // Nudge 50 ms so the real first frame paints (avoids a solid-black poster).
+      // Nudge 50 ms so the real first frame paints (avoids a black frame over the poster).
       try {
         if (video.currentTime < 0.05) video.currentTime = 0.05;
-      } catch {
-        /* ignore */
-      }
+      } catch { /* ignore */ }
       if (autoPlay && !didAutoPlay.current) {
         didAutoPlay.current = true;
         setPlaying(true);
@@ -231,9 +241,8 @@ export function RecordingPlayer({
 
   const skip = (delta: number) => seekTo(current + delta);
 
-  // The progress bar is interactive even before the video is fully buffered
-  // as long as we know the metadata (duration). This lets users seek instantly
-  // because the server will serve only the needed byte range.
+  // Seek bar becomes interactive as soon as metadata is available —
+  // no need to wait for the full buffer since the server handles range requests.
   const seekable = metaReady || ready;
 
   return (
@@ -252,20 +261,11 @@ export function RecordingPlayer({
             ref={videoRef}
             src={src}
             /**
-             * preload="metadata" — the browser only fetches the moov atom
-             * (duration, track info, dimensions) on page load rather than
-             * buffering the first few MB of video. Because the MP4 is encoded
-             * with -movflags +faststart the moov atom is at the very front of
-             * the file, so this is nearly instant even on slow connections.
-             * Full video data is loaded on demand via HTTP range requests when
-             * the user actually plays or seeks.
+             * preload="metadata" — fetches only the moov atom (tiny, placed at
+             * the front of the file by -movflags +faststart) rather than buffering
+             * video data. Playback starts on demand via HTTP range requests.
              */
             preload="metadata"
-            /**
-             * poster — shown immediately while the browser fetches metadata,
-             * so the player never appears as a black rectangle. Falls back
-             * gracefully to nothing if the poster URL resolves to 204.
-             */
             poster={poster}
             playsInline
             className="absolute inset-0 h-full w-full bg-black object-contain"
@@ -273,7 +273,11 @@ export function RecordingPlayer({
         ) : (
           <div
             className="absolute inset-0 flex items-center justify-center bg-[#0B1220]"
-            style={poster ? { backgroundImage: `url(${poster})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+            style={
+              poster
+                ? { backgroundImage: `url(${poster})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                : undefined
+            }
           >
             {!poster && (
               <p className="text-[13px] text-white/50">Loading recording…</p>
@@ -289,7 +293,7 @@ export function RecordingPlayer({
           </div>
         ) : null}
 
-        {/* Show play button as soon as we have metadata — no need to wait for full load */}
+        {/* Play overlay — shown as soon as metadata is ready (no full-buffer wait) */}
         {!playing && (ready || metaReady) ? (
           <button
             type="button"
@@ -305,14 +309,14 @@ export function RecordingPlayer({
           </button>
         ) : null}
 
-        {/* Controls overlay */}
+        {/* Controls bar */}
         <div
           className={cn(
             'absolute inset-x-0 bottom-0 px-3 pb-3 pt-12 transition-opacity sm:px-4 sm:pb-4',
             showControls || !playing || dragging ? 'opacity-100' : 'pointer-events-none opacity-0',
           )}
         >
-          {/* Seek bar — interactive once metadata is loaded */}
+          {/* Seek bar */}
           <button
             ref={barRef}
             type="button"
@@ -347,21 +351,13 @@ export function RecordingPlayer({
           </button>
 
           <div className="flex items-center gap-1.5 text-white sm:gap-2">
-            <button
-              type="button"
-              className="rounded-lg p-1.5 hover:bg-white/10"
-              onClick={() => skip(-10)}
-              aria-label="Back 10 seconds"
-            >
+            <button type="button" className="rounded-lg p-1.5 hover:bg-white/10" onClick={() => skip(-10)} aria-label="Back 10 seconds">
               <SkipBack className="size-4 sm:size-[18px]" />
             </button>
             <button
               type="button"
               className="flex size-9 items-center justify-center rounded-full bg-white/15 hover:bg-white/25 sm:size-10"
-              onClick={() => {
-                setPlaying((p) => !p);
-                bumpControls();
-              }}
+              onClick={() => { setPlaying((p) => !p); bumpControls(); }}
               aria-label={playing ? 'Pause' : 'Play'}
             >
               {playing ? (
@@ -370,12 +366,7 @@ export function RecordingPlayer({
                 <Play className="ml-0.5 size-4" fill="currentColor" />
               )}
             </button>
-            <button
-              type="button"
-              className="rounded-lg p-1.5 hover:bg-white/10"
-              onClick={() => skip(10)}
-              aria-label="Forward 10 seconds"
-            >
+            <button type="button" className="rounded-lg p-1.5 hover:bg-white/10" onClick={() => skip(10)} aria-label="Forward 10 seconds">
               <SkipForward className="size-4 sm:size-[18px]" />
             </button>
 
@@ -384,12 +375,7 @@ export function RecordingPlayer({
             </span>
 
             <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
-              <button
-                type="button"
-                className="rounded-lg p-1.5 hover:bg-white/10"
-                onClick={() => setMuted((m) => !m)}
-                aria-label={muted ? 'Unmute' : 'Mute'}
-              >
+              <button type="button" className="rounded-lg p-1.5 hover:bg-white/10" onClick={() => setMuted((m) => !m)} aria-label={muted ? 'Unmute' : 'Mute'}>
                 {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
               </button>
 
@@ -400,23 +386,12 @@ export function RecordingPlayer({
                 aria-label="Playback speed"
               >
                 {[0.75, 1, 1.25, 1.5, 2].map((s) => (
-                  <option key={s} value={s} className="text-[#151D2B]">
-                    {s}x
-                  </option>
+                  <option key={s} value={s} className="text-[#151D2B]">{s}x</option>
                 ))}
               </select>
 
-              <button
-                type="button"
-                className="rounded-lg p-1.5 hover:bg-white/10"
-                onClick={() => void toggleFullscreen()}
-                aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-              >
-                {isFullscreen ? (
-                  <Minimize2 className="size-4" />
-                ) : (
-                  <Maximize2 className="size-4" />
-                )}
+              <button type="button" className="rounded-lg p-1.5 hover:bg-white/10" onClick={() => void toggleFullscreen()} aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+                {isFullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
               </button>
             </div>
           </div>
