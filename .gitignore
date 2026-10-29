@@ -1,3 +1,6 @@
+# Kiro IDE workspace files (specs, hooks, local agent config)
+.kiro/
+
 # OS
 .DS_Store
 Thumbs.db
