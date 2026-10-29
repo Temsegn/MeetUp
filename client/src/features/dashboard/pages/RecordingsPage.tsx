@@ -9,6 +9,10 @@ import {
   type RecordingFilters,
   type RecordingRow,
 } from '../components/RecordingsTable';
+import {
+  RecordingStatCardsSkeleton,
+  RecordingsTableSkeleton,
+} from '../components/DashboardSkeletons';
 import { cn } from '../../../lib/cn';
 import { useRecordings } from '../hooks/useRecordings';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -150,19 +154,28 @@ export function RecordingsPage() {
         sharedByOptions={sharedByOptions}
       />
 
-      <RecordingStatCards {...statCards} />
+      {/* Stat cards: skeleton while loading, real cards once data arrives */}
+      {loading ? (
+        <RecordingStatCardsSkeleton />
+      ) : (
+        <RecordingStatCards {...statCards} />
+      )}
 
-      {/* Bug 4: onRename removed. Bug 5: bulk actions handled inside RecordingsTable. */}
-      <RecordingsTable
-        query={query}
-        filters={filters}
-        onToast={setToast}
-        liveRecordings={liveRecordings}
-        workspaceId={activeWorkspace?.workspaceId}
-        onDelete={async (id) => {
-          await remove(id);
-        }}
-      />
+      {/* Table: skeleton while loading, real table once data arrives */}
+      {loading ? (
+        <RecordingsTableSkeleton rows={6} />
+      ) : (
+        <RecordingsTable
+          query={query}
+          filters={filters}
+          onToast={setToast}
+          liveRecordings={liveRecordings}
+          workspaceId={activeWorkspace?.workspaceId}
+          onDelete={async (id) => {
+            await remove(id);
+          }}
+        />
+      )}
 
       {toast ? (
         <div

@@ -272,3 +272,121 @@ export function RecordingDetailSkeleton() {
   );
 }
 
+
+/** Skeleton for the 4 recording stat/KPI cards on the Recordings page. */
+export function RecordingStatCardsSkeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+      {Array.from({ length: 4 }, (_, i) => (
+        <article
+          key={i}
+          className="flex min-h-[112px] flex-col rounded-2xl border border-[#E8ECF1] bg-white p-3.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)]"
+        >
+          <div className="flex items-center gap-2">
+            <SkeletonCircle className="size-7" />
+            <Skeleton className="h-3 w-28" />
+          </div>
+          <Skeleton className="mt-3 h-7 w-20" />
+          <div className="mt-auto flex items-end justify-between gap-2 pt-2.5">
+            <Skeleton className="h-2.5 w-32" />
+            <Skeleton className="h-7 w-[72px] rounded-md" />
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+/** One row in the recordings table skeleton. */
+function RecordingsTableRowSkeleton() {
+  return (
+    <tr className="border-b border-[#F1F4F8] last:border-b-0">
+      {/* checkbox */}
+      <td className="px-3 py-3">
+        <Skeleton className="size-3.5 rounded" />
+      </td>
+      {/* thumbnail + title + avatars */}
+      <td className="px-3 py-3">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-12 w-[72px] shrink-0 rounded-lg" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-3 w-[75%]" />
+            <div className="flex items-center">
+              <SkeletonCircle className="size-5" />
+              <SkeletonCircle className="-ml-1.5 size-5" />
+              <SkeletonCircle className="-ml-1.5 size-5" />
+            </div>
+          </div>
+        </div>
+      </td>
+      {/* meeting */}
+      <td className="px-3 py-3"><Skeleton className="h-3 w-28" /></td>
+      {/* date & time */}
+      <td className="px-3 py-3">
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="mt-1 h-2.5 w-14" />
+      </td>
+      {/* duration */}
+      <td className="px-3 py-3"><Skeleton className="h-3 w-10" /></td>
+      {/* size */}
+      <td className="px-3 py-3"><Skeleton className="h-3 w-12" /></td>
+      {/* views */}
+      <td className="px-3 py-3"><Skeleton className="h-3 w-6" /></td>
+      {/* shared by */}
+      <td className="px-3 py-3">
+        <div className="flex items-center gap-2">
+          <SkeletonCircle className="size-6 shrink-0" />
+          <Skeleton className="h-3 w-20" />
+        </div>
+      </td>
+      {/* actions */}
+      <td className="px-2 py-3">
+        <Skeleton className="size-7 rounded-md" />
+      </td>
+    </tr>
+  );
+}
+
+/**
+ * Full skeleton for the recordings list table — header + N placeholder rows.
+ * Matches the exact column layout of RecordingsTable so there's no layout shift.
+ */
+export function RecordingsTableSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[#E8ECF1] bg-white shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[960px] border-collapse text-left">
+          <thead>
+            <tr className="border-b border-[#EEF1F5] bg-[#FAFBFC]">
+              <th className="w-10 px-3 py-3"><Skeleton className="size-3.5 rounded" /></th>
+              {['Recording Name', 'Meeting', 'Date & Time', 'Duration', 'Size', 'Views', 'Shared By', ''].map(
+                (label, i) => (
+                  <th key={i} className="px-3 py-3">
+                    {label ? (
+                      <Skeleton className={`h-2.5 ${i === 0 ? 'w-32' : i === 1 ? 'w-20' : 'w-16'}`} />
+                    ) : null}
+                  </th>
+                ),
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: rows }, (_, i) => (
+              <RecordingsTableRowSkeleton key={i} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {/* pagination footer */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#EEF1F5] px-4 py-3">
+        <Skeleton className="h-3 w-36" />
+        <div className="flex items-center gap-2">
+          <Skeleton className="size-8 rounded-lg" />
+          <Skeleton className="size-8 rounded-full" />
+          <Skeleton className="size-8 rounded-lg" />
+          <Skeleton className="h-8 w-20 rounded-lg" />
+        </div>
+      </div>
+    </section>
+  );
+}
