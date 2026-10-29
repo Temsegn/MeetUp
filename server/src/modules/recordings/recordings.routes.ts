@@ -272,6 +272,11 @@ async function injectTokenQueryAuth(
       return;
     }
     req.user = user;
+    // Inject a synthetic Authorization header so the `authenticate` call
+    // inside requireWorkspace finds a valid Bearer token and does not reject
+    // the request. Without this, requireWorkspace re-runs authenticate on
+    // the empty Authorization header and returns 401.
+    req.headers['authorization'] = `Bearer ${queryToken}`;
     // Inject the workspace id so requireWorkspace can resolve it
     if (wsid) {
       req.headers['x-workspace-id'] = wsid;
