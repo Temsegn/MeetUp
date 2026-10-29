@@ -16,6 +16,12 @@ type Props = {
   title: string;
   durationSec: number;
   src?: string;
+  /**
+   * Poster image URL (JPEG first-frame thumbnail).
+   * Shown while the video is loading so the player never appears black.
+   * Supplied by RecordingDetailPage via recordingsService.getPosterUrl().
+   */
+  poster?: string;
   className?: string;
   /** Start playback as soon as the stream is ready. */
   autoPlay?: boolean;
@@ -25,6 +31,7 @@ export function RecordingPlayer({
   title,
   durationSec,
   src,
+  poster,
   className,
   autoPlay = true,
 }: Props) {
@@ -38,6 +45,8 @@ export function RecordingPlayer({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [ready, setReady] = useState(false);
+  /** True once we have at least the metadata (duration, dimensions). */
+  const [metaReady, setMetaReady] = useState(false);
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -74,6 +83,8 @@ export function RecordingPlayer({
     setDuration(durationSec);
   }, [durationSec]);
 
+  // Fake-tick timer — only used when there is no real video source.
+  // If src is present, the <video> element drives currentTime via timeupdate.
   useEffect(() => {
     if (src) return;
     if (!playing) return;
@@ -98,7 +109,6 @@ export function RecordingPlayer({
     if (playing) {
       void video.play().catch(() => {
         setPlaying(false);
-        // Autoplay is often blocked until a user gesture — keep the real frame, no stock cover.
         if (didAutoPlay.current && video.paused) {
           setLoadError(null);
           return;
@@ -110,8 +120,10 @@ export function RecordingPlayer({
     }
   }, [src, playing, muted, speed]);
 
+  // Reset state when src changes (new recording selected).
   useEffect(() => {
     setReady(false);
+    setMetaReady(false);
     setPlaying(false);
     setCurrent(0);
     setLoadError(null);
@@ -123,16 +135,22 @@ export function RecordingPlayer({
     const video = videoRef.current;
 
     const onTimeUpdate = () => setCurrent(video.currentTime);
+
+    // loadedmetadata fires as soon as the browser knows duration + dimensions.
+    // With preload="metadata" this happens very quickly without buffering video data.
     const onMeta = () => {
       if (Number.isFinite(video.duration) && video.duration > 0) {
         setDuration(video.duration);
       }
+      setMetaReady(true);
       setLoadError(null);
     };
+
+    // loadeddata fires when the first frame is available to paint.
     const onReady = () => {
       setReady(true);
       setLoadError(null);
-      // Nudge so the real first frame paints (no stock poster).
+      // Nudge 50 ms so the real first frame paints (avoids a solid-black poster).
       try {
         if (video.currentTime < 0.05) video.currentTime = 0.05;
       } catch {
@@ -143,21 +161,22 @@ export function RecordingPlayer({
         setPlaying(true);
       }
     };
+
     const onEnded = () => setPlaying(false);
     const onError = () => setLoadError('Recording video failed to load.');
 
     video.addEventListener('timeupdate', onTimeUpdate);
-    video.addEventListener('loadeddata', onReady);
     video.addEventListener('loadedmetadata', onMeta);
     video.addEventListener('durationchange', onMeta);
+    video.addEventListener('loadeddata', onReady);
     video.addEventListener('ended', onEnded);
     video.addEventListener('error', onError);
 
     return () => {
       video.removeEventListener('timeupdate', onTimeUpdate);
-      video.removeEventListener('loadeddata', onReady);
       video.removeEventListener('loadedmetadata', onMeta);
       video.removeEventListener('durationchange', onMeta);
+      video.removeEventListener('loadeddata', onReady);
       video.removeEventListener('ended', onEnded);
       video.removeEventListener('error', onError);
     };
@@ -210,9 +229,12 @@ export function RecordingPlayer({
     else await document.exitFullscreen?.();
   };
 
-  const skip = (delta: number) => {
-    seekTo(current + delta);
-  };
+  const skip = (delta: number) => seekTo(current + delta);
+
+  // The progress bar is interactive even before the video is fully buffered
+  // as long as we know the metadata (duration). This lets users seek instantly
+  // because the server will serve only the needed byte range.
+  const seekable = metaReady || ready;
 
   return (
     <div
@@ -229,13 +251,33 @@ export function RecordingPlayer({
           <video
             ref={videoRef}
             src={src}
+            /**
+             * preload="metadata" — the browser only fetches the moov atom
+             * (duration, track info, dimensions) on page load rather than
+             * buffering the first few MB of video. Because the MP4 is encoded
+             * with -movflags +faststart the moov atom is at the very front of
+             * the file, so this is nearly instant even on slow connections.
+             * Full video data is loaded on demand via HTTP range requests when
+             * the user actually plays or seeks.
+             */
+            preload="metadata"
+            /**
+             * poster — shown immediately while the browser fetches metadata,
+             * so the player never appears as a black rectangle. Falls back
+             * gracefully to nothing if the poster URL resolves to 204.
+             */
+            poster={poster}
             playsInline
-            preload="auto"
             className="absolute inset-0 h-full w-full bg-black object-contain"
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#0B1220]">
-            <p className="text-[13px] text-white/50">Loading recording…</p>
+          <div
+            className="absolute inset-0 flex items-center justify-center bg-[#0B1220]"
+            style={poster ? { backgroundImage: `url(${poster})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+          >
+            {!poster && (
+              <p className="text-[13px] text-white/50">Loading recording…</p>
+            )}
           </div>
         )}
 
@@ -247,7 +289,8 @@ export function RecordingPlayer({
           </div>
         ) : null}
 
-        {!playing && ready ? (
+        {/* Show play button as soon as we have metadata — no need to wait for full load */}
+        {!playing && (ready || metaReady) ? (
           <button
             type="button"
             onClick={() => {
@@ -262,28 +305,36 @@ export function RecordingPlayer({
           </button>
         ) : null}
 
+        {/* Controls overlay */}
         <div
           className={cn(
             'absolute inset-x-0 bottom-0 px-3 pb-3 pt-12 transition-opacity sm:px-4 sm:pb-4',
             showControls || !playing || dragging ? 'opacity-100' : 'pointer-events-none opacity-0',
           )}
         >
+          {/* Seek bar — interactive once metadata is loaded */}
           <button
             ref={barRef}
             type="button"
-            className="group relative mb-3 h-2 w-full cursor-pointer rounded-full bg-white/25 sm:h-2.5"
+            className={cn(
+              'group relative mb-3 h-2 w-full rounded-full bg-white/25 sm:h-2.5',
+              seekable ? 'cursor-pointer' : 'cursor-default opacity-50',
+            )}
             aria-label="Seek"
+            disabled={!seekable}
             onMouseDown={(e) => {
+              if (!seekable) return;
               setDragging(true);
               seekFromClientX(e.clientX);
               bumpControls();
             }}
             onTouchStart={(e) => {
+              if (!seekable) return;
               setDragging(true);
               seekFromClientX(e.touches[0]?.clientX ?? 0);
               bumpControls();
             }}
-            onClick={(e) => seekFromClientX(e.clientX)}
+            onClick={(e) => { if (seekable) seekFromClientX(e.clientX); }}
           >
             <span
               className="absolute inset-y-0 left-0 rounded-full bg-[#016BE6]"

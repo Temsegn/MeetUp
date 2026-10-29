@@ -11,11 +11,16 @@ export function createRecordingsController(deps?: RecordingServiceDeps) {
     async upload(req: AuthRequest, res: Response): Promise<void> {
       const { roomId } = res.locals.params as RoomIdParams;
       const workspaceHeader = req.header('x-workspace-id') || req.header('X-Workspace-Id');
+      // Bug 3: accept optional meetingId from query param so participants can
+      // be resolved even when the Meeting document is gone by upload time.
+      const meetingIdHeader = req.header('x-meeting-id') || req.header('X-Meeting-Id');
+      const meetingIdQuery = String(req.query.meetingId ?? '').trim() || null;
       const saved = await service.saveComposite({
         roomId,
         userId: req.user!.id,
         body: req.body as Buffer,
         workspaceId: workspaceHeader || req.workspaceId || null,
+        meetingId: meetingIdHeader || meetingIdQuery || null,
       });
 
       res.status(201).json({

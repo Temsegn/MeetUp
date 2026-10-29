@@ -2,6 +2,7 @@ import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
 import { env, corsOrigins } from './config/env';
 import { authRouter } from './modules/auth/auth.routes';
 import { createGuestAuthRouter } from './modules/auth/guest-auth.routes';
@@ -33,6 +34,32 @@ export const createApp = (): Express => {
 
   // ── Security headers ───────────────────────────────────────────────────────
   app.use(helmet());
+
+  // ── Response compression ───────────────────────────────────────────────────
+  // Compresses JSON, text, and other compressible API responses with gzip/deflate.
+  // We explicitly skip video and image content-types — MP4s and JPEGs are already
+  // compressed binaries; trying to gzip them wastes CPU with zero size benefit.
+  app.use(
+    compression({
+      // Only compress when the response body is larger than 1 KB
+      threshold: 1024,
+      filter(req, res) {
+        const type = res.getHeader('Content-Type');
+        if (typeof type === 'string') {
+          // Skip video streams, images, and binary attachments
+          if (
+            type.startsWith('video/') ||
+            type.startsWith('image/') ||
+            type.startsWith('audio/')
+          ) {
+            return false;
+          }
+        }
+        // Use the default compression filter for everything else
+        return compression.filter(req, res);
+      },
+    }),
+  );
 
   // ── CORS ───────────────────────────────────────────────────────────────────
   app.use(cors({

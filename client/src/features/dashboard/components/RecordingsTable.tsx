@@ -5,7 +5,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Download,
   Play,
+  Trash2,
   X,
 } from 'lucide-react';
 import { cn } from '../../../lib/cn';
@@ -34,8 +36,6 @@ type Props = {
   liveRecordings: RecordingRow[];
   /** Persist delete to the API; required for real data. */
   onDelete?: (id: string) => Promise<void>;
-  /** Persist rename to the API; required for real data. */
-  onRename?: (id: string, title: string) => Promise<void>;
   /** Workspace for authenticated download. */
   workspaceId?: string | null;
 };
@@ -46,7 +46,6 @@ export function RecordingsTable({
   onToast,
   liveRecordings,
   onDelete,
-  onRename,
   workspaceId,
 }: Props) {
   const navigate = useNavigate();
@@ -61,11 +60,15 @@ export function RecordingsTable({
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZES)[number]>(10);
   const [pageSizeOpen, setPageSizeOpen] = useState(false);
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  // Per-row delete
   const [deleteTarget, setDeleteTarget] = useState<RecordingRow | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [renameTarget, setRenameTarget] = useState<RecordingRow | null>(null);
-  const [renameValue, setRenameValue] = useState('');
-  const [renaming, setRenaming] = useState(false);
+
+  // Bug 5: bulk delete state
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   const pageSizeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -164,6 +167,7 @@ export function RecordingsTable({
 
   const notify = (message: string) => onToast?.(message);
 
+  // ── Per-row actions (Bug 4: Rename removed) ──────────────────────────────
   const actionsFor = (r: RecordingRow) => [
     {
       label: 'Play recording',
@@ -203,51 +207,18 @@ export function RecordingsTable({
       },
     },
     {
-      label: 'Rename',
-      onClick: () => {
-        setRenameTarget(r);
-        setRenameValue(r.title);
-      },
-    },
-    {
       label: 'Delete',
       danger: true,
       onClick: () => setDeleteTarget(r),
     },
   ];
 
-  const confirmRename = async () => {
-    if (!renameTarget) return;
-    const next = renameValue.trim();
-    if (!next || next === renameTarget.title) {
-      setRenameTarget(null);
-      return;
-    }
-    setRenaming(true);
-    try {
-      if (onRename) {
-        await onRename(renameTarget.id, next);
-      } else {
-        setItems((prev) =>
-          prev.map((row) => (row.id === renameTarget.id ? { ...row, title: next } : row)),
-        );
-      }
-      setRenameTarget(null);
-      notify('Recording renamed');
-    } catch (err) {
-      notify(err instanceof Error ? err.message : 'Could not rename recording');
-    } finally {
-      setRenaming(false);
-    }
-  };
-
+  // ── Per-row delete ────────────────────────────────────────────────────────
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      if (onDelete) {
-        await onDelete(deleteTarget.id);
-      }
+      if (onDelete) await onDelete(deleteTarget.id);
       setItems((prev) => prev.filter((row) => row.id !== deleteTarget.id));
       setSelected((prev) => {
         const next = new Set(prev);
@@ -263,32 +234,63 @@ export function RecordingsTable({
     }
   };
 
+  // ── Bug 5: Bulk download ──────────────────────────────────────────────────
+  const handleBulkDownload = () => {
+    void (async () => {
+      if (!workspaceId) {
+        notify('No workspace selected');
+        return;
+      }
+      const ids = [...selected];
+      if (ids.length === 0) return;
+      notify(`Downloading ${ids.length} recording${ids.length !== 1 ? 's' : ''}…`);
+      const { recordingsService } = await import(
+        '../../../services/recordings/recordings.service'
+      );
+      for (const id of ids) {
+        const row = items.find((r) => r.id === id);
+        const title = row?.title ?? id;
+        try {
+          await recordingsService.download(workspaceId, id, title);
+        } catch {
+          notify(`Failed to download: ${title}`);
+        }
+      }
+      notify(`Downloaded ${ids.length} recording${ids.length !== 1 ? 's' : ''}`);
+    })();
+  };
+
+  // ── Bug 5: Bulk delete ────────────────────────────────────────────────────
+  const handleBulkDelete = async () => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    setBulkDeleting(true);
+    try {
+      if (onDelete) {
+        const results = await Promise.allSettled(ids.map((id) => onDelete(id)));
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        if (failed > 0) notify(`${failed} deletion${failed !== 1 ? 's' : ''} failed`);
+      }
+      setItems((prev) => prev.filter((row) => !ids.includes(row.id)));
+      setSelected(new Set());
+      setBulkDeleteOpen(false);
+      notify(`Deleted ${ids.length} recording${ids.length !== 1 ? 's' : ''}`);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Bulk delete failed');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   return (
     <section className="overflow-hidden rounded-2xl border border-[#E8ECF1] bg-white shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
-      <ConfirmDialog
-        open={Boolean(renameTarget)}
-        title="Rename recording"
-        description="Choose a name that makes this recording easy to find later."
-        confirmLabel="Save name"
-        cancelLabel="Cancel"
-        busy={renaming}
-        input={{
-          label: 'Recording name',
-          value: renameValue,
-          placeholder: 'Enter a title',
-          onChange: setRenameValue,
-        }}
-        onClose={() => {
-          if (!renaming) setRenameTarget(null);
-        }}
-        onConfirm={() => void confirmRename()}
-      />
+      {/* ── Per-row delete dialog ── */}
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         title="Delete this recording?"
         description={
           deleteTarget
-            ? `“${deleteTarget.title}” will be permanently deleted. This action cannot be undone.`
+            ? `"${deleteTarget.title}" will be permanently deleted. This action cannot be undone.`
             : undefined
         }
         confirmLabel="Delete recording"
@@ -300,6 +302,57 @@ export function RecordingsTable({
         }}
         onConfirm={() => void confirmDelete()}
       />
+
+      {/* ── Bug 5: Bulk delete dialog ── */}
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        title={`Delete ${selected.size} recording${selected.size !== 1 ? 's' : ''}?`}
+        description={`${selected.size} recording${selected.size !== 1 ? 's' : ''} will be permanently deleted. This action cannot be undone.`}
+        confirmLabel={`Delete ${selected.size} recording${selected.size !== 1 ? 's' : ''}`}
+        cancelLabel="Keep recordings"
+        danger
+        busy={bulkDeleting}
+        onClose={() => {
+          if (!bulkDeleting) setBulkDeleteOpen(false);
+        }}
+        onConfirm={() => void handleBulkDelete()}
+      />
+
+      {/* ── Bug 5: Bulk actions bar — visible only when rows are selected ── */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 border-b border-[#D1E3FC] bg-[#EEF5FF] px-4 py-2.5">
+          <span className="text-[12px] font-semibold text-[#016BE6]">
+            {selected.size} selected
+          </span>
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              type="button"
+              onClick={handleBulkDownload}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#016BE6] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#016BE6] hover:bg-[#E8F1FE]"
+            >
+              <Download className="size-3.5" />
+              Download
+            </button>
+            <button
+              type="button"
+              onClick={() => setBulkDeleteOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-[12px] font-semibold text-red-600 hover:bg-red-50"
+            >
+              <Trash2 className="size-3.5" />
+              Delete
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              className="rounded-lg p-1.5 text-[#94A3B8] hover:bg-[#E8F1FE] hover:text-[#016BE6]"
+              aria-label="Clear selection"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full min-w-[960px] border-collapse text-left">
           <thead>
@@ -443,7 +496,9 @@ export function RecordingsTable({
                   </td>
 
                   <td className="px-3 py-3 align-middle">
-                    <p className="max-w-[160px] text-[12px] leading-snug text-[#334155]">{r.meeting}</p>
+                    <p className="max-w-[160px] text-[12px] leading-snug text-[#334155]">
+                      {r.meeting}
+                    </p>
                   </td>
 
                   <td className="px-3 py-3 align-middle">
@@ -451,7 +506,9 @@ export function RecordingsTable({
                     <p className="mt-0.5 text-[11px] text-[#8A94A6]">{r.time}</p>
                   </td>
 
-                  <td className="px-3 py-3 align-middle text-[12px] text-[#334155]">{r.duration}</td>
+                  <td className="px-3 py-3 align-middle text-[12px] text-[#334155]">
+                    {r.duration}
+                  </td>
                   <td className="px-3 py-3 align-middle text-[12px] text-[#334155]">{r.size}</td>
                   <td className="px-3 py-3 align-middle text-[12px] text-[#334155]">{r.views}</td>
 
@@ -482,6 +539,7 @@ export function RecordingsTable({
         </table>
       </div>
 
+      {/* ── Pagination footer ── */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#EEF1F5] px-4 py-3">
         <p className="text-[12px] text-[#8A94A6]">
           {total === 0

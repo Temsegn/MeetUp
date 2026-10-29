@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import { AppError, ValidationError } from '../../../shared/errors/AppError';
 import { logger } from '../../../infrastructure/logging/logger';
 import { recordingFileRepository, RecordingFileDeps } from '../recordings.repository';
-import { convertToMp4, probeDurationSeconds } from '../transcode';
+import { convertToMp4, probeDurationSeconds, extractPosterFrame } from '../transcode';
 import { sanitizeStorageSegment } from '../recordings.utils';
 import type { SavedRecording, UploadRecordingInput } from '../recordings.types';
 import { Recording } from '../../../database/models/Recording.model';
@@ -60,6 +60,11 @@ export function createRecordingsService(deps: RecordingServiceDeps = defaultDeps
       const durationSeconds = await probeDurationSeconds(mp4Path);
       const storageKey = deps.files.storageKey(mp4Key);
 
+      // Extract a poster frame (JPEG thumbnail) for fast player previews.
+      // Fire-and-forget — a missing poster is not fatal.
+      const posterKey = `${relativeDir}/poster.jpg`;
+      void extractPosterFrame(mp4Path, deps.files.pathFor(posterKey)).catch(() => {});
+
       logger.info('Meeting composite recording saved as MP4', {
         roomId,
         recordingId,
@@ -90,19 +95,32 @@ export function createRecordingsService(deps: RecordingServiceDeps = defaultDeps
       }
 
       try {
-        // Snapshot host + registered participants so recording cards show profile images
+        // Bug 3 fix: snapshot ALL participants who ever joined this meeting.
+        //
+        // We use an `effectiveMeetingId` that prefers the DB-looked-up meeting
+        // ID but falls back to the one passed in by the client (`input.meetingId`).
+        // This means we can still query MeetingParticipant even when the Meeting
+        // document has already been cleaned up after the meeting ended.
+        const effectiveMeetingId: string | null =
+          meeting?._id
+            ? String(meeting._id)
+            : (input.meetingId ?? null);
+
         let participants: Array<{ userId: string; name: string; avatarUrl?: string | null }> = [];
-        if (meeting?._id) {
+        if (effectiveMeetingId) {
           const { listMeetingParticipants } = await import(
             '../../meetings/services/meeting-participants.service'
           );
-          const roster = await listMeetingParticipants(String(meeting._id));
+          // listMeetingParticipants queries the MeetingParticipant collection
+          // which persists historical attendees even after the meeting ends.
+          const roster = await listMeetingParticipants(effectiveMeetingId);
           participants = roster.map((p) => ({
             userId: p.userId,
             name: p.name,
             avatarUrl: p.avatarUrl ?? null,
           }));
         }
+        // Only fall back to uploader-only when we genuinely have no roster data.
         if (participants.length === 0) {
           const uploader = await import('../../auth/auth.repository').then((m) =>
             m.authRepository.findUserById(input.userId),

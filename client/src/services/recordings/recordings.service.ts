@@ -45,7 +45,6 @@ function workspaceHeader(workspaceId?: string | null): Record<string, string> {
   return { 'X-Workspace-Id': workspaceId };
 }
 
-
 export const recordingsService = {
   async list(
     workspaceId: string | null | undefined,
@@ -92,6 +91,48 @@ export const recordingsService = {
     });
   },
 
+  /**
+   * Build a direct streaming URL so the browser's <video> element
+   * can use HTTP range requests and start playback immediately without
+   * buffering the entire file first.
+   *
+   * The access token is embedded as a query param because <video src> cannot
+   * send custom headers. The server stream route accepts ?token= as an
+   * alternative to the Authorization Bearer header.
+   *
+   * This method is synchronous — no network call, just string construction.
+   */
+  getStreamDirectUrl(workspaceId: string | null | undefined, id: string): string {
+    const qs = new URLSearchParams();
+    const token = getAccessToken();
+    if (token) qs.set('token', token);
+    if (workspaceId) qs.set('wsid', workspaceId);
+    const query = qs.toString() ? `?${qs}` : '';
+    return `${API_URL}/recordings/${id}/stream${query}`;
+  },
+
+  /**
+   * Build a direct URL for the poster/thumbnail image of a recording.
+   *
+   * The poster is a JPEG first-frame thumbnail stored alongside the MP4.
+   * The server returns 204 No Content when the poster isn't ready yet —
+   * in that case the <video> element falls back to its default black frame.
+   *
+   * This method is synchronous — no network call.
+   */
+  getPosterUrl(workspaceId: string | null | undefined, id: string): string {
+    const qs = new URLSearchParams();
+    const token = getAccessToken();
+    if (token) qs.set('token', token);
+    if (workspaceId) qs.set('wsid', workspaceId);
+    const query = qs.toString() ? `?${qs}` : '';
+    return `${API_URL}/recordings/${id}/poster${query}`;
+  },
+
+  /**
+   * Full-blob fetch — used only for the download action where we need to
+   * trigger a browser file-save dialog. NOT used for playback.
+   */
   async getStreamBlobUrl(
     workspaceId: string | null | undefined,
     id: string,

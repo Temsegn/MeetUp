@@ -16,6 +16,9 @@ import { useAuth } from '../../../contexts/AuthContext';
 /**
  * Recordings library — Figma 1:3612
  * Search, filters, sort, pagination, and row actions are interactive.
+ *
+ * Bug 4: onRename prop removed — rename is no longer surfaced in the UI.
+ * Bug 5: bulk select/download/delete is handled inside RecordingsTable.
  */
 export function RecordingsPage() {
   const { activeWorkspace } = useAuth();
@@ -24,7 +27,7 @@ export function RecordingsPage() {
   const [filters, setFilters] = useState<RecordingFilters>(DEFAULT_RECORDING_FILTERS);
   const [toast, setToast] = useState<string | null>(null);
 
-  const { recordings: apiRecordings, stats: recordingStats, loading, remove, rename } = useRecordings();
+  const { recordings: apiRecordings, stats: recordingStats, loading, remove } = useRecordings();
 
   const liveRecordings = useMemo<RecordingRow[]>(() => {
     if (loading) return [];
@@ -149,6 +152,7 @@ export function RecordingsPage() {
 
       <RecordingStatCards {...statCards} />
 
+      {/* Bug 4: onRename removed. Bug 5: bulk actions handled inside RecordingsTable. */}
       <RecordingsTable
         query={query}
         filters={filters}
@@ -157,9 +161,6 @@ export function RecordingsPage() {
         workspaceId={activeWorkspace?.workspaceId}
         onDelete={async (id) => {
           await remove(id);
-        }}
-        onRename={async (id, title) => {
-          await rename(id, title);
         }}
       />
 

@@ -23,6 +23,15 @@ import { recordingsService, type Recording } from '../../../services/recordings/
 
 /**
  * Watch page: player + details below; recordings list on the right.
+ *
+ * Bug fixes applied:
+ *  - Bug 1: Only mount <RecordingPlayer> when status === 'ready'; show
+ *    "Processing…" or "Recording unavailable" for other statuses so the
+ *    player never shows a fake-playing blank state.
+ *  - Bug 2: Stream URL is built via getStreamDirectUrl (plain string, no
+ *    full-file blob download) so the browser can use HTTP range requests
+ *    and start playback immediately.
+ *  - Bug 4: Rename option removed from the actions menu.
  */
 export function RecordingDetailPage() {
   const { recordingId = '' } = useParams();
@@ -31,13 +40,11 @@ export function RecordingDetailPage() {
   const [recording, setRecording] = useState<Recording | null>(null);
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [renameOpen, setRenameOpen] = useState(false);
-  const [renameValue, setRenameValue] = useState('');
-  const [renaming, setRenaming] = useState(false);
 
   useEffect(() => {
     if (!activeWorkspace?.workspaceId || !recordingId) {
@@ -49,17 +56,26 @@ export function RecordingDetailPage() {
       recordingsService.get(activeWorkspace.workspaceId, recordingId),
       recordingsService.list(activeWorkspace.workspaceId, { page: 1, limit: 20 }),
     ])
-      .then(async ([current, list]) => {
+      .then(([current, list]) => {
         setRecording(current);
         setRecordings(list.recordings);
-        try {
-          const url = await recordingsService.getStreamBlobUrl(activeWorkspace.workspaceId, recordingId);
-          setStreamUrl((prev) => {
-            if (prev) URL.revokeObjectURL(prev);
-            return url;
-          });
-        } catch {
+        // Bug 1 + Bug 2: only build a stream URL when the recording is ready
+        // to play. getStreamDirectUrl returns a plain string (no blob fetch)
+        // so the browser can immediately begin buffering via range requests.
+        if (current.status === 'ready') {
+          const url = recordingsService.getStreamDirectUrl(
+            activeWorkspace.workspaceId,
+            recordingId,
+          );
+          setStreamUrl(url);
+          // Poster: synchronous URL build — server returns 204 if not ready yet,
+          // browser will silently ignore it and show a black frame instead.
+          setPosterUrl(
+            recordingsService.getPosterUrl(activeWorkspace.workspaceId, recordingId),
+          );
+        } else {
           setStreamUrl(null);
+          setPosterUrl(null);
         }
       })
       .catch(() => {
@@ -67,11 +83,10 @@ export function RecordingDetailPage() {
         setRecordings([]);
       })
       .finally(() => setLoading(false));
+
     return () => {
-      setStreamUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return null;
-      });
+      setStreamUrl(null);
+      setPosterUrl(null);
     };
   }, [activeWorkspace?.workspaceId, recordingId]);
 
@@ -108,6 +123,7 @@ export function RecordingDetailPage() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col gap-3 overflow-hidden pr-2 sm:pr-3 md:pr-4">
+      {/* ── Top bar ── */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <button
           type="button"
@@ -152,19 +168,13 @@ export function RecordingDetailPage() {
             <Download className="size-3.5" />
             Download
           </button>
+          {/* Bug 4: Rename removed from actions */}
           <RowActionsMenu
             actions={[
               { label: 'Copy link', onClick: () => void share() },
               {
                 label: 'Open in new tab',
                 onClick: () => window.open(recordingShareUrl(recording.id), '_blank'),
-              },
-              {
-                label: 'Rename',
-                onClick: () => {
-                  setRenameValue(recording.title);
-                  setRenameOpen(true);
-                },
               },
               {
                 label: 'Delete',
@@ -176,58 +186,11 @@ export function RecordingDetailPage() {
         </div>
       </div>
 
-      <ConfirmDialog
-        open={renameOpen}
-        title="Rename recording"
-        description="Choose a name that makes this recording easy to find later."
-        confirmLabel="Save name"
-        cancelLabel="Cancel"
-        busy={renaming}
-        input={{
-          label: 'Recording name',
-          value: renameValue,
-          placeholder: 'Enter a title',
-          onChange: setRenameValue,
-        }}
-        onClose={() => {
-          if (!renaming) setRenameOpen(false);
-        }}
-        onConfirm={() => {
-          void (async () => {
-            const next = renameValue.trim();
-            if (!next || next === recording.title) {
-              setRenameOpen(false);
-              return;
-            }
-            if (!activeWorkspace?.workspaceId) {
-              notify('No workspace selected');
-              return;
-            }
-            setRenaming(true);
-            try {
-              const updated = await recordingsService.rename(
-                activeWorkspace.workspaceId,
-                recording.id,
-                next,
-              );
-              setRecording(updated);
-              setRecordings((prev) =>
-                prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)),
-              );
-              setRenameOpen(false);
-              notify('Recording renamed');
-            } catch (err) {
-              notify(err instanceof Error ? err.message : 'Could not rename recording');
-            } finally {
-              setRenaming(false);
-            }
-          })();
-        }}
-      />
+      {/* ── Delete dialog ── */}
       <ConfirmDialog
         open={deleteOpen}
         title="Delete this recording?"
-        description={`“${recording.title}” will be permanently deleted. This action cannot be undone.`}
+        description={`"${recording.title}" will be permanently deleted. This action cannot be undone.`}
         confirmLabel="Delete recording"
         cancelLabel="Keep recording"
         danger
@@ -254,19 +217,44 @@ export function RecordingDetailPage() {
         }}
       />
 
+      {/* ── Main grid ── */}
       <div className="grid min-h-0 flex-1 gap-3 overflow-hidden lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-4">
-        {/* Left: video + scrollable details under it */}
+        {/* Left: video + scrollable details */}
         <div className="flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden">
+
+          {/* Bug 1: status-aware player area */}
           <div className="min-h-0 flex-[1.15] overflow-hidden">
-            <RecordingPlayer
-              key={recording.id}
-              title={recording.title}
-              durationSec={recording.durationSeconds}
-              src={streamUrl ?? undefined}
-              className="h-full min-h-[200px]"
-            />
+            {recording.status === 'ready' ? (
+              <RecordingPlayer
+                key={recording.id}
+                title={recording.title}
+                durationSec={recording.durationSeconds}
+                src={streamUrl ?? undefined}
+                poster={posterUrl ?? undefined}
+                className="h-full min-h-[200px]"
+              />
+            ) : recording.status === 'processing' ? (
+              <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-3 rounded-2xl bg-[#0B1220]">
+                <div className="size-10 animate-spin rounded-full border-4 border-white/10 border-t-[#016BE6]" />
+                <p className="text-[13px] font-medium text-white/60">Processing recording…</p>
+                <p className="text-[11px] text-white/30">
+                  This may take a few minutes. Refresh to check again.
+                </p>
+              </div>
+            ) : (
+              <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-3 rounded-2xl bg-[#0B1220]">
+                <div className="flex size-12 items-center justify-center rounded-full bg-red-500/20 text-2xl">
+                  ⚠️
+                </div>
+                <p className="text-[13px] font-medium text-white/60">Recording unavailable</p>
+                <p className="text-[11px] text-white/30">
+                  This recording could not be processed or the file is missing.
+                </p>
+              </div>
+            )}
           </div>
 
+          {/* Scrollable details */}
           <div className="scrollbar-none min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pb-1">
             <div className="rounded-2xl border border-[#E8ECF1] bg-white px-4 py-3.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
               <h1 className="text-lg font-bold tracking-tight text-[#151D2B] sm:text-xl">
@@ -275,7 +263,16 @@ export function RecordingDetailPage() {
               <p className="mt-1 text-[12px] text-[#6F7B8C]">
                 {recording.roomId}
                 <span className="mx-1.5 text-[#CBD5E1]">•</span>
-                {createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} at {createdAt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                {createdAt.toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}{' '}
+                at{' '}
+                {createdAt.toLocaleTimeString(undefined, {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
               </p>
               <div className="mt-2.5 flex flex-wrap gap-2">
                 <span className="inline-flex items-center gap-1 rounded-full bg-[#F1F5F9] px-2.5 py-1 text-[11px] font-medium text-[#334155]">
@@ -292,11 +289,16 @@ export function RecordingDetailPage() {
                 </span>
                 <span className="inline-flex items-center gap-1 rounded-full bg-[#F1F5F9] px-2.5 py-1 text-[11px] font-medium text-[#334155]">
                   <CalendarDays className="size-3 text-[#016BE6]" />
-                  {createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {createdAt.toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })}
                 </span>
               </div>
             </div>
 
+            {/* Bug 3: participants now show all attendees (fixed server-side) */}
             <div className="rounded-2xl border border-[#E8ECF1] bg-white px-4 py-3.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
               <div className="mb-2.5 flex items-center justify-between">
                 <h2 className="flex items-center gap-2 text-[13px] font-semibold text-[#151D2B]">
@@ -304,7 +306,7 @@ export function RecordingDetailPage() {
                   Participants
                 </h2>
                 <span className="text-[11px] font-medium text-[#8A94A6]">
-                  {participantCount} people
+                  {participantCount} {participantCount === 1 ? 'person' : 'people'}
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -333,6 +335,7 @@ export function RecordingDetailPage() {
           </div>
         </div>
 
+        {/* Right sidebar: recordings list */}
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#E8ECF1] bg-white shadow-[0_2px_8px_rgba(15,23,42,0.04)] max-lg:max-h-[40vh]">
           <div className="shrink-0 border-b border-[#EEF1F5] px-3.5 py-3">
             <h2 className="text-[13px] font-semibold text-[#151D2B]">Recordings</h2>
@@ -389,7 +392,11 @@ export function RecordingDetailPage() {
                         {r.title}
                       </p>
                       <p className="mt-0.5 text-[10px] text-[#8A94A6]">
-                        {itemDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} • {r.views} views
+                        {itemDate.toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                        })}{' '}
+                        • {r.views} views
                       </p>
                     </div>
                   </button>
@@ -400,6 +407,7 @@ export function RecordingDetailPage() {
         </aside>
       </div>
 
+      {/* Toast */}
       {toast ? (
         <div
           role="status"
