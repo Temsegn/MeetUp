@@ -15,6 +15,7 @@ import { authRepository } from '../auth/auth.repository';
 import { tokenService } from '../auth/services/token.service';
 import { listMeetingParticipants } from '../meetings/services/meeting-participants.service';
 import { resolveDurationSeconds } from './recordings.duration';
+import { logger } from '../../infrastructure/logging/logger';
 
 async function enrichParticipants(
   participants:

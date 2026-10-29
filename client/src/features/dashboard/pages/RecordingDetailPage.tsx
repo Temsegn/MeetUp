@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -24,14 +24,14 @@ import { recordingsService, type Recording } from '../../../services/recordings/
 /**
  * Watch page: player + details below; recordings list on the right.
  *
- * Bug fixes applied:
- *  - Bug 1: Only mount <RecordingPlayer> when status === 'ready'; show
- *    "Processing…" or "Recording unavailable" for other statuses so the
- *    player never shows a fake-playing blank state.
- *  - Bug 2: Stream URL is built via getStreamDirectUrl (plain string, no
- *    full-file blob download) so the browser can use HTTP range requests
- *    and start playback immediately.
- *  - Bug 4: Rename option removed from the actions menu.
+ * Fixes applied:
+ *  - Bug 1: Only mount <RecordingPlayer> when status === 'ready'.
+ *  - Bug 2: Stream URL is built lazily (fresh token every time) so a stale
+ *    or null in-memory token after a page refresh doesn't cause a 401.
+ *  - Bug 4: Rename removed from actions menu.
+ *  - Stream error: onVideoError callback fetches the stream URL with
+ *    Authorization header to get the real HTTP status code, then shows
+ *    an actionable error message with a Retry button.
  */
 export function RecordingDetailPage() {
   const { recordingId = '' } = useParams();
@@ -42,9 +42,26 @@ export function RecordingDetailPage() {
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [streamError, setStreamError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Keep a ref to the recording id so the retry handler can always use the latest.
+  const recordingIdRef = useRef(recordingId);
+  const workspaceIdRef = useRef(activeWorkspace?.workspaceId);
+  useEffect(() => {
+    recordingIdRef.current = recordingId;
+    workspaceIdRef.current = activeWorkspace?.workspaceId;
+  });
+
+  /** Build a fresh stream URL with the current access token. */
+  const buildStreamUrl = useCallback(() => {
+    const wsId = workspaceIdRef.current;
+    const recId = recordingIdRef.current;
+    if (!wsId || !recId) return null;
+    return recordingsService.getStreamDirectUrl(wsId, recId);
+  }, []);
 
   useEffect(() => {
     if (!activeWorkspace?.workspaceId || !recordingId) {
@@ -52,6 +69,7 @@ export function RecordingDetailPage() {
       return;
     }
     setLoading(true);
+    setStreamError(null);
     Promise.all([
       recordingsService.get(activeWorkspace.workspaceId, recordingId),
       recordingsService.list(activeWorkspace.workspaceId, { page: 1, limit: 20 }),
@@ -59,20 +77,17 @@ export function RecordingDetailPage() {
       .then(([current, list]) => {
         setRecording(current);
         setRecordings(list.recordings);
-        // Bug 1 + Bug 2: only build a stream URL when the recording is ready
-        // to play. getStreamDirectUrl returns a plain string (no blob fetch)
-        // so the browser can immediately begin buffering via range requests.
         if (current.status === 'ready') {
-          const url = recordingsService.getStreamDirectUrl(
+          // Build the stream URL with the current token at load time.
+          // The token is refreshed on retry via buildStreamUrl().
+          setStreamUrl(recordingsService.getStreamDirectUrl(
             activeWorkspace.workspaceId,
             recordingId,
-          );
-          setStreamUrl(url);
-          // Poster: synchronous URL build — server returns 204 if not ready yet,
-          // browser will silently ignore it and show a black frame instead.
-          setPosterUrl(
-            recordingsService.getPosterUrl(activeWorkspace.workspaceId, recordingId),
-          );
+          ));
+          setPosterUrl(recordingsService.getPosterUrl(
+            activeWorkspace.workspaceId,
+            recordingId,
+          ));
         } else {
           setStreamUrl(null);
           setPosterUrl(null);
@@ -89,6 +104,56 @@ export function RecordingDetailPage() {
       setPosterUrl(null);
     };
   }, [activeWorkspace?.workspaceId, recordingId]);
+
+  /**
+   * Called by RecordingPlayer when the <video> error event fires.
+   * We do a preflight HEAD/fetch to get the real HTTP status, then
+   * show an actionable message rather than a generic "failed to load".
+   */
+  const handleVideoError = useCallback(async () => {
+    const wsId = workspaceIdRef.current;
+    const recId = recordingIdRef.current;
+    if (!wsId || !recId) {
+      setStreamError('Recording could not be loaded.');
+      return;
+    }
+
+    try {
+      // Use getStreamBlobUrl internally — it sends Authorization header so we
+      // get the real status code rather than CORS-opaque 0.
+      const { getAccessToken } = await import('../../../services/auth/auth.service');
+      const { API_URL } = await import('../../../lib/apiUrl');
+      const token = getAccessToken();
+      const res = await fetch(
+        `${API_URL}/recordings/${recId}/stream?wsid=${wsId}&_probe=1`,
+        {
+          method: 'HEAD',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          credentials: 'include',
+        },
+      );
+
+      if (res.status === 401 || res.status === 403) {
+        setStreamError('Session expired. Please refresh the page to reload your session.');
+      } else if (res.status === 404) {
+        setStreamError('Recording file not found on the server. It may have been deleted.');
+      } else if (!res.ok) {
+        setStreamError(`Could not load recording (HTTP ${res.status}). Try again in a moment.`);
+      } else {
+        // Server says OK but video still errored — codec / format issue
+        setStreamError('Recording video failed to load. The file may be corrupted.');
+      }
+    } catch {
+      setStreamError('Network error loading recording. Check your connection and try again.');
+    }
+  }, []);
+
+  /** Rebuild the stream URL with a fresh token and clear the error. */
+  const handleRetry = useCallback(() => {
+    setStreamError(null);
+    const fresh = buildStreamUrl();
+    setStreamUrl(fresh);
+  }, [buildStreamUrl]);
 
   if (loading) {
     return <RecordingDetailSkeleton />;
@@ -168,7 +233,6 @@ export function RecordingDetailPage() {
             <Download className="size-3.5" />
             Download
           </button>
-          {/* Bug 4: Rename removed from actions */}
           <RowActionsMenu
             actions={[
               { label: 'Copy link', onClick: () => void share() },
@@ -195,9 +259,7 @@ export function RecordingDetailPage() {
         cancelLabel="Keep recording"
         danger
         busy={deleting}
-        onClose={() => {
-          if (!deleting) setDeleteOpen(false);
-        }}
+        onClose={() => { if (!deleting) setDeleteOpen(false); }}
         onConfirm={() => {
           void (async () => {
             if (!activeWorkspace?.workspaceId) {
@@ -219,37 +281,53 @@ export function RecordingDetailPage() {
 
       {/* ── Main grid ── */}
       <div className="grid min-h-0 flex-1 gap-3 overflow-hidden lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-4">
-        {/* Left: video + scrollable details */}
         <div className="flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden">
 
-          {/* Bug 1: status-aware player area */}
+          {/* Player area */}
           <div className="min-h-0 flex-[1.15] overflow-hidden">
             {recording.status === 'ready' ? (
-              <RecordingPlayer
-                key={recording.id}
-                title={recording.title}
-                durationSec={recording.durationSeconds}
-                src={streamUrl ?? undefined}
-                poster={posterUrl ?? undefined}
-                className="h-full min-h-[200px]"
-              />
+              <>
+                {/* Stream error overlay — shown instead of the player */}
+                {streamError ? (
+                  <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-4 rounded-2xl bg-[#0B1220] px-6 text-center">
+                    <div className="flex size-12 items-center justify-center rounded-full bg-red-500/20 text-2xl">
+                      ⚠️
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-medium text-white/80">{streamError}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRetry}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-[#016BE6] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#0059C4]"
+                    >
+                      <Play className="size-3.5" fill="currentColor" />
+                      Retry
+                    </button>
+                  </div>
+                ) : (
+                  <RecordingPlayer
+                    key={`${recording.id}-${streamUrl ?? 'loading'}`}
+                    title={recording.title}
+                    durationSec={recording.durationSeconds}
+                    src={streamUrl ?? undefined}
+                    poster={posterUrl ?? undefined}
+                    className="h-full min-h-[200px]"
+                    onVideoError={() => void handleVideoError()}
+                  />
+                )}
+              </>
             ) : recording.status === 'processing' ? (
               <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-3 rounded-2xl bg-[#0B1220]">
                 <div className="size-10 animate-spin rounded-full border-4 border-white/10 border-t-[#016BE6]" />
                 <p className="text-[13px] font-medium text-white/60">Processing recording…</p>
-                <p className="text-[11px] text-white/30">
-                  This may take a few minutes. Refresh to check again.
-                </p>
+                <p className="text-[11px] text-white/30">This may take a few minutes. Refresh to check again.</p>
               </div>
             ) : (
               <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-3 rounded-2xl bg-[#0B1220]">
-                <div className="flex size-12 items-center justify-center rounded-full bg-red-500/20 text-2xl">
-                  ⚠️
-                </div>
+                <div className="flex size-12 items-center justify-center rounded-full bg-red-500/20 text-2xl">⚠️</div>
                 <p className="text-[13px] font-medium text-white/60">Recording unavailable</p>
-                <p className="text-[11px] text-white/30">
-                  This recording could not be processed or the file is missing.
-                </p>
+                <p className="text-[11px] text-white/30">This recording could not be processed or the file is missing.</p>
               </div>
             )}
           </div>
@@ -263,42 +341,25 @@ export function RecordingDetailPage() {
               <p className="mt-1 text-[12px] text-[#6F7B8C]">
                 {recording.roomId}
                 <span className="mx-1.5 text-[#CBD5E1]">•</span>
-                {createdAt.toLocaleDateString(undefined, {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                })}{' '}
-                at{' '}
-                {createdAt.toLocaleTimeString(undefined, {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
+                {createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                {' '}at{' '}
+                {createdAt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
               </p>
               <div className="mt-2.5 flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#F1F5F9] px-2.5 py-1 text-[11px] font-medium text-[#334155]">
-                  <Clock3 className="size-3 text-[#016BE6]" />
-                  {durationLabel}
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#F1F5F9] px-2.5 py-1 text-[11px] font-medium text-[#334155]">
-                  <HardDrive className="size-3 text-[#016BE6]" />
-                  {sizeLabel}
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#F1F5F9] px-2.5 py-1 text-[11px] font-medium text-[#334155]">
-                  <Eye className="size-3 text-[#016BE6]" />
-                  {recording.views} views
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#F1F5F9] px-2.5 py-1 text-[11px] font-medium text-[#334155]">
-                  <CalendarDays className="size-3 text-[#016BE6]" />
-                  {createdAt.toLocaleDateString(undefined, {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </span>
+                {[
+                  { icon: <Clock3 className="size-3 text-[#016BE6]" />, label: durationLabel },
+                  { icon: <HardDrive className="size-3 text-[#016BE6]" />, label: sizeLabel },
+                  { icon: <Eye className="size-3 text-[#016BE6]" />, label: `${recording.views} views` },
+                  { icon: <CalendarDays className="size-3 text-[#016BE6]" />, label: createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) },
+                ].map(({ icon, label }, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 rounded-full bg-[#F1F5F9] px-2.5 py-1 text-[11px] font-medium text-[#334155]">
+                    {icon}
+                    {label}
+                  </span>
+                ))}
               </div>
             </div>
 
-            {/* Bug 3: participants now show all attendees (fixed server-side) */}
             <div className="rounded-2xl border border-[#E8ECF1] bg-white px-4 py-3.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
               <div className="mb-2.5 flex items-center justify-between">
                 <h2 className="flex items-center gap-2 text-[13px] font-semibold text-[#151D2B]">
@@ -310,12 +371,12 @@ export function RecordingDetailPage() {
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {(recording.participants ?? []).map((participant, i) => (
+                {(recording.participants ?? []).map((p, i) => (
                   <UserAvatar
                     key={`${recording.id}-p-${i}`}
-                    name={participant.name}
-                    avatarUrl={participant.avatarUrl}
-                    avatarColor={participant.avatarColor}
+                    name={p.name}
+                    avatarUrl={p.avatarUrl}
+                    avatarColor={p.avatarColor}
                     size="md"
                     ring
                   />
@@ -339,17 +400,13 @@ export function RecordingDetailPage() {
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#E8ECF1] bg-white shadow-[0_2px_8px_rgba(15,23,42,0.04)] max-lg:max-h-[40vh]">
           <div className="shrink-0 border-b border-[#EEF1F5] px-3.5 py-3">
             <h2 className="text-[13px] font-semibold text-[#151D2B]">Recordings</h2>
-            <p className="text-[11px] text-[#8A94A6]">
-              {recordings.length} files — click a row to play
-            </p>
+            <p className="text-[11px] text-[#8A94A6]">{recordings.length} files — click a row to play</p>
           </div>
-
           <ul className="scrollbar-none min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
             {recordings.map((r) => {
               const active = r.id === recording.id;
               const itemDate = new Date(r.createdAt);
-              const itemDuration =
-                r.durationSeconds > 0 ? `${Math.floor(r.durationSeconds / 60)}m` : '—';
+              const itemDuration = r.durationSeconds > 0 ? `${Math.floor(r.durationSeconds / 60)}m` : '—';
               return (
                 <li key={r.id}>
                   <button
@@ -357,24 +414,12 @@ export function RecordingDetailPage() {
                     onClick={() => navigate(`/app/recordings/${r.id}`)}
                     className={cn(
                       'flex w-full gap-2.5 rounded-xl px-2 py-2 text-left transition',
-                      active
-                        ? 'bg-[#E8F1FE] ring-1 ring-[#016BE6]/25'
-                        : 'hover:bg-[#F8FAFC]',
+                      active ? 'bg-[#E8F1FE] ring-1 ring-[#016BE6]/25' : 'hover:bg-[#F8FAFC]',
                     )}
                   >
                     <div className="relative h-12 w-[68px] shrink-0 overflow-hidden rounded-lg bg-[#0B1220]">
-                      <span
-                        className={cn(
-                          'absolute inset-0 flex items-center justify-center',
-                          active ? 'bg-[#016BE6]/35' : 'bg-black/20',
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            'flex size-6 items-center justify-center rounded-full',
-                            active ? 'bg-[#016BE6] text-white' : 'bg-black/45 text-white',
-                          )}
-                        >
+                      <span className={cn('absolute inset-0 flex items-center justify-center', active ? 'bg-[#016BE6]/35' : 'bg-black/20')}>
+                        <span className={cn('flex size-6 items-center justify-center rounded-full', active ? 'bg-[#016BE6] text-white' : 'bg-black/45 text-white')}>
                           <Play className="size-2.5" fill="currentColor" />
                         </span>
                       </span>
@@ -383,20 +428,11 @@ export function RecordingDetailPage() {
                       </span>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p
-                        className={cn(
-                          'line-clamp-2 text-[12px] font-semibold',
-                          active ? 'text-[#016BE6]' : 'text-[#151D2B]',
-                        )}
-                      >
+                      <p className={cn('line-clamp-2 text-[12px] font-semibold', active ? 'text-[#016BE6]' : 'text-[#151D2B]')}>
                         {r.title}
                       </p>
                       <p className="mt-0.5 text-[10px] text-[#8A94A6]">
-                        {itemDate.toLocaleDateString(undefined, {
-                          month: 'short',
-                          day: 'numeric',
-                        })}{' '}
-                        • {r.views} views
+                        {itemDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} • {r.views} views
                       </p>
                     </div>
                   </button>
@@ -407,12 +443,8 @@ export function RecordingDetailPage() {
         </aside>
       </div>
 
-      {/* Toast */}
       {toast ? (
-        <div
-          role="status"
-          className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-[#151D2B] px-4 py-2.5 text-[12px] font-medium text-white shadow-lg"
-        >
+        <div role="status" className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-[#151D2B] px-4 py-2.5 text-[12px] font-medium text-white shadow-lg">
           {toast}
         </div>
       ) : null}
