@@ -134,7 +134,7 @@ export function InstallAppButton({ variant = 'ghost', onInstall, className = '' 
           onClick={handleClick}
           disabled={installing}
           aria-label="Download Samtal app"
-          className={`inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#D7DEE8] bg-white/90 px-3 text-[12px] font-semibold text-[#243044] transition-colors hover:bg-white active:bg-[#F1F5F9] disabled:opacity-60 ${className}`}
+          className={`inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#D7DEE8] bg-white/90 px-2.5 text-[12px] font-semibold text-[#243044] transition-colors hover:bg-white active:bg-[#F1F5F9] disabled:opacity-60 ${className}`}
         >
           {installing ? (
             <svg className="size-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -144,7 +144,6 @@ export function InstallAppButton({ variant = 'ghost', onInstall, className = '' 
           ) : (
             <img src="/icons/icon-192x192.png" alt="" aria-hidden="true" className="size-4 rounded-[3px] object-contain" />
           )}
-          {/* Desktop always says "Download App" in the nav */}
           Download App
         </button>
         {showIosInstructions && <IosInstructionsOverlay onDismiss={dismissIosInstructions} />}

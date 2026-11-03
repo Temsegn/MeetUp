@@ -100,15 +100,19 @@ export function LandingNav({ user }: Props) {
           )}
         </div>
 
-        <button
-          type="button"
-          className="justify-self-end rounded-xl p-2 text-[#5B677A] hover:bg-[#F5F7FA] md:hidden"
-          aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
-          aria-expanded={mobileOpen}
-          onClick={() => setMobileOpen((v) => !v)}
-        >
-          {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
-        </button>
+        {/* Mobile right slot: Download App button + hamburger */}
+        <div className="flex items-center gap-1.5 justify-self-end md:hidden">
+          <InstallAppButton variant="nav" />
+          <button
+            type="button"
+            className="rounded-xl p-2 text-[#5B677A] hover:bg-[#F5F7FA]"
+            aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen((v) => !v)}
+          >
+            {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+          </button>
+        </div>
       </div>
 
       {mobileOpen ? (
