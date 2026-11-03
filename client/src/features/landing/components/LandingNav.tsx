@@ -8,6 +8,7 @@ import { useLandingChrome } from '../landing-chrome';
 import { useLandingLocale } from '../landing-locale';
 import { useLandingCopy } from '../useLandingCopy';
 import { AppEntryLink, AuthLink } from './LandingLinks';
+import { InstallAppButton } from './InstallAppButton';
 
 type Props = {
   user: { name?: string } | null;
@@ -61,6 +62,8 @@ export function LandingNav({ user }: Props) {
         </nav>
 
         <div className="hidden items-center justify-self-end gap-2 md:flex">
+          {/* Install / Download App — desktop: before language switcher */}
+          <InstallAppButton variant="nav" />
           <div className="me-1 flex rounded-lg border border-[#E6EBF2] bg-[#F8FAFC] p-0.5 text-[11px] font-semibold">
             <button
               type="button"
@@ -129,6 +132,10 @@ export function LandingNav({ user }: Props) {
             ))}
           </nav>
           <div className="mt-3 flex gap-2 border-t border-[#E6EBF2] pt-3">
+            {/* Install / Download App — mobile menu: before language buttons */}
+            <InstallAppButton variant="mobile-menu" onInstall={() => setMobileOpen(false)} />
+          </div>
+          <div className="mt-2 flex gap-2">
             <button
               type="button"
               onClick={() => setLocale('en')}

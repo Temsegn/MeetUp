@@ -1,0 +1,32 @@
+# ── Local development compose ──────────────────────────────────────────────────────
+# Runs ONLY MongoDB in Docker, exposes it on localhost:27017.
+# Start with:  docker compose -f docker-compose.dev.yml up -d
+#
+# Then in two separate terminals:
+#   Terminal 1 → cd server && npm run dev
+#   Terminal 2 → cd client && npm run dev
+#
+# Frontend:  http://localhost:5173
+# Backend:   http://localhost:4001
+
+services:
+  mongo:
+    image: mongo:8.0
+    restart: unless-stopped
+    ports:
+      # Expose MongoDB to the host so npm run dev (outside Docker) can connect
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo_data_dev:/data/db
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --eval
+        - "db.adminCommand('ping')"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongo_data_dev:

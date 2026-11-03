@@ -2,12 +2,38 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+
+    <!-- Favicon & touch icons -->
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="shortcut icon" type="image/png" href="/favicon.png" />
-    <link rel="apple-touch-icon" href="/favicon.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512x512.png" />
+
+    <!-- Viewport -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- PWA manifest -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Theme color (matches brand blue) -->
+    <meta name="theme-color" content="#016BE6" />
+    <meta name="msapplication-TileColor" content="#016BE6" />
+    <meta name="msapplication-TileImage" content="/icons/icon-192x192.png" />
+
+    <!-- Mobile web app capable (iOS standalone-mode support) -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Samtal" />
+
+    <!-- SEO / Open Graph -->
+    <meta name="description" content="Secure video meetings for organizations — waiting rooms, screen share, whiteboard, chat, calendar, and recordings." />
+    <meta property="og:title" content="Samtal" />
+    <meta property="og:description" content="Secure video meetings for organizations." />
+    <meta property="og:image" content="/icons/icon-512x512.png" />
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
-    <title>Samtal — Organization video meetings</title>
+    <title>Samtal</title>
   </head>
   <body>
     <div id="root"></div>
