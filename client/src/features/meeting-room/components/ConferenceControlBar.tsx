@@ -16,6 +16,7 @@ import {
   Settings2,
   Lock,
   LockOpen,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '../../../lib/cn';
 
@@ -57,6 +58,9 @@ type Props = {
   onToggleParticipants: () => void;
   onToggleChat: () => void;
   onOpenDevices?: () => void;
+  /** Opens the virtual background / blur picker. */
+  onOpenBackgrounds?: () => void;
+  backgroundActive?: boolean;
   onToggleLock?: () => void;
   onSendReaction: (reaction: string) => void;
   onLeave: () => void;
@@ -189,6 +193,15 @@ export function ConferenceControlBar(props: Props) {
         onClick: props.onOpenDevices,
       });
     }
+    if (props.onOpenBackgrounds) {
+      items.push({
+        id: 'backgrounds',
+        label: 'Backgrounds',
+        icon: Sparkles,
+        active: props.backgroundActive,
+        onClick: props.onOpenBackgrounds,
+      });
+    }
     if (props.canLock && props.onToggleLock) {
       items.push({
         id: 'lock',
@@ -220,6 +233,8 @@ export function ConferenceControlBar(props: Props) {
     props.recordingBusy,
     props.onToggleRecording,
     props.onOpenDevices,
+    props.onOpenBackgrounds,
+    props.backgroundActive,
     props.canLock,
     props.meetingLocked,
     props.onToggleLock,

@@ -26,7 +26,7 @@ export const SignInPanel: React.FC<Props> = (props) => (
     className="flex min-h-0 min-w-0 flex-col overflow-y-auto overflow-x-hidden bg-white"
     aria-labelledby="signin-heading"
   >
-    <div className="flex min-h-full flex-col items-center justify-center px-8 py-10 sm:px-12 sm:py-12">
+    <div className="flex min-h-full flex-col items-center justify-center px-6 py-8 sm:px-12 sm:py-12">
       <div className="flex w-full max-w-[24rem] flex-col items-center">
         <WelcomeHeader />
         <div className="w-full">

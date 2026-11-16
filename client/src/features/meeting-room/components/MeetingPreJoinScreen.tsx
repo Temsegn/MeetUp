@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import { ArrowLeft, Check, Copy, Mic, MicOff, Video, VideoOff } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Mic, MicOff, Sparkles, Video, VideoOff } from 'lucide-react';
 import { VideoPlayer } from '../../../components/video/VideoPlayer';
 import { UserAvatar } from '../../../components/ui/UserAvatar';
 import { guestJoinUrl } from '../../../lib/frontendUrl';
+import { cn } from '../../../lib/cn';
+import type { BackgroundEffectController } from '../../media/hooks/useBackgroundEffect';
+import { BackgroundEffectPicker } from './BackgroundEffectPicker';
 
 type Props = {
   roomId: string;
@@ -17,6 +20,10 @@ type Props = {
   avatarUrl?: string | null;
   avatarColor?: string | null;
   localStream: MediaStream | null;
+  /** What to show in the preview (camera with background effect applied). */
+  previewStream?: MediaStream | null;
+  /** Virtual background controls; omit to hide the Backgrounds button. */
+  background?: BackgroundEffectController;
   mediaError?: string | null;
   onRequestMedia?: () => void;
   isJoining?: boolean;
@@ -47,6 +54,8 @@ export function MeetingPreJoinScreen({
   avatarUrl,
   avatarColor,
   localStream,
+  previewStream,
+  background,
   mediaError = null,
   onRequestMedia,
   isJoining = false,
@@ -62,6 +71,9 @@ export function MeetingPreJoinScreen({
   const [audioMuted, setAudioMuted] = useState(false);
   const [videoMuted, setVideoMuted] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const shownStream = previewStream ?? localStream;
+  const hasCamera = Boolean(localStream?.getVideoTracks().length);
 
   const toggleAudio = () => {
     if (!localStream) {
@@ -180,8 +192,8 @@ export function MeetingPreJoinScreen({
         {/* Preview — constrained height so form fits one screen */}
         <div className="relative min-h-0 w-full shrink-0 overflow-hidden rounded-2xl border border-[#E8ECF1] bg-[#0F172A] shadow-sm lg:min-h-0 lg:flex-1">
           <div className="relative aspect-[16/10] max-h-[32svh] w-full sm:max-h-[38svh] lg:aspect-auto lg:h-full lg:max-h-none">
-            {localStream && !videoMuted ? (
-              <VideoPlayer stream={localStream} muted className="h-full w-full object-cover" />
+            {shownStream && !videoMuted ? (
+              <VideoPlayer stream={shownStream} muted className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full min-h-[140px] w-full flex-col items-center justify-center gap-2 px-4 lg:min-h-0">
                 <UserAvatar
@@ -217,9 +229,39 @@ export function MeetingPreJoinScreen({
               >
                 {videoMuted ? <VideoOff className="size-4" /> : <Video className="size-4" />}
               </button>
+              {background && hasCamera ? (
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen((v) => !v)}
+                  className={cn(
+                    'flex size-10 items-center justify-center rounded-full',
+                    background.isActive || pickerOpen
+                      ? 'bg-[#016BE6] text-white'
+                      : 'bg-white/95 text-[#151D2B]',
+                  )}
+                  aria-label="Backgrounds and effects"
+                  aria-expanded={pickerOpen}
+                  title="Backgrounds and effects"
+                >
+                  <Sparkles className="size-4" />
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
+
+        {background && pickerOpen ? (
+          <div className="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 flex justify-center px-3 lg:inset-x-auto lg:right-6 lg:bottom-6 lg:px-0">
+            <BackgroundEffectPicker
+              effect={background.effect}
+              onSelect={background.setEffect}
+              onClose={() => setPickerOpen(false)}
+              status={background.status}
+              error={background.error}
+              onOpen={background.preload}
+            />
+          </div>
+        ) : null}
 
         {/* Join form — compact, one-screen */}
         <div className="flex min-h-0 w-full flex-1 flex-col justify-center overflow-y-auto overscroll-contain lg:max-w-sm lg:shrink-0 lg:overflow-visible">

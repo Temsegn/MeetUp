@@ -10,7 +10,7 @@ type Props = {
 };
 
 const inputClass =
-  'h-11 w-full rounded-xl border border-[#E2E8F0] bg-white px-3 pl-10 text-[0.9375rem] text-[#0F172A] caret-[#016BE6] outline-none placeholder:text-[#94A3B8] hover:border-slate-300 focus:border-[#016BE6] focus:shadow-[0_0_0_3px_rgba(1,107,230,0.12)]';
+  'h-12 w-full rounded-xl border border-[#E2E8F0] bg-white px-3 pl-10 text-[0.9375rem] text-[#0F172A] caret-[#016BE6] outline-none placeholder:text-[#94A3B8] hover:border-slate-300 focus:border-[#016BE6] focus:shadow-[0_0_0_3px_rgba(1,107,230,0.12)]';
 
 export const EmailField: React.FC<Props> = ({
   id = 'signin-email',

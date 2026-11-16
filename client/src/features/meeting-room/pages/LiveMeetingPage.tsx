@@ -14,6 +14,7 @@ import {
 } from '../../meeting/lib/guest-display-name';
 import { setLiveMeetingPresence } from '../../meeting/lib/live-meeting-presence';
 import { useLocalMedia } from '../../media/hooks/useLocalMedia';
+import { useBackgroundEffect } from '../../media/hooks/useBackgroundEffect';
 import { useReactions } from '../../collaboration/hooks/useReactions';
 import { ReactionOverlay } from '../../collaboration/components/ReactionOverlay/ReactionOverlay';
 import { useMeetingScreenRecorder } from '../../media/recording/useMeetingScreenRecorder';
@@ -31,6 +32,7 @@ import { MeetingRoomHeader } from '../components/MeetingRoomHeader';
 import { VideoTile, type LiveParticipant } from '../components/VideoTile';
 import { ConferenceControlBar } from '../components/ConferenceControlBar';
 import { MeetingDeviceSettings } from '../components/MeetingDeviceSettings';
+import { BackgroundEffectPicker } from '../components/BackgroundEffectPicker';
 import { MeetingVideoGrid } from '../components/MeetingVideoGrid';
 import { ParticipantsPanel } from '../components/ParticipantsPanel';
 import { MeetingChatPanel } from '../components/MeetingChatPanel';
@@ -236,6 +238,12 @@ export function LiveMeetingPage() {
     replaceAudioTrack,
     error: mediaError,
   } = useLocalMedia();
+  // AI virtual background / blur. `cameraStream` is what we preview and send;
+  // `localStream` stays the raw capture (device switching, mute toggles, leave).
+  const background = useBackgroundEffect(localStream, { paused: isCameraOff });
+  const cameraStream = background.outputStream ?? localStream;
+  const getOutgoingVideoTrack = background.getOutgoingVideoTrack;
+  const [backgroundPickerOpen, setBackgroundPickerOpen] = useState(false);
   const { activeReactions, sendReaction, raisedHands, toggleRaiseHand, setRaiseHand } = useReactions(
     roomId,
     participantId || '__pre_join__',
@@ -484,10 +492,25 @@ export function LiveMeetingPage() {
           if (track.readyState !== 'live') continue;
           if (publishedTrackIdsRef.current.has(track.id)) continue;
           publishedTrackIdsRef.current.add(track.id);
+          // Send the virtual-background track when an effect is on. Its track is
+          // stable across camera switches, so skip if it's already being sent.
+          const outgoing = background.getOutgoingVideoTrack(track);
+          if (
+            sess
+              .getProducersBySource('camera')
+              .some((p) => !p.closed && p.track === outgoing)
+          ) {
+            continue;
+          }
           try {
-            const producer = await sess.produce(track, 'camera', true);
+            const producer = await sess.produce(outgoing, 'camera', true);
             if (isCameraOff && producer) {
               await sess.pauseProducer(producer.id);
+            }
+            // Effect toggled while produce() was in flight → send the latest track.
+            const latest = background.getOutgoingVideoTrack(track);
+            if (producer && latest !== outgoing && latest.readyState === 'live') {
+              await producer.replaceTrack({ track: latest });
             }
           } catch (err) {
             publishedTrackIdsRef.current.delete(track.id);
@@ -510,6 +533,20 @@ export function LiveMeetingPage() {
     muteOnEntry,
     meetingMeta?.settings?.muteOnEntry,
   ]);
+
+  // Background effect toggled on/off mid-call → swap the camera producer's
+  // track in place (no renegotiation, remote peers keep their consumer).
+  const outgoingVideoTrack = background.outgoingVideoTrack;
+  useEffect(() => {
+    if (!joined || !outgoingVideoTrack || outgoingVideoTrack.readyState !== 'live') return;
+    const sess = session.current;
+    if (!sess) return;
+    const producers = sess.getProducersBySource('camera').filter((p) => !p.closed);
+    if (producers.length === 0 || producers.every((p) => p.track === outgoingVideoTrack)) return;
+    sess.replaceProducerTrack('camera', outgoingVideoTrack).catch(() => {
+      addToast('Could not apply background effect to your camera');
+    });
+  }, [joined, outgoingVideoTrack, session, mediaEpoch, addToast]);
 
   useEffect(() => {
     setMeetingLocked(Boolean(meetingMeta?.settings?.locked));
@@ -592,12 +629,14 @@ export function LiveMeetingPage() {
       }
       setVideoInputId(deviceId);
       try {
-        await session.current?.replaceProducerTrack('camera', track);
+        // With a background effect on, the processor's output track is kept and
+        // only its input changes — replacing with the same track is a no-op.
+        await session.current?.replaceProducerTrack('camera', getOutgoingVideoTrack(track));
       } catch {
         addToast('Camera switched locally; republish may be needed');
       }
     },
-    [replaceVideoTrack, session, addToast],
+    [replaceVideoTrack, session, addToast, getOutgoingVideoTrack],
   );
 
   const handleSelectSpeaker = useCallback(
@@ -889,7 +928,7 @@ export function LiveMeetingPage() {
     const local: LiveParticipant = {
       id: participantId || 'local',
       name: effectiveName || 'You',
-      stream: screenStream || localStream,
+      stream: screenStream || cameraStream,
       isYou: true,
       isMuted,
       isCameraOff: screenStream ? false : isCameraOff,
@@ -930,7 +969,7 @@ export function LiveMeetingPage() {
       };
     });
     return [local, ...remotes];
-  }, [participantId, effectiveName, user?.avatarUrl, user?.avatarColor, localStream, screenStream, isMuted, isCameraOff, peers, remoteStreams, raisedHands]);
+  }, [participantId, effectiveName, user?.avatarUrl, user?.avatarColor, cameraStream, screenStream, isMuted, isCameraOff, peers, remoteStreams, raisedHands]);
 
   const panelPeople = useMemo(
     () =>
@@ -1201,6 +1240,8 @@ export function LiveMeetingPage() {
         avatarUrl={user?.avatarUrl}
         avatarColor={user?.avatarColor}
         localStream={localStream}
+        previewStream={cameraStream}
+        background={background}
         mediaError={mediaError?.message ?? null}
         onRequestMedia={() => void startLocalMedia().catch(() => {})}
         isJoining={isJoining}
@@ -1561,6 +1602,10 @@ export function LiveMeetingPage() {
           onOpenDevices={
             controllingRemote ? undefined : () => setDeviceSettingsOpen(true)
           }
+          backgroundActive={background.isActive}
+          onOpenBackgrounds={
+            controllingRemote ? undefined : () => setBackgroundPickerOpen((v) => !v)
+          }
           onToggleLock={
             isHost && !controllingRemote ? () => handleToggleLock() : undefined
           }
@@ -1569,6 +1614,19 @@ export function LiveMeetingPage() {
           userName={controllingRemote && controlledPeerName ? controlledPeerName : effectiveName}
         />
       </div>
+
+      {backgroundPickerOpen && !controllingRemote ? (
+        <div className="fixed inset-x-0 bottom-[5.25rem] z-[60] flex justify-center px-3 sm:inset-x-auto sm:right-4 sm:bottom-[5.75rem] sm:px-0">
+          <BackgroundEffectPicker
+            effect={background.effect}
+            onSelect={background.setEffect}
+            onClose={() => setBackgroundPickerOpen(false)}
+            status={background.status}
+            error={background.error}
+            onOpen={background.preload}
+          />
+        </div>
+      ) : null}
 
       <MeetingDeviceSettings
         open={deviceSettingsOpen}

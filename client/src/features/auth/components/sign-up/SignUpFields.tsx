@@ -4,7 +4,7 @@ import { cn } from '../../../../lib/cn';
 import { AUTH_ASSETS } from '../../constants/auth.assets';
 
 const baseInput =
-  'h-9 w-full rounded-[10px] border border-[#E2E8F0] bg-white text-[0.8125rem] leading-normal text-[#1C2842] caret-[#0056EF] outline-none placeholder:text-[#62748E] hover:border-slate-300 focus:border-[#0056EF] focus:shadow-[0_0_0_2px_rgba(0,86,239,0.12)]';
+  'h-12 w-full rounded-xl border border-[#E2E8F0] bg-white text-[0.9375rem] leading-normal text-[#1C2842] caret-[#0056EF] outline-none placeholder:text-[#62748E] hover:border-slate-300 focus:border-[#0056EF] focus:shadow-[0_0_0_3px_rgba(0,86,239,0.12)]';
 
 type FieldProps = {
   id: string;

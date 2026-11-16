@@ -33,3 +33,14 @@ docs/user-guide/screenshots/
 docs/user-guide/_prepared/
 docs/user-guide/_qa/
 docs/user-guide/_sample_qa/
+
+# Local AI tooling (Claude Code, graphify, MCP) — per-developer, do not commit
+.claude/
+CLAUDE.md
+.mcp.json
+graphify-out/
+
+# Office documents + LibreOffice/Office lock files
+.~lock.*#
+~$*
+*.docx
