@@ -1,13 +1,15 @@
-import { Router } from 'express';
-import { createReadStream } from 'fs';
+import { Router, type NextFunction, type Request, type Response } from 'express';
+import { createReadStream, createWriteStream, promises as fsp } from 'fs';
+import { randomUUID } from 'crypto';
+import { Transform } from 'stream';
+import { pipeline } from 'stream/promises';
 import { Types } from 'mongoose';
-import express from 'express';
 import { requireWorkspace } from '../workspace/workspace.middleware';
 import { authenticate } from '../auth/middleware/authenticate.middleware';
 import { AuthRequest } from '../auth/auth.types';
 import { Recording } from '../../database/models/Recording.model';
 import { storage } from '../../infrastructure/storage/local.storage';
-import { NotFoundError, ForbiddenError } from '../../shared/errors/AppError';
+import { NotFoundError, ForbiddenError, AppError } from '../../shared/errors/AppError';
 import { hasMinRole } from '../workspace/workspace.types';
 import { createRecordingsController } from './controllers/recordings.controller';
 import { RoomIdParamsSchema, validateParams } from './recordings.validation';
@@ -516,12 +518,52 @@ router.delete('/:id', requireWorkspace('member'), async (req: AuthRequest, res) 
   res.json({ success: true });
 });
 
-// ── Legacy upload endpoint (raw webm → MP4) ─────────────────────────────────
+// ── Upload endpoint (WebM → MP4 in the background) ─────────────────────────
+/** ~2.5 h of meeting video at the recorder's 2.5 Mbps target. */
+const MAX_RECORDING_BYTES = 3 * 1024 ** 3;
+
+function tooLarge(): AppError {
+  return new AppError('Recording is too large to upload.', 'RECORDING_TOO_LARGE', 413);
+}
+
+/**
+ * Stream the request body straight to disk instead of buffering it in memory
+ * (express.raw held up to 500 MB per upload in RAM). Sets res.locals.uploadPath.
+ */
+async function streamUploadToDisk(req: Request, res: Response, next: NextFunction) {
+  const declared = Number(req.headers['content-length'] || 0);
+  if (declared > MAX_RECORDING_BYTES) return next(tooLarge());
+
+  let tmpPath: string | null = null;
+  try {
+    await storage.mkdir('recordings', '_incoming');
+    tmpPath = storage.pathFor('recordings', `_incoming/${Date.now()}-${randomUUID()}.webm`);
+    let received = 0;
+    const limiter = new Transform({
+      transform(chunk: Buffer, _enc, cb) {
+        received += chunk.length;
+        if (received > MAX_RECORDING_BYTES) cb(tooLarge());
+        else cb(null, chunk);
+      },
+    });
+    await pipeline(req, limiter, createWriteStream(tmpPath));
+    res.locals.uploadPath = tmpPath;
+    next();
+  } catch (err) {
+    if (tmpPath) await fsp.unlink(tmpPath).catch(() => {});
+    next(
+      err instanceof AppError
+        ? err
+        : new AppError('Recording upload was interrupted. Please try again.', 'UPLOAD_ABORTED', 400),
+    );
+  }
+}
+
 router.post(
   '/:roomId',
   authenticate,
-  express.raw({ type: () => true, limit: '500mb' }),
   validateParams(RoomIdParamsSchema),
+  streamUploadToDisk,
   (req, res) => legacyController.upload(req, res),
 );
 

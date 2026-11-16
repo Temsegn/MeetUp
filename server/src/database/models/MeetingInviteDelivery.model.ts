@@ -16,6 +16,8 @@ export interface IMeetingInviteDelivery extends Document {
   messageId?: string | null;
   smtpMode?: 'smtp' | 'console' | null;
   nextAttemptAt?: Date | null;
+  /** Send lease: set atomically by the sender that owns this row right now. */
+  claimedUntil?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,6 +40,7 @@ const meetingInviteDeliverySchema = new Schema<IMeetingInviteDelivery>(
     messageId: { type: String, default: null },
     smtpMode: { type: String, enum: ['smtp', 'console'], default: null },
     nextAttemptAt: { type: Date, default: null },
+    claimedUntil: { type: Date, default: null },
   },
   { timestamps: true },
 );

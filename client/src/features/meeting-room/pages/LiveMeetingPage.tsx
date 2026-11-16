@@ -244,6 +244,9 @@ export function LiveMeetingPage() {
   const cameraStream = background.outputStream ?? localStream;
   const getOutgoingVideoTrack = background.getOutgoingVideoTrack;
   const [backgroundPickerOpen, setBackgroundPickerOpen] = useState(false);
+  // Dashboard "Share Screen" quick action → offer one-tap sharing after join.
+  // (getDisplayMedia needs a user gesture, so it can't start automatically.)
+  const [sharePromptOpen, setSharePromptOpen] = useState(() => searchParams.get('share') === '1');
   const { activeReactions, sendReaction, raisedHands, toggleRaiseHand, setRaiseHand } = useReactions(
     roomId,
     participantId || '__pre_join__',
@@ -1614,6 +1617,40 @@ export function LiveMeetingPage() {
           userName={controllingRemote && controlledPeerName ? controlledPeerName : effectiveName}
         />
       </div>
+
+      {sharePromptOpen && joined && !screenStream && !controllingRemote ? (
+        <div className="fixed inset-x-0 bottom-[5.25rem] z-[60] flex justify-center px-3 sm:bottom-[5.75rem]">
+          <div
+            role="dialog"
+            aria-label="Share your screen"
+            className="flex w-full max-w-sm items-center gap-3 rounded-2xl border border-[#E8ECF1] bg-white p-3 shadow-[0_8px_30px_rgba(15,23,42,0.16)]"
+          >
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#EEE9FF] text-[#6B3FA0]">
+              <MonitorUp className="size-4" />
+            </span>
+            <p className="min-w-0 flex-1 text-[12px] font-semibold text-[#151D2B]">
+              Ready to present your screen?
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSharePromptOpen(false);
+                void handleShareScreen();
+              }}
+              className="h-9 shrink-0 rounded-xl bg-[#016BE6] px-3 text-[12px] font-semibold text-white hover:bg-[#0159C7]"
+            >
+              Share screen
+            </button>
+            <button
+              type="button"
+              onClick={() => setSharePromptOpen(false)}
+              className="h-9 shrink-0 rounded-xl px-2 text-[12px] font-semibold text-[#64748B] hover:bg-[#F1F5F9]"
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {backgroundPickerOpen && !controllingRemote ? (
         <div className="fixed inset-x-0 bottom-[5.25rem] z-[60] flex justify-center px-3 sm:inset-x-auto sm:right-4 sm:bottom-[5.75rem] sm:px-0">

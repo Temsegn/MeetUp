@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarClock, ChevronDown, Plus, Video, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { CalendarClock, ChevronDown, LogIn, Plus, Video, X } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { JoinMeetingDialog } from './JoinMeetingDialog';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotificationCenter } from '../../../contexts/NotificationCenterContext';
 import { meetingsService, type Meeting } from '../../../services/meetings/meetings.service';
@@ -46,6 +47,31 @@ export function CreateMeetingMenu() {
   const { activeWorkspace, user } = useAuth();
   const { pushLocalNotification } = useNotificationCenter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [joinOpen, setJoinOpen] = useState(false);
+  /** Dashboard "Share Screen" quick action: open screen share once in the room. */
+  const [shareOnJoin, setShareOnJoin] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Dashboard Quick Actions deep-link here: ?create=schedule|instant[&share=1], ?join=1
+  useEffect(() => {
+    const create = searchParams.get('create');
+    const join = searchParams.get('join');
+    if (!create && !join) return;
+    if (create === 'schedule' || create === 'scheduled') setCreateOpen('scheduled');
+    else if (create === 'instant') {
+      setCreateOpen('instant');
+      setShareOnJoin(searchParams.get('share') === '1');
+    }
+    if (join === '1') setJoinOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('create');
+    next.delete('join');
+    next.delete('share');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const liveRoomPath = (roomId: string) =>
+    `/app/meeting/${roomId}${shareOnJoin ? '?share=1' : ''}`;
   const [createOpen, setCreateOpen] = useState<'instant' | 'scheduled' | null>(null);
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState('');
@@ -129,6 +155,7 @@ export function CreateMeetingMenu() {
   }, [scheduledAt, duration, timezone, createOpen]);
 
   const reset = () => {
+    setShareOnJoin(false);
     setTitle('');
     setScheduledAt('');
     setDuration(30);
@@ -230,7 +257,7 @@ export function CreateMeetingMenu() {
       );
       reset();
       if (createOpen === 'scheduled') navigate(`/app/meetings/${meeting.id}`);
-      else navigate(`/app/meeting/${meeting.roomId}`);
+      else navigate(liveRoomPath(meeting.roomId));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create meeting.');
     } finally {
@@ -319,6 +346,20 @@ export function CreateMeetingMenu() {
               <p className="text-[11px] text-[#6F7B8C]">Choose title, date, and participants.</p>
             </div>
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setJoinOpen(true);
+              setMenuOpen(false);
+            }}
+            className="flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left hover:bg-[#F8FAFC]"
+          >
+            <LogIn className="mt-0.5 size-4 text-[#016BE6]" />
+            <div>
+              <p className="text-[12px] font-semibold text-[#151D2B]">Join with ID</p>
+              <p className="text-[11px] text-[#6F7B8C]">Enter a meeting ID or paste a link.</p>
+            </div>
+          </button>
         </div>
       ) : null}
 
@@ -358,7 +399,7 @@ export function CreateMeetingMenu() {
                   if (!first) return;
                   setLiveWarning(null);
                   reset();
-                  navigate(`/app/meeting/${first.roomId}`);
+                  navigate(liveRoomPath(first.roomId));
                 }}
                 className="rounded-lg border border-[#016BE6] px-3 py-2 text-[12px] font-semibold text-[#016BE6] hover:bg-[#F4F8FF]"
               >
@@ -627,6 +668,7 @@ export function CreateMeetingMenu() {
           </div>
         </div>
       ) : null}
+      <JoinMeetingDialog open={joinOpen} onClose={() => setJoinOpen(false)} />
     </div>
   );
 }

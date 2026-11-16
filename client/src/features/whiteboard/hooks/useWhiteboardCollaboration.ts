@@ -32,6 +32,8 @@ export type CollaboratorCursor = {
   userName: string;
   x: number;
   y: number;
+  button?: 'up' | 'down';
+  tool?: 'pointer' | 'laser';
 };
 
 type CollabHandlers = {
@@ -39,7 +41,12 @@ type CollabHandlers = {
     elements: readonly WhiteboardElement[],
     files?: WhiteboardFiles,
   ) => void;
-  sendCursor: (x: number, y: number, button?: 'up' | 'down') => void;
+  sendCursor: (
+    x: number,
+    y: number,
+    button?: 'up' | 'down',
+    tool?: 'pointer' | 'laser',
+  ) => void;
   fitContent: () => void;
 };
 
@@ -248,6 +255,8 @@ export function useWhiteboardCollaboration(opts: {
           userName: payload.userName,
           x: payload.x,
           y: payload.y,
+          button: payload.button,
+          tool: payload.tool,
         },
       }));
     });
@@ -385,8 +394,8 @@ export function useWhiteboardCollaboration(opts: {
         }
         scheduleFlush();
       },
-      sendCursor: throttle((x: number, y: number, button?: 'up' | 'down') => {
-        adapter.sendCursor({ x, y, pointer: 'mouse', button });
+      sendCursor: throttle((x: number, y: number, button?: 'up' | 'down', tool?: 'pointer' | 'laser') => {
+        adapter.sendCursor({ x, y, pointer: 'mouse', button, tool });
         // Commit the finished stroke/shape as soon as the pointer lifts.
         if (button === 'up') {
           const api = apiRef.current;
@@ -490,11 +499,15 @@ export function useWhiteboardCollaboration(opts: {
   );
 
   const onPointerUpdate = useCallback(
-    (payload: { pointer: { x: number; y: number }; button: 'up' | 'down' }) => {
+    (payload: {
+      pointer: { x: number; y: number; tool?: 'pointer' | 'laser' };
+      button: 'up' | 'down';
+    }) => {
       handlersRef.current?.sendCursor(
         payload.pointer.x,
         payload.pointer.y,
         payload.button,
+        payload.pointer.tool === 'laser' ? 'laser' : 'pointer',
       );
     },
     [],

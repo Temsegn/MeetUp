@@ -46,6 +46,7 @@ export const WhiteboardCursorSchema = z.object({
   y: z.number().finite(),
   pointer: z.enum(['mouse', 'touch', 'pen']).optional(),
   button: z.enum(['up', 'down']).optional(),
+  tool: z.enum(['pointer', 'laser']).optional(),
 });
 
 export const WhiteboardClearSchema = z.object({

@@ -44,6 +44,8 @@ export function meetingInviteEmail(input: {
   /** Optional workspace logo URL / data URL for footer branding. */
   logoUrl?: string | null;
   supportEmail?: string | null;
+  /** Signed RSVP links (Accept / Maybe / Decline). Omitted for cancellations. */
+  rsvp?: { accept: string; tentative: string; decline: string } | null;
 }): { subject: string; text: string; html: string; joinUrl: string } {
   const joinUrl = `${env.FRONTEND_URL}/join/${encodeURIComponent(input.roomId)}?email=${encodeURIComponent(input.inviteeEmail)}`;
   const tz = (input.timezone && input.timezone.trim()) || 'Asia/Riyadh';
@@ -96,6 +98,15 @@ export function meetingInviteEmail(input: {
       : `This invitation is for ${input.inviteeEmail}. Open the link below, enter your name, and join.`,
     kind === 'cancel' ? '' : joinUrl,
     '',
+    ...(kind !== 'cancel' && input.rsvp
+      ? [
+          'Will you attend?',
+          `  Yes:   ${input.rsvp.accept}`,
+          `  Maybe: ${input.rsvp.tentative}`,
+          `  No:    ${input.rsvp.decline}`,
+          '',
+        ]
+      : []),
     'This is a no-reply email. Replies are not monitored.',
     `Support: ${support}`,
     '',
@@ -160,6 +171,18 @@ export function meetingInviteEmail(input: {
           ${input.isLive ? 'Join meeting' : 'Open invitation'}
         </a>
       </p>
+      ${
+        input.rsvp
+          ? `<p style="color:#334155;font-size:14px;font-weight:600;margin:20px 0 8px">Will you attend?</p>
+      <table style="border-collapse:separate;border-spacing:8px 0;margin:0 -8px">
+        <tr>
+          <td><a href="${escapeHtml(input.rsvp.accept)}" style="display:inline-block;border:1px solid #16A34A;color:#15803D;text-decoration:none;padding:8px 16px;border-radius:999px;font-size:13px;font-weight:600">Yes</a></td>
+          <td><a href="${escapeHtml(input.rsvp.tentative)}" style="display:inline-block;border:1px solid #CBD5E1;color:#334155;text-decoration:none;padding:8px 16px;border-radius:999px;font-size:13px;font-weight:600">Maybe</a></td>
+          <td><a href="${escapeHtml(input.rsvp.decline)}" style="display:inline-block;border:1px solid #DC2626;color:#B91C1C;text-decoration:none;padding:8px 16px;border-radius:999px;font-size:13px;font-weight:600">No</a></td>
+        </tr>
+      </table>`
+          : ''
+      }
       <p style="color:#94a3b8;font-size:12px;margin-top:24px">Or open: ${escapeHtml(joinUrl)}</p>`
       }
       <hr style="border:none;border-top:1px solid #E2E8F0;margin:28px 0 16px" />

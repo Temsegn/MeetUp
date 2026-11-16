@@ -80,12 +80,16 @@ export const WhiteboardStage: React.FC<WhiteboardStageProps> = ({
       {
         username?: string;
         pointer?: { x: number; y: number; tool: 'pointer' | 'laser' };
+        button?: 'up' | 'down';
       }
     >();
     for (const c of Object.values(collaborators)) {
       map.set(c.clientId, {
         username: c.userName,
-        pointer: { x: c.x, y: c.y, tool: 'pointer' },
+        // Excalidraw renders a remote laser trail only when tool === 'laser'
+        // and the button is held down — both must come from the sender.
+        pointer: { x: c.x, y: c.y, tool: c.tool === 'laser' ? 'laser' : 'pointer' },
+        button: c.button ?? 'up',
       });
     }
     return map;

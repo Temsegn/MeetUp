@@ -13,7 +13,7 @@ const ctx = { ip: IP, userAgent: UA };
 describe('session management', () => {
   it('lists a user\'s active sessions (and not revoked ones)', async () => {
     const { deps, state } = makeStubDeps();
-    const { password } = await seedUser(deps);
+    const { password } = await seedUser(deps, { verified: true });
     const login = createLoginService(deps);
     const sessions = createSessionService(deps);
 
@@ -31,7 +31,7 @@ describe('session management', () => {
 
   it('sorts sessions by most recently used first', async () => {
     const { deps, state } = makeStubDeps();
-    const { password } = await seedUser(deps);
+    const { password } = await seedUser(deps, { verified: true });
     const login = createLoginService(deps);
 
     const first = await login.login({ email: 'test@example.com', password, rememberMe: false, ctx });
@@ -47,8 +47,8 @@ describe('session management', () => {
 
   it('enforces ownership on session lookup (findSessionByIdForUser)', async () => {
     const { deps } = makeStubDeps();
-    const a = await seedUser(deps, { email: 'a@example.com' });
-    const b = await seedUser(deps, { email: 'b@example.com' });
+    const a = await seedUser(deps, { email: 'a@example.com', verified: true });
+    const b = await seedUser(deps, { email: 'b@example.com', verified: true });
     const login = createLoginService(deps);
 
     const sessionA = await login.login({ email: 'a@example.com', password: a.password, rememberMe: false, ctx });
@@ -62,7 +62,7 @@ describe('session management', () => {
 
   it('sessions carry device metadata (user agent + IP) for the sessions page', async () => {
     const { deps } = makeStubDeps();
-    const { user, password } = await seedUser(deps);
+    const { user, password } = await seedUser(deps, { verified: true });
     await createLoginService(deps).login({
       email: user.email,
       password,

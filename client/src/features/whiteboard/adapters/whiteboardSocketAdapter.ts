@@ -22,6 +22,7 @@ export type WhiteboardSocketAdapter = {
     y: number;
     pointer?: 'mouse' | 'touch' | 'pen';
     button?: 'up' | 'down';
+    tool?: 'pointer' | 'laser';
   }) => void;
   clear: () => Promise<WhiteboardUpdateAck>;
   onSync: (handler: (payload: WhiteboardSyncPayload) => void) => () => void;
@@ -113,6 +114,7 @@ export function createWhiteboardSocketAdapter(opts: {
     y: number;
     pointer?: 'mouse' | 'touch' | 'pen';
     button?: 'up' | 'down';
+    tool?: 'pointer' | 'laser';
   }): void {
     socket.emit(WB_EVENTS.CURSOR, {
       roomId,

@@ -69,6 +69,7 @@ export function RecordingsPage() {
         avatarColor: r.sharedBy?.avatarColor ?? null,
       },
       description: r.description,
+      status: r.status,
     }));
   }, [apiRecordings, loading]);
 

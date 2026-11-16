@@ -21,7 +21,11 @@ export interface InvitationDelivery {
   status: string;
   lastError?: string | null;
   attempts: number;
+  /** Invitee's answer from the email RSVP links; null = no response yet. */
+  rsvp?: RsvpResponse | null;
 }
+
+export type RsvpResponse = 'accepted' | 'tentative' | 'declined';
 
 export interface InvitationSummary {
   sent: number;
@@ -30,6 +34,7 @@ export interface InvitationSummary {
   skipped: number;
   smtpConfigured: boolean;
   deliveries: InvitationDelivery[];
+  rsvp?: { accepted: number; tentative: number; declined: number; noResponse: number };
 }
 
 export interface Meeting {

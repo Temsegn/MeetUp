@@ -27,7 +27,7 @@ const ACTIONS = [
     label: 'Share Screen',
     bg: 'bg-[#EEE9FF]',
     text: 'text-[#6B3FA0]',
-    to: '/app/meetings?create=instant',
+    to: '/app/meetings?create=instant&share=1',
   },
   {
     icon: CloudUpload,

@@ -59,6 +59,8 @@ export type WhiteboardCursorPayload = {
   y: number;
   pointer?: 'mouse' | 'touch' | 'pen';
   button?: 'up' | 'down';
+  /** Excalidraw pointer tool — 'laser' draws a fading trail for everyone. */
+  tool?: 'pointer' | 'laser';
 };
 
 export type WhiteboardVisibilityEvent = {

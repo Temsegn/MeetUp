@@ -85,6 +85,10 @@ export function MeetingsList({ meetings, filterKey = '', onChanged }: Props) {
       onChanged?.();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : 'Could not cancel meeting.');
+      // The meeting likely changed state (e.g. already ended) — refresh so the
+      // list stops showing it as live/upcoming.
+      setCancelTarget(null);
+      onChanged?.();
     } finally {
       setBusyId(null);
     }

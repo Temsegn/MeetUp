@@ -18,13 +18,15 @@ export function createRecordingsController(deps?: RecordingServiceDeps) {
       const saved = await service.saveComposite({
         roomId,
         userId: req.user!.id,
-        body: req.body as Buffer,
+        filePath: res.locals.uploadPath as string,
         workspaceId: workspaceHeader || req.workspaceId || null,
         meetingId: meetingIdHeader || meetingIdQuery || null,
       });
 
-      res.status(201).json({
+      // 202: stored; MP4 conversion continues in the background.
+      res.status(202).json({
         success: true,
+        status: saved.status,
         format: 'mp4',
         roomId: saved.roomId,
         recordingId: saved.recordingId,

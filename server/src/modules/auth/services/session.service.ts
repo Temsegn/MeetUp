@@ -18,7 +18,14 @@ import { RequestContext, SessionRecord, UserRecord } from '../auth.types';
  *     revokes the ENTIRE session family (the token may be stolen).
  *   - Sessions have an absolute `expiresAt` — rotation never extends it, so
  *     Remember Me (7 days) is a hard cap, not a rolling window.
+ *   - Grace window: presenting the just-rotated-out token within
+ *     REUSE_GRACE_MS of the rotation is a benign race, not theft — a page
+ *     reload aborted the refresh response (browser kept the old cookie) or
+ *     two tabs refreshed at the same moment. That rotates normally instead
+ *     of revoking the family (which logged users out on every refresh).
  */
+
+export const REUSE_GRACE_MS = 60_000;
 
 export interface CreatedSession {
   session: SessionRecord;
@@ -57,17 +64,23 @@ export function createSessionService(deps: AuthDeps = authRepository) {
     async rotateSession(opts: {
       refreshToken: string;
       ctx?: RequestContext;
+      /** Injectable clock (tests). */
+      now?: Date;
     }): Promise<{ session: SessionRecord; refreshToken: string; user: UserRecord }> {
       const presentedHash = hashToken(opts.refreshToken);
-      const now = new Date();
+      const now = opts.now ?? new Date();
 
       let session = await deps.findSessionByTokenHash(presentedHash);
 
       // Reuse detection: token matches the ROTATED-OUT hash → someone is
-      // replaying a token that should be dead. Revoke the whole family.
+      // replaying a token that should be dead. Revoke the whole family —
+      // unless it is inside the grace window right after rotation.
       if (!session) {
         const reused = await deps.findSessionByPreviousHash(presentedHash);
-        if (reused) {
+        const sinceRotation = reused ? now.getTime() - reused.lastUsedAt.getTime() : Infinity;
+        if (reused && !reused.revokedAt && sinceRotation >= 0 && sinceRotation <= REUSE_GRACE_MS) {
+          session = reused;
+        } else if (reused) {
           await deps.revokeSessionFamily(reused.familyId, 'refresh_token_reuse', now);
           deps.audit({
             action: 'REFRESH_REUSE_DETECTED',
@@ -81,10 +94,12 @@ export function createSessionService(deps: AuthDeps = authRepository) {
             'SESSION_REUSE_DETECTED'
           );
         }
-        throw new AuthError(
-          'Session expired or revoked. Please sign in again.',
-          'SESSION_INVALID'
-        );
+        if (!session) {
+          throw new AuthError(
+            'Session expired or revoked. Please sign in again.',
+            'SESSION_INVALID'
+          );
+        }
       }
 
       if (session.revokedAt) {

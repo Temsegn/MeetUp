@@ -196,11 +196,21 @@ export async function refreshSession(): Promise<boolean> {
     refreshInFlight = (async () => {
       const epochAtStart = accessTokenEpoch;
       try {
-        const res = await fetch(`${API_URL}/auth/refresh`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-        });
+        const doRefresh = () =>
+          fetch(`${API_URL}/auth/refresh`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+          });
+        // All tabs share one refresh cookie. Serialize refreshes across tabs so
+        // two tabs never present the same (about-to-rotate) token at once —
+        // the server would treat the second one as token reuse.
+        const locks = (navigator as Navigator & {
+          locks?: { request: <T>(name: string, cb: () => Promise<T>) => Promise<T> };
+        }).locks;
+        const res = locks
+          ? await locks.request('samtal-auth-refresh', doRefresh)
+          : await doRefresh();
         if (!res.ok) {
           // A missing refresh cookie must not erase a token issued while this
           // request was in flight (login racing a background 401).

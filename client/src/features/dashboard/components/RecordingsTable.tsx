@@ -463,8 +463,16 @@ export function RecordingsTable({
                         </span>
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-[13px] font-semibold text-[#151D2B]">
-                          {r.title}
+                        <p className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-[#151D2B]">
+                          <span className="truncate">{r.title}</span>
+                          {r.status === 'processing' ? (
+                            <span
+                              className="shrink-0 rounded-full bg-[#FEF3C7] px-1.5 py-px text-[9px] font-bold uppercase text-[#B45309]"
+                              title="Converting to MP4 — playback and download will be fastest once this finishes"
+                            >
+                              Processing
+                            </span>
+                          ) : null}
                         </p>
                         <div className="mt-1.5 flex items-center">
                           {(r.people?.length

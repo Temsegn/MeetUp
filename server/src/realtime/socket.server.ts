@@ -21,6 +21,10 @@ export const setupSocketServer = (io: SocketIOServer): void => {
   startMeetingDurationJob(io);
   startMeetingReminderJob();
   startMeetingInviteDeliveryJob();
+  // Finish recording conversions interrupted by a restart.
+  void import('../modules/recordings/services/recordings.service')
+    .then(({ recordingsService }) => recordingsService.resumeProcessing())
+    .catch(() => {});
 
   // ── Authentication middleware ──────────────────────────────────────────────
   io.use(socketAuthMiddleware);

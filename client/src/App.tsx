@@ -15,6 +15,7 @@ import {
 import { SecuritySettingsPage } from './pages/SecuritySettingsPage';
 import { LandingPage, MarketingLayout } from './features/landing';
 import { HomePage } from './pages/HomePage';
+import { MeetingRsvpPage } from './pages/MeetingRsvpPage';
 import {
   AppShellLayout,
   AdminOverviewPage,
@@ -184,6 +185,7 @@ function App() {
               <Route path="billing/invoices" element={<BillingPage />} />
             </Route>
 
+            <Route path="/rsvp/:token" element={<MeetingRsvpPage />} />
             <Route path="/join/:roomId" element={
               <div className="h-[100svh] h-[100dvh] min-h-0 bg-white">
                 <LiveMeetingPage />

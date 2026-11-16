@@ -12,6 +12,8 @@ import { Workspace } from '../../../database/models/Workspace.model';
 import { emailService, isSmtpConfigured, EmailDeliveryError } from '../../auth/services/email.service';
 import { meetingInviteEmail } from '../../auth/templates/meeting-invite-email';
 import { logger } from '../../../infrastructure/logging/logger';
+import { env } from '../../../config/env';
+import { createRsvpToken, rsvpUrl, rsvpMapForMeeting } from '../rsvp/meeting-rsvp.service';
 import {
   buildGoogleCalendarUrl,
   buildMeetingIcs,
@@ -37,7 +39,10 @@ export interface InvitationSummary {
     status: string;
     lastError?: string | null;
     attempts: number;
+    /** Invitee's answer via the email RSVP links; null = no response yet. */
+    rsvp: 'accepted' | 'tentative' | 'declined' | null;
   }>;
+  rsvp: { accepted: number; tentative: number; declined: number; noResponse: number };
 }
 
 function isEmail(value: string): boolean {
@@ -123,17 +128,49 @@ async function hostOrganizer(meeting: IMeeting): Promise<{ email: string; name: 
   };
 }
 
+/** Bare address from EMAIL_FROM ("Name <addr>" or "addr"). */
+function senderAddress(): string | null {
+  const raw = String(env.EMAIL_FROM || '').trim();
+  const match = raw.match(/<([^>]+)>/);
+  const addr = normalizeEmail(match ? match[1] : raw);
+  return isEmail(addr) ? addr : null;
+}
+
 function envFallbackOrganizer(): string {
   // Prefer a plausible mailto if host email missing; ICS requires ORGANIZER.
   return 'noreply@meet.samtal.cc';
 }
 
+/** How long a sender owns a row before another sender may retry it. */
+const CLAIM_LEASE_MS = 2 * 60_000;
+
+/**
+ * Atomically take ownership of a delivery row. The immediate send loop and the
+ * 30s retry sweep both pick up 'pending' rows; without this lease, a slow SMTP
+ * send let both deliver the same invite (recipients got it twice).
+ */
+async function claimDelivery(rowId: Types.ObjectId | string): Promise<IMeetingInviteDelivery | null> {
+  const now = new Date();
+  return MeetingInviteDelivery.findOneAndUpdate(
+    {
+      _id: rowId,
+      status: { $in: ['pending', 'failed'] },
+      $or: [{ claimedUntil: null }, { claimedUntil: { $lte: now } }],
+    },
+    { $set: { claimedUntil: new Date(now.getTime() + CLAIM_LEASE_MS) } },
+    { new: true },
+  );
+}
+
 async function sendOneDelivery(
-  row: IMeetingInviteDelivery,
+  candidate: IMeetingInviteDelivery,
   meeting: IMeeting,
   companyName: string,
 ): Promise<void> {
-  if (row.status === 'accepted') return;
+  if (candidate.status === 'accepted' || candidate.status === 'skipped') return;
+  const row = await claimDelivery(candidate._id as Types.ObjectId);
+  if (!row) return; // another sender owns it, or it was already sent
+  row.claimedUntil = null;
   if (row.attempts >= MAX_ATTEMPTS) {
     row.status = 'failed';
     row.lastError = row.lastError || 'Max delivery attempts reached.';
@@ -143,7 +180,12 @@ async function sendOneDelivery(
 
   const start = meeting.scheduledAt ?? meeting.startedAt ?? new Date();
   const end = meetingEndAt(start, meeting.duration ?? 30);
-  const organizer = await hostOrganizer(meeting);
+  const host = await hostOrganizer(meeting);
+  // ORGANIZER must match the address the mail is actually sent from. A
+  // host's @gmail.com/@outlook.com organizer on mail sent by our SMTP server
+  // looks spoofed to Gmail (DMARC) and the invite is dropped or spammed.
+  // Keep the host's name; replies go to the host via Reply-To.
+  const organizer = { email: senderAddress() ?? host.email, name: host.name };
   const calendarUid = ensureCalendarUid(String(meeting._id), meeting.calendarUid);
   const ws = meeting.workspaceId
     ? await Workspace.findById(meeting.workspaceId).select('email logoUrl settings.timeZone').lean()
@@ -184,13 +226,24 @@ async function sendOneDelivery(
     kind: emailKind,
     logoUrl: ws?.logoUrl ?? null,
     supportEmail: (ws?.email || '').trim() || 'support@samtal.cc',
+    rsvp:
+      emailKind === 'cancel'
+        ? null
+        : (() => {
+            const token = createRsvpToken(String(meeting._id), row.email);
+            return {
+              accept: rsvpUrl(token, 'accepted'),
+              tentative: rsvpUrl(token, 'tentative'),
+              decline: rsvpUrl(token, 'declined'),
+            };
+          })(),
   });
 
   row.attempts += 1;
   try {
     const result = await emailService.send({
       to: row.email,
-      replyTo: 'no-reply@samtal.cc',
+      replyTo: isEmail(host.email) ? host.email : 'no-reply@samtal.cc',
       subject: msg.subject,
       text: msg.text,
       html: msg.html,
@@ -300,6 +353,13 @@ export async function summarizeDeliveries(meetingId: string): Promise<Invitation
     if (!latestByEmail.has(r.email)) latestByEmail.set(r.email, r);
   }
   const latest = [...latestByEmail.values()];
+  const rsvps = await rsvpMapForMeeting(meetingId);
+  const rsvpCounts = { accepted: 0, tentative: 0, declined: 0, noResponse: 0 };
+  for (const r of latest) {
+    const answer = rsvps.get(r.email);
+    if (answer) rsvpCounts[answer] += 1;
+    else rsvpCounts.noResponse += 1;
+  }
 
   let sent = 0;
   let failed = 0;
@@ -325,7 +385,9 @@ export async function summarizeDeliveries(meetingId: string): Promise<Invitation
       status: r.status,
       lastError: r.lastError,
       attempts: r.attempts,
+      rsvp: rsvps.get(r.email) ?? null,
     })),
+    rsvp: rsvpCounts,
   };
 }
 
@@ -379,6 +441,7 @@ export async function retryFailedMeetingInvites(
       skipped: 0,
       smtpConfigured: isSmtpConfigured(),
       deliveries: [],
+      rsvp: { accepted: 0, tentative: 0, declined: 0, noResponse: 0 },
     };
   }
   const meeting = await Meeting.findById(meetingId);
@@ -390,6 +453,7 @@ export async function retryFailedMeetingInvites(
       skipped: 0,
       smtpConfigured: isSmtpConfigured(),
       deliveries: [],
+      rsvp: { accepted: 0, tentative: 0, declined: 0, noResponse: 0 },
     };
   }
 

@@ -21,6 +21,8 @@ interface SaveRecordingResponse {
   filename: string;
   bytes: number;
   recordingId?: string;
+  /** 'processing' while the server converts to MP4 in the background. */
+  status?: 'processing' | 'ready';
   warning?: string;
   error?: string;
 }
@@ -72,8 +74,10 @@ async function uploadRecording(
     }
   }
 
-  // One retry for transient upstream / gateway failures.
-  if (!res.ok && (res.status === 502 || res.status === 503 || res.status === 504 || res.status >= 500)) {
+  // One retry when the API was briefly unreachable (restart / bad gateway).
+  // Not on 504/500: the server may already have the file — a blind re-upload
+  // would duplicate the recording.
+  if (res.status === 502 || res.status === 503) {
     await new Promise((r) => window.setTimeout(r, 800));
     res = await attempt();
   }
@@ -179,7 +183,9 @@ export function useMeetingScreenRecorder({
         const saved = await uploadRecording(roomId, result.blob, workspaceId);
         setLastSavedPath(saved.path);
         addToast?.(
-          `Recording saved (${Math.round(saved.bytes / 1e6)} MB). Find it under Recordings.`,
+          saved.status === 'processing'
+            ? `Recording uploaded (${Math.max(1, Math.round(saved.bytes / 1e6))} MB). It will appear in Recordings in a moment while it's processed.`
+            : `Recording saved (${Math.round(saved.bytes / 1e6)} MB). Find it under Recordings.`,
         );
       } catch (uploadErr) {
         // Never lose the take — fall back to a local download.

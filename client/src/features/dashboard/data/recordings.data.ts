@@ -21,6 +21,8 @@ export type RecordingRow = {
     avatarColor?: string | null;
   };
   description?: string;
+  /** Server-side conversion state. */
+  status?: 'processing' | 'ready' | 'failed';
 };
 
 export function formatPlayerTime(sec: number): string {

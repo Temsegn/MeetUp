@@ -642,6 +642,23 @@ export function MeetingDetailPage() {
               Pending {meeting.invitations.pending}
             </span>
           </div>
+          {meeting.invitations.rsvp ? (
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold">
+              <span className="text-[#8A94A6]">Responses:</span>
+              <span className="rounded-full bg-[#DCFCE7] px-2.5 py-1 text-[#15803D]">
+                Going {meeting.invitations.rsvp.accepted}
+              </span>
+              <span className="rounded-full bg-[#F1F5F9] px-2.5 py-1 text-[#475569]">
+                Maybe {meeting.invitations.rsvp.tentative}
+              </span>
+              <span className="rounded-full bg-[#FEE2E2] px-2.5 py-1 text-[#B91C1C]">
+                Declined {meeting.invitations.rsvp.declined}
+              </span>
+              <span className="rounded-full bg-[#F8FAFC] px-2.5 py-1 text-[#94A3B8]">
+                No reply {meeting.invitations.rsvp.noResponse}
+              </span>
+            </div>
+          ) : null}
           {meeting.invitations.deliveries.length === 0 ? (
             <p className="text-[12px] text-[#8A94A6]">No invitation emails yet.</p>
           ) : (
@@ -660,6 +677,21 @@ export function MeetingDetailPage() {
                       <p className="mt-0.5 text-[10px] text-[#DC2626]">{d.lastError}</p>
                     ) : null}
                   </div>
+                  {d.rsvp ? (
+                    <span
+                      className={cn(
+                        'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase',
+                        d.rsvp === 'accepted'
+                          ? 'bg-[#DCFCE7] text-[#15803D]'
+                          : d.rsvp === 'declined'
+                            ? 'bg-[#FEE2E2] text-[#B91C1C]'
+                            : 'bg-[#F1F5F9] text-[#475569]',
+                      )}
+                      title="Invitee's answer via the RSVP buttons in the email"
+                    >
+                      {d.rsvp === 'accepted' ? 'Going' : d.rsvp === 'declined' ? 'Declined' : 'Maybe'}
+                    </span>
+                  ) : null}
                   <span
                     className={cn(
                       'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase',
@@ -669,8 +701,20 @@ export function MeetingDetailPage() {
                           ? 'bg-[#FEE2E2] text-[#DC2626]'
                           : 'bg-[#E2E8F0] text-[#475569]',
                     )}
+                    title={
+                      d.status === 'accepted'
+                        ? 'Delivered to the recipient’s mail server. This is not an RSVP.'
+                        : undefined
+                    }
                   >
-                    {d.status}
+                    {/* "accepted" = SMTP accepted the email, not the invitee accepting the meeting. */}
+                    {d.status === 'accepted'
+                      ? 'Sent'
+                      : d.status === 'failed'
+                        ? 'Failed'
+                        : d.status === 'skipped'
+                          ? 'Skipped'
+                          : 'Pending'}
                   </span>
                 </li>
               ))}

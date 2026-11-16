@@ -12,12 +12,12 @@ export function useRecordings(params: { page?: number; limit?: number; meetingId
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (quiet = false) => {
     if (!workspaceId) {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!quiet) setLoading(true);
     setError(null);
     try {
       const [data, s] = await Promise.all([
@@ -36,6 +36,14 @@ export function useRecordings(params: { page?: number; limit?: number; meetingId
 
   useEffect(() => { void load(); }, [load]);
 
+  // New uploads are converted to MP4 on the server — poll quietly until done.
+  const hasProcessing = recordings.some((r) => r.status === 'processing');
+  useEffect(() => {
+    if (!hasProcessing) return;
+    const id = window.setInterval(() => void load(true), 8_000);
+    return () => window.clearInterval(id);
+  }, [hasProcessing, load]);
+
   const remove = useCallback(async (id: string) => {
     if (!workspaceId) return;
     await recordingsService.delete(workspaceId, id);
@@ -51,5 +59,5 @@ export function useRecordings(params: { page?: number; limit?: number; meetingId
     return updated;
   }, [workspaceId]);
 
-  return { recordings, stats, total, loading, error, reload: load, remove, rename };
+  return { recordings, stats, total, loading, error, reload: () => load(), remove, rename };
 }

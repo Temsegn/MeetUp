@@ -230,6 +230,7 @@ export function registerWhiteboardHandlers(io: Server, socket: Socket): void {
       y: v.data.y,
       pointer: v.data.pointer,
       button: v.data.button,
+      tool: v.data.tool,
     });
   });
 

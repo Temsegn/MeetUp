@@ -6,13 +6,13 @@ import { describe, it } from 'node:test';
 import { AuthError } from '../../../shared/errors/AppError';
 import { makeStubDeps, seedUser, IP, UA } from './stub-deps';
 import { createLoginService } from '../services/login.service';
-import { createSessionService } from '../services/session.service';
+import { createSessionService, REUSE_GRACE_MS } from '../services/session.service';
 import { hashToken } from '../security/token-hasher';
 
 const ctx = { ip: IP, userAgent: UA };
 
 async function loggedIn(deps: ReturnType<typeof makeStubDeps>['deps']) {
-  const { password } = await seedUser(deps);
+  const { password } = await seedUser(deps, { verified: true });
   const { session } = await createLoginService(deps).login({
     email: 'test@example.com', password, rememberMe: false, ctx,
   });
@@ -38,6 +38,22 @@ describe('refresh (rotation)', () => {
     assert.ok(state.audits.some((a) => a.action === 'TOKEN_REFRESHED'));
   });
 
+  it('accepts the just-rotated token inside the grace window (reload / concurrent tabs)', async () => {
+    const { deps, state } = makeStubDeps();
+    const { session } = await loggedIn(deps);
+    const sessions = createSessionService(deps);
+
+    const first = await sessions.rotateSession({ refreshToken: session.refreshToken, ctx });
+    // Response was lost (page reload) → browser presents the old token again.
+    const second = await sessions.rotateSession({ refreshToken: session.refreshToken, ctx });
+
+    assert.notEqual(second.refreshToken, first.refreshToken);
+    const stored = state.sessions.get(session.id)!;
+    assert.equal(stored.revokedAt ?? null, null);
+    assert.equal(stored.tokenHash, hashToken(second.refreshToken));
+    assert.ok(!state.audits.some((a) => a.action === 'REFRESH_REUSE_DETECTED'));
+  });
+
   it('detects reuse of a rotated-out token and revokes the whole family', async () => {
     const { deps, state } = makeStubDeps();
     const { session } = await loggedIn(deps);
@@ -47,9 +63,10 @@ describe('refresh (rotation)', () => {
     // One legitimate rotation.
     await sessions.rotateSession({ refreshToken: session.refreshToken, ctx });
 
-    // Attacker replays the OLD token → reuse → family revoked.
+    // Attacker replays the OLD token after the grace window → reuse → family revoked.
+    const later = new Date(Date.now() + REUSE_GRACE_MS + 5_000);
     await assert.rejects(
-      sessions.rotateSession({ refreshToken: session.refreshToken, ctx }),
+      sessions.rotateSession({ refreshToken: session.refreshToken, ctx, now: later }),
       (err: unknown) => err instanceof AuthError && err.code === 'SESSION_REUSE_DETECTED'
     );
     assert.ok(state.audits.some((a) => a.action === 'REFRESH_REUSE_DETECTED'));

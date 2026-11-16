@@ -8,6 +8,7 @@ import { authRouter } from './modules/auth/auth.routes';
 import { createGuestAuthRouter } from './modules/auth/guest-auth.routes';
 import { meetingsRouter } from './modules/meetings/meetings.routes';
 import { recordingsRouter } from './modules/recordings/recordings.routes';
+import { meetingRsvpRouter } from './modules/meetings/rsvp/meeting-rsvp.routes';
 import { adminRouter } from './modules/admin/admin.routes';
 import { workspaceMeetingsRouter } from './modules/meetings/workspace-meetings.routes';
 import { workspaceRoomsRouter } from './modules/rooms/workspace-rooms.routes';
@@ -213,6 +214,8 @@ export const createApp = (): Express => {
   app.use('/auth', createGuestAuthRouter());
   app.use('/workspaces', workspaceRouter);
   app.use('/billing', billingRouter);
+  // Public, token-authorised RSVP links (before /meetings, which requires auth).
+  app.use('/meetings/rsvp', meetingRsvpRouter);
   app.use('/meetings', meetingsRouter);
   app.use('/workspace-meetings', workspaceMeetingsRouter);
   app.use('/workspace-rooms', workspaceRoomsRouter);

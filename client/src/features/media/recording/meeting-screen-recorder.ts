@@ -10,6 +10,7 @@
  */
 
 import { domToCanvas } from 'modern-screenshot';
+import { fixWebmDuration } from './webm-duration';
 
 export type MeetingRecorderStatus = 'idle' | 'recording' | 'stopping';
 
@@ -135,7 +136,8 @@ export class MeetingScreenRecorder {
     const mimeType = pickMimeType();
     const recorder = new MediaRecorder(combined, {
       mimeType,
-      videoBitsPerSecond: 5_000_000,
+      // 2.5 Mbps: sharp for a meeting grid, half the upload size of 5 Mbps.
+      videoBitsPerSecond: 2_500_000,
       audioBitsPerSecond: 128_000,
     });
     recorder.ondataavailable = (ev) => {
@@ -152,7 +154,7 @@ export class MeetingScreenRecorder {
     if (this.status !== 'recording' || !this.mediaRecorder) return null;
     this.status = 'stopping';
 
-    const blob = await new Promise<Blob>((resolve, reject) => {
+    const recorded = await new Promise<Blob>((resolve, reject) => {
       const rec = this.mediaRecorder!;
       rec.onerror = () => reject(new Error('MediaRecorder failed'));
       rec.onstop = () => resolve(new Blob(this.chunks, { type: rec.mimeType || 'video/webm' }));
@@ -166,7 +168,11 @@ export class MeetingScreenRecorder {
 
     this.status = 'idle';
     this.chunks = [];
-    if (blob.size < 256) return null;
+    if (recorded.size < 256) return null;
+
+    // Write the real duration into the WebM header so the file has a timeline
+    // and seeks properly (MediaRecorder leaves it out). No-op for non-WebM.
+    const blob = await fixWebmDuration(recorded, Date.now() - this.startedAt);
 
     const secs = Math.max(1, Math.round((Date.now() - this.startedAt) / 1000));
     const filename = `${this.filePrefix}-${new Date(this.startedAt).toISOString().replace(/[:.]/g, '-')}-${secs}s.webm`;
