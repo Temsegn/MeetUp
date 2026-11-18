@@ -360,6 +360,10 @@ export function LiveMeetingPage() {
       );
       allowLeaveRef.current = true;
       void (async () => {
+        // Stop recording first so the blob is uploaded before we navigate away.
+        if (isRecording) {
+          try { await stopRecording(); } catch { /* ignore — recording saved if possible */ }
+        }
         localStream?.getTracks().forEach((t) => t.stop());
         screenStream?.getTracks().forEach((t) => t.stop());
         await leaveMeeting();
@@ -370,7 +374,7 @@ export function LiveMeetingPage() {
     return () => {
       socket.off('meeting-ended', onEnded);
     };
-  }, [socket, leaveMeeting, navigate, addToast, localStream, screenStream]);
+  }, [socket, leaveMeeting, navigate, addToast, localStream, screenStream, isRecording, stopRecording]);
 
   const handleJoin = async (): Promise<boolean> => {
     setJoinError(null);

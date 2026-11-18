@@ -37,8 +37,8 @@ export function RowActionsMenu({ actions, align = 'right', className }: Props) {
     const menu = menuRef.current;
     if (!btn || !menu) return;
     const r = btn.getBoundingClientRect();
-    const mw = menu.offsetWidth;
-    const mh = menu.offsetHeight;
+    const mw = menu.offsetWidth || 160;   // fallback width if not painted yet
+    const mh = menu.offsetHeight || 120;  // fallback height if not painted yet
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
@@ -55,12 +55,17 @@ export function RowActionsMenu({ actions, align = 'right', className }: Props) {
   }, [align]);
 
   // Measure after the menu renders (hidden) so we know its real size.
+  // Use rAF to let the browser paint the hidden element before reading offsetHeight.
   useLayoutEffect(() => {
     if (!open) {
       setPos(null);
       return;
     }
+    // First pass — may have height=0 if not painted yet
     place();
+    // Second pass after paint — gets the real height for flip logic
+    const id = requestAnimationFrame(() => place());
+    return () => cancelAnimationFrame(id);
   }, [open, place]);
 
   useEffect(() => {

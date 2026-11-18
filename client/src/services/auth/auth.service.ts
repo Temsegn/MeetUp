@@ -392,6 +392,12 @@ export const authService = {
   },
 
   async getCurrentUser(): Promise<User> {
+    // On page refresh the in-memory access token is gone.
+    // Try to restore it from the HttpOnly refresh cookie before calling /auth/me,
+    // so apiFetch can send a valid Bearer token and avoid a spurious sign-out.
+    if (!getAccessToken()) {
+      await refreshSession();
+    }
     const data = await apiFetch<{ user: User } | User>('/auth/me');
     const raw = data && typeof data === 'object' && 'user' in data && data.user
       ? data.user
