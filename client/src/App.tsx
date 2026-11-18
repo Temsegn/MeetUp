@@ -13,7 +13,7 @@ import {
   OAuthCallbackPage,
 } from './features/auth';
 import { SecuritySettingsPage } from './pages/SecuritySettingsPage';
-import { LandingPage, MarketingLayout } from './features/landing';
+import { MarketingLayout } from './features/landing';
 import { HomePage } from './pages/HomePage';
 import { MeetingRsvpPage } from './pages/MeetingRsvpPage';
 import {
@@ -93,6 +93,13 @@ const RedirectToSignIn: React.FC = () => {
   );
 };
 
+/** Root `/` — send logged-in users to the app, everyone else to sign-in. */
+const RootRedirect: React.FC = () => {
+  const { user, initializing } = useAuth();
+  if (initializing) return null;
+  return <Navigate to={user ? '/app' : '/sign-in'} replace />;
+};
+
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, initializing } = useAuth();
   if (initializing)
@@ -133,7 +140,7 @@ function App() {
         <NotificationCenterProvider>
           <Routes>
             <Route element={<MarketingLayout />}>
-              <Route path="/" element={<LandingPage />} />
+              <Route path="/" element={<RootRedirect />} />
               <Route path="/sign-in" element={<PublicRoute><SignInPage /></PublicRoute>} />
               <Route path="/signup" element={<PublicRoute><SignUpPage /></PublicRoute>} />
               <Route path="/auth" element={<RedirectToSignIn />} />
