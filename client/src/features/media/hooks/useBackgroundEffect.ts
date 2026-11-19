@@ -11,26 +11,9 @@ export type { BackgroundEffect, BackgroundProcessorStatus };
 const STORAGE_KEY = 'samtal:background-effect';
 
 function loadSavedEffect(): BackgroundEffect {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { kind: 'none' };
-    const parsed = JSON.parse(raw) as BackgroundEffect;
-    switch (parsed?.kind) {
-      case 'blur-light':
-      case 'blur-strong':
-        return { kind: parsed.kind };
-      case 'color':
-        return typeof parsed.color === 'string' ? parsed : { kind: 'none' };
-      case 'image':
-        return typeof parsed.url === 'string' && !parsed.url.startsWith('blob:')
-          ? parsed
-          : { kind: 'none' };
-      default:
-        return { kind: 'none' };
-    }
-  } catch {
-    return { kind: 'none' };
-  }
+  // Background effects are always off by default.
+  // Users must explicitly enable them each session.
+  return { kind: 'none' };
 }
 
 function saveEffect(effect: BackgroundEffect): void {
