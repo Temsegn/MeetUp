@@ -1353,7 +1353,7 @@ export function LiveMeetingPage() {
           panelOpen ? 'xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]' : 'grid-cols-1',
         )}
       >
-        <div className="relative min-h-0 min-w-0 overflow-hidden rounded-xl bg-[#EEF2F7] sm:rounded-2xl">
+        <div className="relative min-h-0 min-w-0 overflow-hidden overflow-x-auto sm:overflow-x-hidden rounded-xl bg-[#EEF2F7] sm:rounded-2xl">
           {whiteboardOpen && socket ? (
             <WhiteboardStage
               socket={socket}

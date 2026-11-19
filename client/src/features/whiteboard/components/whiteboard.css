@@ -208,15 +208,32 @@
     display: none !important;
   }
 
-  /* Keep footer tools scrollable horizontally when needed */
+  /* Toolbar scrolls horizontally so all tools are always reachable */
   .meeting-whiteboard-stage .excalidraw .App-toolbar {
-    overflow-x: auto;
+    overflow-x: auto !important;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    /* Allow the toolbar to scroll inside the stage without the stage expanding */
+    max-width: 100vw;
+    box-sizing: border-box;
   }
 
   .meeting-whiteboard-stage .excalidraw .App-toolbar::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Ensure the layer-ui wrapper never causes horizontal overflow on the stage */
+  .meeting-whiteboard-stage .excalidraw .layer-ui__wrapper {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  /* Keep the canvas itself full-size regardless of toolbar overflow */
+  .meeting-whiteboard-canvas .excalidraw .excalidraw__canvas,
+  .meeting-whiteboard-canvas .excalidraw canvas {
+    width: 100% !important;
+    height: 100% !important;
+    touch-action: none;
   }
 }

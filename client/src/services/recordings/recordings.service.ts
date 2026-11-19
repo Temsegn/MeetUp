@@ -159,18 +159,29 @@ export const recordingsService = {
     return URL.createObjectURL(typed);
   },
 
+  /**
+   * Trigger a browser file-save using a direct URL to the server's attachment
+   * endpoint. The access token is passed as ?token= so the browser can
+   * authenticate without a custom header — this lets the browser stream
+   * straight to disk and show its native download progress immediately,
+   * instead of buffering the entire file in memory first.
+   */
   async download(
     workspaceId: string | null | undefined,
     id: string,
     filename = 'recording.mp4',
   ): Promise<void> {
-    const url = await this.getStreamBlobUrl(workspaceId, id, { download: true });
+    const qs = new URLSearchParams();
+    qs.set('download', '1');
+    const token = getAccessToken();
+    if (token) qs.set('token', token);
+    if (workspaceId) qs.set('wsid', workspaceId);
+    const url = `${API_URL}/recordings/${id}/stream?${qs}`;
     const a = document.createElement('a');
     a.href = url;
     a.download = filename.endsWith('.mp4') ? filename : `${filename}.mp4`;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
   },
 };
